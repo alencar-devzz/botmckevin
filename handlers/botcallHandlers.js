@@ -1,11 +1,6 @@
 const { MessageFlags } = require("discord.js");
-const {
-  joinVoiceChannel,
-  getVoiceConnection,
-  entersState,
-  VoiceConnectionStatus,
-} = require("@discordjs/voice");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
+const { joinCall, stopKeeping } = require("../utils/callKeeper");
 const {
   buildBotcallPanel,
   buildBotcallSelectEfemera,
@@ -19,42 +14,8 @@ function isStaff(interaction) {
   return interaction.member?.roles?.cache?.hasAny(...ALL_STAFF_ROLE_IDS);
 }
 
-// Entra na call (trocando de call se o bot já estiver em outra) e espera ficar pronto
-async function connectToChannel(channel) {
-  getVoiceConnection(channel.guild.id)?.destroy();
-
-  const connection = joinVoiceChannel({
-    channelId: channel.id,
-    guildId: channel.guild.id,
-    adapterCreator: channel.guild.voiceAdapterCreator,
-    selfDeaf: true,
-  });
-
-  try {
-    await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
-  } catch (err) {
-    connection.destroy();
-    throw err;
-  }
-
-  // Se o bot for desconectado/movido por fora, tenta reconectar; se não der, limpa a conexão
-  connection.on(VoiceConnectionStatus.Disconnected, async () => {
-    try {
-      await Promise.race([
-        entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
-        entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
-      ]);
-    } catch {
-      if (connection.state.status !== VoiceConnectionStatus.Destroyed) {
-        connection.destroy();
-      }
-    }
-  });
-
-  return connection;
-}
-
-// Valida a call e conecta. Retorna true se conectou; senão avisa em efêmera e retorna false.
+// Valida a call e conecta (o callKeeper salva no MongoDB e passa a manter a call).
+// Retorna true se conectou; senão avisa em efêmera e retorna false.
 async function tryConnect(interaction, channel) {
   if (!channel || !channel.isVoiceBased()) {
     await interaction.followUp({ content: "Essa call não existe mais.", flags: EPHEMERAL });
@@ -68,7 +29,7 @@ async function tryConnect(interaction, channel) {
     return false;
   }
   try {
-    await connectToChannel(channel);
+    await joinCall(channel);
     return true;
   } catch (err) {
     console.error("[BOTCALL] Erro ao conectar:", err);
@@ -134,11 +95,15 @@ async function handleBotcallButton(interaction) {
         flags: V2 | EPHEMERAL,
       });
 
-    case "botcall_disconnect":
-      getVoiceConnection(interaction.guild.id)?.destroy();
-      return interaction.update({
+    case "botcall_disconnect": {
+      await interaction.deferUpdate();
+      // Desconexão de propósito: o bot sai e NÃO volta sozinho
+      await stopKeeping(interaction.guild.id);
+      return interaction.editReply({
         components: buildBotcallPanel({ selectedId: channelId, connected: false }),
+        flags: V2,
       });
+    }
 
     case "botcall_connect": {
       await interaction.deferUpdate();
