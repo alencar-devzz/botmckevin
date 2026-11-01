@@ -27,6 +27,7 @@ module.exports = {
         reason,
       }),
       flags: MessageFlags.IsComponentsV2,
+      allowedMentions: { parse: [] },
     });
 
     setPendingModeration(
