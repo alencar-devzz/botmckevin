@@ -1,5 +1,6 @@
 const { MessageFlags } = require("discord.js");
 const { buildBotcallPanel } = require("../ui/botcall");
+const { getKeptChannel } = require("../utils/callKeeper");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 
 module.exports = {
@@ -20,11 +21,12 @@ module.exports = {
 
     message.delete().catch(() => {});
 
-    // Se o bot já estiver em uma call, o painel já nasce mostrando ela como conectada
+    // Se o bot já estiver em uma call (ou estiver reconectando), o painel já nasce mostrando ela
     const currentId = message.guild.members.me?.voice?.channelId ?? null;
+    const selectedId = getKeptChannel(message.guild.id) ?? currentId;
 
     await message.channel.send({
-      components: buildBotcallPanel({ selectedId: currentId, connected: Boolean(currentId) }),
+      components: buildBotcallPanel({ selectedId, connected: Boolean(currentId) }),
       flags: MessageFlags.IsComponentsV2,
     });
   },
