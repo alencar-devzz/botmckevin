@@ -5,7 +5,7 @@ const {
   entersState,
   VoiceConnectionStatus,
 } = require("@discordjs/voice");
-const { STAFF_ROLE_IDS } = require("../utils/ticketConfig");
+const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 const {
   buildBotcallPanel,
   buildBotcallSelectEfemera,
@@ -16,7 +16,7 @@ const V2 = MessageFlags.IsComponentsV2;
 const EPHEMERAL = MessageFlags.Ephemeral;
 
 function isStaff(interaction) {
-  return interaction.member?.roles?.cache?.hasAny(...STAFF_ROLE_IDS);
+  return interaction.member?.roles?.cache?.hasAny(...ALL_STAFF_ROLE_IDS);
 }
 
 // Entra na call (trocando de call se o bot já estiver em outra) e espera ficar pronto
