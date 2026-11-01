@@ -1,12 +1,13 @@
 const { MessageFlags, PermissionFlagsBits } = require("discord.js");
-const { STAFF_ROLE_IDS } = require("../utils/ticketConfig");
+const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 const { getPrefix } = require("../utils/getPrefix");
 const { formatDuration } = require("../utils/formatDuration");
 const { buildLimpandoPanel, buildLimpoPanel } = require("../ui/limpar");
 
 const MAX_MESSAGES = 500;
-const BULK_LIMIT_MS = 14 * 24 * 60 * 60 * 1000 - 60_000; // bulkDelete só aceita mensagens com menos de 14 dias
-const UPDATE_INTERVAL_MS = 2000;
+const DELETE_DELAY_MS = 2000; // espera entre cada mensagem apagada (evita rate limit)
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Envia um aviso no canal e apaga depois de 5s
 async function aviso(message, content) {
@@ -19,7 +20,7 @@ module.exports = {
   aliases: ["clear"],
   async execute(message, args) {
     // Apenas os cargos da equipe podem usar o comando
-    if (!message.member.roles.cache.hasAny(...STAFF_ROLE_IDS)) {
+    if (!message.member.roles.cache.hasAny(...ALL_STAFF_ROLE_IDS)) {
       return aviso(message, "Você não tem permissão para usar esse comando.");
     }
 
@@ -57,11 +58,8 @@ module.exports = {
       allowedMentions: { parse: [] },
     });
 
-    let lastUpdate = Date.now();
-    const refresh = async (force = false) => {
-      if (!force && Date.now() - lastUpdate < UPDATE_INTERVAL_MS) return;
-      lastUpdate = Date.now();
-      await panel
+    const refresh = () =>
+      panel
         .edit({
           components: buildLimpandoPanel({
             channel,
@@ -73,7 +71,6 @@ module.exports = {
           allowedMentions: { parse: [] },
         })
         .catch(() => {});
-    };
 
     try {
       while (deleted < total) {
@@ -85,20 +82,16 @@ module.exports = {
         if (batch.length === 0) break;
 
         const before = deleted;
-        const recent = batch.filter((m) => Date.now() - m.createdTimestamp < BULK_LIMIT_MS);
-        const old = batch.filter((m) => Date.now() - m.createdTimestamp >= BULK_LIMIT_MS);
 
-        if (recent.length > 0) {
-          const removed = await channel.bulkDelete(recent, true).catch(() => null);
-          deleted += removed?.size ?? 0;
-          await refresh();
-        }
-
-        // Mensagens com mais de 14 dias só podem ser apagadas uma por uma (mais lento)
-        for (const msg of old) {
+        // Apaga uma por vez, esperando 2 segundos entre cada deleção
+        for (const msg of batch) {
           const ok = await msg.delete().then(() => true).catch(() => false);
-          if (ok) deleted++;
+          if (!ok) continue;
+
+          deleted++;
           await refresh();
+
+          if (deleted < total) await sleep(DELETE_DELAY_MS);
         }
 
         // Nada foi apagado nessa rodada: para para não ficar em loop
