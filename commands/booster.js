@@ -1,12 +1,12 @@
 const { MessageFlags } = require("discord.js");
 const { buildBoosterPanel } = require("../ui/booster");
-const { STAFF_ROLE_IDS } = require("../utils/ticketConfig");
+const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 
 module.exports = {
   name: "booster",
   async execute(message) {
     // Apenas os cargos da equipe podem usar o comando
-    if (!message.member.roles.cache.hasAny(...STAFF_ROLE_IDS)) {
+    if (!message.member.roles.cache.hasAny(...ALL_STAFF_ROLE_IDS)) {
       const warning = await message.channel
         .send("Você não tem permissão para usar esse comando.")
         .catch(() => null);
