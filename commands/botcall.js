@@ -1,6 +1,6 @@
 const { MessageFlags } = require("discord.js");
 const { buildBotcallPanel } = require("../ui/botcall");
-const { getKeptChannel } = require("../utils/callKeeper");
+const { getKeptChannel, registerPanel } = require("../utils/callKeeper");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 
 module.exports = {
@@ -25,9 +25,13 @@ module.exports = {
     const currentId = message.guild.members.me?.voice?.channelId ?? null;
     const selectedId = getKeptChannel(message.guild.id) ?? currentId;
 
-    await message.channel.send({
-      components: buildBotcallPanel({ selectedId, connected: Boolean(currentId) }),
+    const state = { selectedId, connected: Boolean(currentId) };
+    const panel = await message.channel.send({
+      components: buildBotcallPanel(state),
       flags: MessageFlags.IsComponentsV2,
     });
+
+    // Esse painel passa a ser atualizado em tempo real
+    registerPanel(message.guild.id, message.channel.id, panel.id, state);
   },
 };
