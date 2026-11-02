@@ -25,6 +25,11 @@ function buildMainMenu() {
         label: "Comunidade e interação",
         description: "Configurações da comunidade e interações.",
         value: "comunidade",
+      },
+      {
+        label: "Sistema de tickets",
+        description: "Painel, textos, imagens, cargos e opções dos tickets.",
+        value: "tickets",
       }
     );
 
