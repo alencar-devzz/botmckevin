@@ -2,11 +2,13 @@ const { MessageFlags, PermissionFlagsBits } = require("discord.js");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 const {
   MAX_OPTIONS,
+  MAX_IMAGES,
   getTicketSettings,
   updateTicketConfig,
   parseImageUrls,
 } = require("../utils/ticketSettings");
 const { sendTicketPanel, refreshTicketPanels } = require("../utils/ticketPanels");
+const { describeSources, saveUploads, deleteUploads } = require("../utils/ticketMedia");
 const {
   buildTicketMenuPanel,
   buildPanelExternoCfg,
@@ -21,6 +23,7 @@ const {
   buildImagesModal,
   buildInternalTextModal,
   buildOptionModal,
+  buildRemoveOptionsModal,
 } = require("../ui/ticketConfigModals");
 
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -46,6 +49,92 @@ const clean = (value) => {
   const v = value?.trim();
   return v ? v : null;
 };
+
+// Lê os valores de um select do modal (vazio se o select não existir)
+function selectValues(interaction, id) {
+  try {
+    return interaction.fields.getStringSelectValues(id) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+// Move/insere um item numa posição (0-based) da lista
+function placeAt(list, item, position) {
+  const index = Math.max(0, Math.min(Number.isInteger(position) ? position : list.length, list.length));
+  const copy = [...list];
+  copy.splice(index, 0, item);
+  return copy;
+}
+
+// Modal de imagens: mantém as marcadas no select, soma uploads e links novos
+const IMAGE_SCOPES = {
+  panel: {
+    modalId: "tcfg_modal_panel_images",
+    sources: (s) => s.panelSources,
+    field: "panelImages",
+    build: buildPanelExternoCfg,
+    refresh: true,
+  },
+  internal: {
+    modalId: "tcfg_modal_int_images",
+    sources: (s) => s.internalSources,
+    field: "internalImages",
+    build: buildInternoCfg,
+    refresh: false,
+  },
+};
+
+async function handleImagesModal(interaction, scope) {
+  const cfg = IMAGE_SCOPES[scope];
+  const guildId = interaction.guild.id;
+
+  // Baixar os arquivos pode levar alguns segundos
+  await interaction.deferUpdate();
+
+  const before = await getTicketSettings(guildId);
+  const current = cfg.sources(before);
+
+  const keepIndexes = new Set(selectValues(interaction, "keep"));
+  const kept = current.filter((_, index) => keepIndexes.has(String(index)));
+  const removed = current.filter((_, index) => !keepIndexes.has(String(index)));
+
+  // 1) arquivos enviados
+  const uploaded = interaction.fields.getUploadedFiles("upload", false);
+  const { stored, rejected } = await saveUploads({
+    guildId,
+    scope,
+    files: uploaded ? [...uploaded.values()] : [],
+    existingSources: kept,
+    room: Math.max(0, MAX_IMAGES - kept.length),
+  });
+  const uploadedSources = stored.map((id) => `db:${id}`);
+
+  // 2) links digitados
+  const { urls, invalid } = parseImageUrls(interaction.fields.getTextInputValue("links"));
+  const linkRoom = Math.max(0, MAX_IMAGES - kept.length - uploadedSources.length);
+  const newLinks = urls.filter((u) => !kept.includes(u)).slice(0, linkRoom);
+  const ignoredLinks = invalid + Math.max(0, urls.filter((u) => !kept.includes(u)).length - newLinks.length);
+
+  const finalSources = [...kept, ...uploadedSources, ...newLinks];
+  const settings = await updateTicketConfig(guildId, { [cfg.field]: finalSources });
+
+  // Apaga do banco só o que saiu da lista
+  await deleteUploads(removed).catch((err) =>
+    console.error("[TICKET IMAGENS] Erro ao apagar imagens removidas:", err.message)
+  );
+
+  await interaction.editReply({ components: cfg.build(settings) });
+  if (cfg.refresh) refreshInBackground(interaction, settings);
+
+  const notes = [...rejected];
+  if (ignoredLinks) notes.push(`${ignoredLinks} link(s) ignorados (inválidos ou acima do limite).`);
+  if (notes.length) {
+    await interaction
+      .followUp({ content: notes.map((n) => `• ${n}`).join("\n").slice(0, 1900), flags: EPHEMERAL })
+      .catch(() => {});
+  }
+}
 
 // ---------- selects ----------
 
@@ -151,10 +240,9 @@ async function handleTicketConfigButton(interaction) {
       const settings = await getTicketSettings(guildId);
       return interaction.showModal(
         buildImagesModal({
-          customId: "tcfg_modal_panel_images",
+          customId: IMAGE_SCOPES.panel.modalId,
           title: "Imagens do painel externo",
-          current: settings.custom.panelImages ? settings.panelImages : [],
-          emptyHint: "vazio = imagem padrão",
+          current: await describeSources(settings.panelSources),
         })
       );
     }
@@ -168,10 +256,9 @@ async function handleTicketConfigButton(interaction) {
       const settings = await getTicketSettings(guildId);
       return interaction.showModal(
         buildImagesModal({
-          customId: "tcfg_modal_int_images",
+          customId: IMAGE_SCOPES.internal.modalId,
           title: "Imagens do ticket interno",
-          current: settings.internalImages,
-          emptyHint: "vazio = sem imagens",
+          current: await describeSources(settings.internalSources),
         })
       );
     }
@@ -185,7 +272,12 @@ async function handleTicketConfigButton(interaction) {
         });
       }
       return interaction.showModal(
-        buildOptionModal({ customId: "tcfg_modal_opt_add", title: "Nova opção" })
+        buildOptionModal({
+          customId: "tcfg_modal_opt_add",
+          title: "Nova opção",
+          options: settings.options,
+          position: settings.options.length,
+        })
       );
     }
 
@@ -198,8 +290,21 @@ async function handleTicketConfigButton(interaction) {
           customId: `tcfg_modal_opt_edit:${key}`,
           title: "Editar opção",
           option,
+          options: settings.options,
+          position: settings.options.findIndex((o) => o.key === key),
         })
       );
+    }
+
+    case "tcfg_opt_remove": {
+      const settings = await getTicketSettings(guildId);
+      if (settings.options.length <= 1) {
+        return interaction.reply({
+          content: "O painel precisa ter pelo menos uma opção.",
+          flags: EPHEMERAL,
+        });
+      }
+      return interaction.showModal(buildRemoveOptionsModal(settings.options));
     }
 
     case "tcfg_opt_del": {
@@ -246,28 +351,8 @@ async function handleTicketConfigModal(interaction) {
       return refreshInBackground(interaction, settings);
     }
 
-    case "tcfg_modal_panel_images": {
-      const raw = field("images");
-      const { urls, invalid } = parseImageUrls(raw);
-      if (clean(raw) && !urls.length) {
-        return interaction.reply({
-          content: "Nenhum link válido. Envie links que começam com http:// ou https://",
-          flags: EPHEMERAL,
-        });
-      }
-      const settings = await updateTicketConfig(guildId, { panelImages: urls });
-      await interaction.update({ components: buildPanelExternoCfg(settings) });
-      refreshInBackground(interaction, settings);
-      if (invalid) {
-        await interaction
-          .followUp({
-            content: `${invalid} link(s) foram ignorados (inválidos ou acima do limite).`,
-            flags: EPHEMERAL,
-          })
-          .catch(() => {});
-      }
-      return;
-    }
+    case "tcfg_modal_panel_images":
+      return handleImagesModal(interaction, "panel");
 
     case "tcfg_modal_int_text": {
       const settings = await updateTicketConfig(guildId, {
@@ -279,27 +364,8 @@ async function handleTicketConfigModal(interaction) {
       return interaction.update({ components: buildInternoCfg(settings) });
     }
 
-    case "tcfg_modal_int_images": {
-      const raw = field("images");
-      const { urls, invalid } = parseImageUrls(raw);
-      if (clean(raw) && !urls.length) {
-        return interaction.reply({
-          content: "Nenhum link válido. Envie links que começam com http:// ou https://",
-          flags: EPHEMERAL,
-        });
-      }
-      const settings = await updateTicketConfig(guildId, { internalImages: urls });
-      await interaction.update({ components: buildInternoCfg(settings) });
-      if (invalid) {
-        await interaction
-          .followUp({
-            content: `${invalid} link(s) foram ignorados (inválidos ou acima do limite).`,
-            flags: EPHEMERAL,
-          })
-          .catch(() => {});
-      }
-      return;
-    }
+    case "tcfg_modal_int_images":
+      return handleImagesModal(interaction, "internal");
 
     case "tcfg_modal_opt_add": {
       const current = await getTicketSettings(guildId);
@@ -317,8 +383,9 @@ async function handleTicketConfigModal(interaction) {
         title: clean(field("opt_title")) ?? label.toUpperCase(),
         message: clean(field("opt_message")),
       };
+      const position = Number.parseInt(selectValues(interaction, "opt_position")[0], 10);
       const settings = await updateTicketConfig(guildId, {
-        options: [...current.options, option],
+        options: placeAt(current.options, option, position),
       });
       await interaction.update({ components: buildOptionsCfg(settings) });
       return refreshInBackground(interaction, settings);
@@ -337,10 +404,29 @@ async function handleTicketConfigModal(interaction) {
         title: clean(field("opt_title")) ?? label.toUpperCase(),
         message: clean(field("opt_message")),
       };
+      const position = Number.parseInt(selectValues(interaction, "opt_position")[0], 10);
+      const others = current.options.filter((o) => o.key !== key);
       const settings = await updateTicketConfig(guildId, {
-        options: current.options.map((o) => (o.key === key ? updated : o)),
+        options: placeAt(others, updated, position),
       });
       await interaction.update({ components: buildOptionDetail(settings, updated) });
+      return refreshInBackground(interaction, settings);
+    }
+
+    case "tcfg_modal_opt_remove": {
+      const current = await getTicketSettings(guildId);
+      const toRemove = new Set(selectValues(interaction, "opt_remove"));
+      const remaining = current.options.filter((o) => !toRemove.has(o.key));
+
+      if (!remaining.length) {
+        return interaction.reply({
+          content: "O painel precisa ter pelo menos uma opção.",
+          flags: EPHEMERAL,
+        });
+      }
+
+      const settings = await updateTicketConfig(guildId, { options: remaining });
+      await interaction.update({ components: buildOptionsCfg(settings) });
       return refreshInBackground(interaction, settings);
     }
 
