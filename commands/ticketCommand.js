@@ -1,6 +1,5 @@
-const { MessageFlags } = require("discord.js");
-const { buildTicketPanel } = require("../ui/ticket");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
+const { sendTicketPanel } = require("../utils/ticketPanels");
 
 module.exports = {
   name: "ticket",
@@ -21,9 +20,7 @@ module.exports = {
 
     message.delete().catch(() => {});
 
-    await message.channel.send({
-      components: buildTicketPanel(),
-      flags: MessageFlags.IsComponentsV2,
-    });
+    // Envia o painel com a configuração atual (textos, imagens e opções do menu de tickets)
+    await sendTicketPanel(message.channel);
   },
 };
