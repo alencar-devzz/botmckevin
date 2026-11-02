@@ -16,6 +16,7 @@ const { handleRegrasButton } = require("./regrasHandlers");
 const { handleBoosterButton } = require("./boosterHandlers");
 const { handleModerationButton } = require("./moderationHandlers");
 const { handleBotcallButton } = require("./botcallHandlers");
+const { handleTicketConfigButton } = require("./ticketConfigHandlers");
 
 async function handleButton(interaction) {
   const { customId } = interaction;
@@ -34,6 +35,10 @@ async function handleButton(interaction) {
 
   if (customId.startsWith("botcall_")) {
     return handleBotcallButton(interaction);
+  }
+
+  if (customId.startsWith("tcfg_")) {
+    return handleTicketConfigButton(interaction);
   }
 
   if (customId === "mod_confirm" || customId === "mod_cancel") {

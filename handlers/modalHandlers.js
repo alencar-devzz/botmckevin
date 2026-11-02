@@ -2,6 +2,7 @@ const { MessageFlags } = require("discord.js");
 const BotConfig = require("../database/models/BotConfig");
 const { getGuildConfig } = require("../database/getGuildConfig");
 const { buildPortariaConfig } = require("../ui/portaria");
+const { handleTicketConfigModal } = require("./ticketConfigHandlers");
 
 async function getBotConfig() {
   let config = await BotConfig.findById("global");
@@ -20,6 +21,10 @@ function getImage(interaction, inputId) {
 
 async function handleModal(interaction) {
   const { customId } = interaction;
+
+  if (customId.startsWith("tcfg_modal_")) {
+    return handleTicketConfigModal(interaction);
+  }
 
   switch (customId) {
     case "modal_nome": {

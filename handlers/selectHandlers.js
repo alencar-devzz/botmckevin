@@ -6,12 +6,18 @@ const { buildPortariaIntro, buildPortariaConfig } = require("../ui/portaria");
 const { buildAutoRolesPanel } = require("../ui/autoroles");
 const { handleTicketSelect } = require("./ticketHandlers");
 const { handleBotcallSelect } = require("./botcallHandlers");
+const { handleTicketConfigSelect } = require("./ticketConfigHandlers");
+const { buildTicketMenuPanel } = require("../ui/ticketConfig");
 
 async function handleSelect(interaction) {
   const { customId, values } = interaction;
 
   if (customId.startsWith("botcall_")) {
     return handleBotcallSelect(interaction);
+  }
+
+  if (customId.startsWith("tcfg_")) {
+    return handleTicketConfigSelect(interaction);
   }
 
   switch (customId) {
@@ -26,6 +32,12 @@ async function handleSelect(interaction) {
       if (value === "comunidade") {
         return interaction.reply({
           components: buildComunidadePanel(),
+          flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+        });
+      }
+      if (value === "tickets") {
+        return interaction.reply({
+          components: buildTicketMenuPanel(),
           flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
         });
       }
