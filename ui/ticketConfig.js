@@ -85,7 +85,7 @@ function buildTicketMenuPanel() {
     );
 
   selectContainer.addActionRowComponents(new ActionRowBuilder().addComponents(select));
-  addBackButton(selectContainer, "back_main");
+  addBackButton(selectContainer, "back_moderacao");
 
   return [header, selectContainer];
 }

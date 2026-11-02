@@ -27,9 +27,9 @@ function buildMainMenu() {
         value: "comunidade",
       },
       {
-        label: "Sistema de tickets",
-        description: "Painel, textos, imagens, cargos e opções dos tickets.",
-        value: "tickets",
+        label: "Moderação",
+        description: "Sistema de tickets e outras ferramentas de moderação.",
+        value: "moderacao",
       }
     );
 
