@@ -11,43 +11,73 @@ const {
   ButtonStyle,
   ActionRowBuilder,
 } = require("discord.js");
-const { PANEL_IMAGE, TICKET_OPTIONS } = require("../utils/ticketConfig");
+const { applyVars, getOption } = require("../utils/ticketSettings");
 
-// Painel enviado pelo n!ticket: imagem + select menu
-function buildTicketPanel() {
+function buildGallery(urls) {
+  return new MediaGalleryBuilder().addItems(
+    urls.slice(0, 10).map((url) => new MediaGalleryItemBuilder().setURL(url))
+  );
+}
+
+// Painel enviado pelo n!ticket (ou pelo menu): imagens + texto + select menu
+// media = { panel: { items }, internal: { items } } (de utils/ticketMedia). Sem media, usa só links.
+function buildTicketPanel(settings, media = null) {
   const select = new StringSelectMenuBuilder()
     .setCustomId("ticket_select")
-    .setPlaceholder("Selecione uma opção")
+    .setPlaceholder(settings.panelPlaceholder.slice(0, 150))
     .addOptions(
-      Object.entries(TICKET_OPTIONS).map(([value, opt]) => ({
-        label: opt.label,
-        description: opt.description,
-        value,
-      }))
+      settings.options.slice(0, 25).map((opt) => {
+        const item = { label: opt.label.slice(0, 100), value: opt.key };
+        if (opt.description) item.description = opt.description.slice(0, 100);
+        return item;
+      })
     );
 
-  return [
-    new ContainerBuilder()
-      .addMediaGalleryComponents(
-        new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(PANEL_IMAGE))
-      )
-      .addActionRowComponents(new ActionRowBuilder().addComponents(select)),
-  ];
+  const container = new ContainerBuilder();
+
+  const panelItems = media?.panel.items ?? settings.panelImages.filter((u) => /^https?:/i.test(u));
+  if (panelItems.length) {
+    container.addMediaGalleryComponents(buildGallery(panelItems));
+  }
+
+  const textParts = [];
+  if (settings.panelTitle) textParts.push(`### ${settings.panelTitle}`);
+  if (settings.panelDescription) textParts.push(settings.panelDescription);
+  if (textParts.length) {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(textParts.join("\n")));
+  }
+
+  container.addActionRowComponents(new ActionRowBuilder().addComponents(select));
+  return [container];
 }
 
 // Container dentro do tópico do ticket
-function buildTicketContainer({ author, optionKey, claimedBy = null }) {
-  const opt = TICKET_OPTIONS[optionKey];
+function buildTicketContainer({
+  author,
+  optionKey,
+  claimedBy = null,
+  settings,
+  guildName = "",
+  media = null,
+}) {
+  const opt = getOption(settings, optionKey);
+  const vars = {
+    user: `<@${author.id}>`,
+    username: author.username,
+    option: opt.label,
+    server: guildName,
+  };
+
+  const heading = applyVars(settings.internalHeading, vars);
+  const message = applyVars(opt.message || settings.internalMessage, vars);
 
   const section = new SectionBuilder()
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`## Ticket - ${author.username}`),
+      new TextDisplayBuilder().setContent(`## ${heading}`),
       new TextDisplayBuilder().setContent(
         `**Assumido por:** \`${claimedBy ? claimedBy.username : "Ninguém"}\``
       ),
-      new TextDisplayBuilder().setContent(
-        `**Opção selecionada:**\n\`\`\`\n${opt.label}\n\`\`\``
-      )
+      new TextDisplayBuilder().setContent(`**Opção selecionada:**\n\`\`\`\n${opt.label}\n\`\`\``)
     )
     .setThumbnailAccessory(
       new ThumbnailBuilder().setURL(author.displayAvatarURL({ extension: "png", size: 256 }))
@@ -64,23 +94,34 @@ function buildTicketContainer({ author, optionKey, claimedBy = null }) {
     .setLabel("Finalizar")
     .setStyle(ButtonStyle.Danger);
 
-  return new ContainerBuilder()
+  const container = new ContainerBuilder()
     .addSectionComponents(section)
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        `## ${opt.title}\n Por favor, aguarde as instruções do staff responsável.`
-      )
-    )
-    .addActionRowComponents(new ActionRowBuilder().addComponents(claimButton, closeButton));
+      new TextDisplayBuilder().setContent(`## ${opt.title}\n ${message}`)
+    );
+
+  const internalItems =
+    media?.internal.items ?? settings.internalImages.filter((u) => /^https?:/i.test(u));
+  if (internalItems.length) {
+    container.addMediaGalleryComponents(buildGallery(internalItems));
+  }
+
+  return container.addActionRowComponents(
+    new ActionRowBuilder().addComponents(claimButton, closeButton)
+  );
 }
 
 // Mensagem enviada quando um staff assume o ticket
-function buildClaimedContainer(staffId, timestamp) {
+function buildClaimedContainer({ staffId, authorId, timestamp, settings, guildName = "" }) {
+  const text = applyVars(settings.claimedMessage, {
+    staff: `<@${staffId}>`,
+    user: `<@${authorId}>`,
+    server: guildName,
+  });
+
   return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(
-      `### <@${staffId}> **Assumiu** este ticket e irá lhe atender.\n-# <t:${timestamp}:t>`
-    )
+    new TextDisplayBuilder().setContent(`### ${text}\n-# <t:${timestamp}:t>`)
   );
 }
 
