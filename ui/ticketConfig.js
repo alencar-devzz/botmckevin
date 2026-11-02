@@ -28,11 +28,15 @@ function rolesText(ids) {
 }
 
 // Section com texto + botão "Definir" ao lado (mesmo estilo dos outros painéis)
-function configSection(lines, customId, label = "Definir") {
+function configSection(lines, customId, label = "Definir", { disabled = false, style = ButtonStyle.Secondary } = {}) {
   return new SectionBuilder()
     .addTextDisplayComponents(...lines.map(text))
     .setButtonAccessory(
-      new ButtonBuilder().setCustomId(customId).setLabel(label).setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder()
+        .setCustomId(customId)
+        .setLabel(label)
+        .setStyle(style)
+        .setDisabled(disabled)
     );
 }
 
@@ -64,8 +68,8 @@ function buildTicketMenuPanel() {
         value: "interno",
       },
       {
-        label: "Opções do ticket",
-        description: "Categorias exibidas no select menu do painel.",
+        label: "Opções do menu",
+        description: "Adicionar, editar, ordenar e remover as opções do painel.",
         value: "opcoes",
       },
       {
@@ -111,9 +115,9 @@ function buildPanelExternoCfg(s) {
     configSection(
       [
         "**Imagens do painel**",
-        `-# Até ${MAX_IMAGES} imagens, um link por linha.`,
+        `-# Até ${MAX_IMAGES} imagens: envie arquivos ou use links.`,
         `-# Imagens: \`${
-          s.custom.panelImages ? `${s.panelImages.length} personalizada(s)` : "Padrão"
+          s.custom.panelImages ? `${s.panelSources.length} personalizada(s)` : "Padrão"
         }\``,
       ],
       "tcfg_panel_images"
@@ -151,8 +155,8 @@ function buildInternoCfg(s) {
     configSection(
       [
         "**Imagens do ticket**",
-        `-# Até ${MAX_IMAGES} imagens, um link por linha.`,
-        `-# Imagens: \`${s.internalImages.length ? `${s.internalImages.length} definida(s)` : "Nenhuma"}\``,
+        `-# Até ${MAX_IMAGES} imagens: envie arquivos ou use links.`,
+        `-# Imagens: \`${s.internalSources.length ? `${s.internalSources.length} definida(s)` : "Nenhuma"}\``,
       ],
       "tcfg_int_images"
     )
@@ -166,8 +170,8 @@ function buildInternoCfg(s) {
 
 function buildOptionsCfg(s) {
   const header = new ContainerBuilder().addTextDisplayComponents(
-    text("### Opções do ticket"),
-    text(`-# Categorias do select menu do painel (até ${MAX_OPTIONS}).`)
+    text("### Opções do menu"),
+    text(`-# Opções do select menu do painel de tickets (até ${MAX_OPTIONS}).`)
   );
 
   const lista = s.options
@@ -180,7 +184,7 @@ function buildOptionsCfg(s) {
   const selectContainer = new ContainerBuilder().addTextDisplayComponents(
     text("**Opções atuais**"),
     text(lista.slice(0, 3000)),
-    text("-# Selecione uma opção abaixo para editar ou remover.")
+    text("-# Selecione uma opção abaixo para editar, mover ou remover.")
   );
 
   const select = new StringSelectMenuBuilder()
@@ -191,13 +195,27 @@ function buildOptionsCfg(s) {
     );
   selectContainer.addActionRowComponents(new ActionRowBuilder().addComponents(select));
 
-  const novaOpcao = new ContainerBuilder().addSectionComponents(
-    configSection(
-      ["**Nova opção**", "-# Adicione uma nova categoria ao painel."],
-      "tcfg_opt_add",
-      "Adicionar"
+  const novaOpcao = new ContainerBuilder()
+    .addSectionComponents(
+      configSection(
+        [
+          "**Nova opção**",
+          `-# Adicione uma opção ao menu (${s.options.length}/${MAX_OPTIONS}).`,
+        ],
+        "tcfg_opt_add",
+        "Adicionar",
+        { disabled: s.options.length >= MAX_OPTIONS }
+      )
     )
-  );
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addSectionComponents(
+      configSection(
+        ["**Remover opções**", "-# Escolha várias opções para remover de uma vez."],
+        "tcfg_opt_remove",
+        "Remover",
+        { disabled: s.options.length <= 1, style: ButtonStyle.Danger }
+      )
+    );
 
   addBackButton(novaOpcao, "tcfg_back");
   return [header, selectContainer, novaOpcao];
