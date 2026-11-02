@@ -1,6 +1,6 @@
 const { MessageFlags } = require("discord.js");
 const { getGuildConfig } = require("../database/getGuildConfig");
-const { buildAparenciaPanel } = require("../ui/aparencia");
+const { openAparencia, handleAparenciaSelect } = require("./aparenciaHandlers");
 const { buildComunidadePanel } = require("../ui/comunidade");
 const { buildPortariaIntro, buildPortariaConfig } = require("../ui/portaria");
 const { buildAutoRolesPanel } = require("../ui/autoroles");
@@ -21,14 +21,15 @@ async function handleSelect(interaction) {
     return handleTicketConfigSelect(interaction);
   }
 
+  if (customId.startsWith("apar_")) {
+    return handleAparenciaSelect(interaction);
+  }
+
   switch (customId) {
     case "main_menu": {
       const value = values[0];
       if (value === "aparencia") {
-        return interaction.reply({
-          components: buildAparenciaPanel(),
-          flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
-        });
+        return openAparencia(interaction);
       }
       if (value === "comunidade") {
         return interaction.reply({
