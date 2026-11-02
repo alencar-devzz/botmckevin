@@ -56,7 +56,7 @@ async function handleBotcallSelect(interaction) {
 
   // Select do próprio painel: conecta e atualiza o painel
   if (interaction.customId === "botcall_select_initial") {
-    registerPanel(interaction.guild.id, interaction.channelId, interaction.message.id);
+    registerPanel(interaction.client, interaction.guild.id, interaction.channelId, interaction.message.id);
     if (!(await tryConnect(interaction, channel))) return;
     return interaction.editReply({
       components: buildBotcallPanel({ selectedId: channel.id, connected: true }),
@@ -67,7 +67,7 @@ async function handleBotcallSelect(interaction) {
   // Select da efêmera (botão "Selecionar"): conecta, atualiza o painel e a efêmera
   if (interaction.customId.startsWith("botcall_pick:")) {
     const panelMessageId = interaction.customId.split(":")[1];
-    registerPanel(interaction.guild.id, interaction.channelId, panelMessageId);
+    registerPanel(interaction.client, interaction.guild.id, interaction.channelId, panelMessageId);
     if (!(await tryConnect(interaction, channel))) return;
 
     const panel = await interaction.channel?.messages.fetch(panelMessageId).catch(() => null);
@@ -91,7 +91,7 @@ async function handleBotcallButton(interaction) {
   const [action, channelId] = interaction.customId.split(":");
 
   // O painel usado agora passa a ser o que é atualizado em tempo real
-  registerPanel(interaction.guild.id, interaction.channelId, interaction.message.id);
+  registerPanel(interaction.client, interaction.guild.id, interaction.channelId, interaction.message.id);
 
   switch (action) {
     case "botcall_choose":
