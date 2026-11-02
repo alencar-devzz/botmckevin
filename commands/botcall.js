@@ -32,6 +32,6 @@ module.exports = {
     });
 
     // Esse painel passa a ser atualizado em tempo real
-    registerPanel(message.guild.id, message.channel.id, panel.id, state);
+    registerPanel(message.client, message.guild.id, message.channel.id, panel.id, state);
   },
 };
