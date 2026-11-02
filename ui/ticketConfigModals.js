@@ -1,66 +1,6 @@
-const {
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  LabelBuilder,
-  FileUploadBuilder,
-  StringSelectMenuBuilder,
-} = require("discord.js");
+const { TextInputStyle, LabelBuilder, FileUploadBuilder } = require("discord.js");
 const { MAX_IMAGES } = require("../utils/ticketSettings");
-
-// ---------- helpers (tudo em Labels: formato novo dos modais) ----------
-
-function textLabel({
-  id,
-  label,
-  description,
-  style = TextInputStyle.Short,
-  max,
-  required = false,
-  value,
-  placeholder,
-}) {
-  const field = new TextInputBuilder()
-    .setCustomId(id)
-    .setStyle(style)
-    .setRequired(required)
-    .setMaxLength(max);
-  if (placeholder) field.setPlaceholder(placeholder.slice(0, 100));
-  if (value) field.setValue(String(value).slice(0, max));
-
-  const wrapper = new LabelBuilder().setLabel(label).setTextInputComponent(field);
-  if (description) wrapper.setDescription(description);
-  return wrapper;
-}
-
-function selectLabel({
-  id,
-  label,
-  description,
-  options,
-  min = 1,
-  max = 1,
-  required = true,
-  placeholder,
-}) {
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(id)
-    .setMinValues(min)
-    .setMaxValues(max)
-    .addOptions(options);
-  if (placeholder) menu.setPlaceholder(placeholder);
-  if (typeof menu.setRequired === "function") menu.setRequired(required);
-
-  const wrapper = new LabelBuilder().setLabel(label).setStringSelectMenuComponent(menu);
-  if (description) wrapper.setDescription(description);
-  return wrapper;
-}
-
-function modal(customId, title, ...labels) {
-  return new ModalBuilder().setCustomId(customId).setTitle(title).addLabelComponents(...labels);
-}
-
-const clip = (value, max) => String(value ?? "").slice(0, max);
+const { clip, textLabel, selectLabel, modal } = require("./modalHelpers");
 
 // ---------- textos do painel externo ----------
 
