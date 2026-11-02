@@ -8,6 +8,7 @@ const { handleTicketSelect } = require("./ticketHandlers");
 const { handleBotcallSelect } = require("./botcallHandlers");
 const { handleTicketConfigSelect } = require("./ticketConfigHandlers");
 const { buildTicketMenuPanel } = require("../ui/ticketConfig");
+const { buildModeracaoPanel } = require("../ui/moderacao");
 
 async function handleSelect(interaction) {
   const { customId, values } = interaction;
@@ -35,11 +36,19 @@ async function handleSelect(interaction) {
           flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
         });
       }
-      if (value === "tickets") {
+      if (value === "moderacao") {
         return interaction.reply({
-          components: buildTicketMenuPanel(),
+          components: buildModeracaoPanel(),
           flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
         });
+      }
+      return;
+    }
+
+    case "moderacao_menu": {
+      const value = values[0];
+      if (value === "tickets") {
+        return interaction.update({ components: buildTicketMenuPanel() });
       }
       return;
     }

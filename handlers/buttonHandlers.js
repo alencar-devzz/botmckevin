@@ -3,6 +3,7 @@ const { getGuildConfig } = require("../database/getGuildConfig");
 const { buildMainMenu } = require("../ui/mainMenu");
 const { buildAparenciaPanel, buildPrefixoEfemero } = require("../ui/aparencia");
 const { buildComunidadePanel } = require("../ui/comunidade");
+const { buildModeracaoPanel } = require("../ui/moderacao");
 const { buildPortariaIntro, buildPortariaConfig } = require("../ui/portaria");
 const {
   buildNomeModal,
@@ -48,6 +49,10 @@ async function handleButton(interaction) {
   switch (customId) {
     case "back_main": {
       return interaction.update({ components: buildMainMenu() });
+    }
+
+    case "back_moderacao": {
+      return interaction.update({ components: buildModeracaoPanel() });
     }
 
     case "back_comunidade": {
