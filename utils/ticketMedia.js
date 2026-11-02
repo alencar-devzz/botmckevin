@@ -115,4 +115,32 @@ async function deleteUploads(sources) {
   if (ids.length) await TicketImage.deleteMany({ _id: { $in: ids } });
 }
 
-module.exports = { isStored, loadMedia, loadTicketMedia, saveUploads, deleteUploads };
+// Nome amigável de cada fonte (para listar nos selects dos modais de imagens)
+async function describeSources(sources) {
+  const ids = sources.filter(isStored).map(storedId);
+  const docs = ids.length ? await TicketImage.find({ _id: { $in: ids } }).select("name size") : [];
+  const byId = new Map(docs.map((d) => [String(d._id), d]));
+
+  return sources.map((source, index) => {
+    if (isStored(source)) {
+      const doc = byId.get(storedId(source));
+      return {
+        label: `${index + 1}. ${doc?.name ?? "imagem enviada"}`.slice(0, 100),
+        description: doc ? `Enviada · ${Math.max(1, Math.round(doc.size / 1024))} KB` : "Enviada (arquivo indisponível)",
+      };
+    }
+    return {
+      label: `${index + 1}. ${String(source).replace(/^https?:\/\//i, "")}`.slice(0, 100),
+      description: "Link",
+    };
+  });
+}
+
+module.exports = {
+  isStored,
+  loadMedia,
+  loadTicketMedia,
+  saveUploads,
+  deleteUploads,
+  describeSources,
+};
