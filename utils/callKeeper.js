@@ -35,6 +35,7 @@ const auditCounts = new Map(); // entryId -> count (para detectar desconexões n
 const lastChannels = new Map(); // guildId -> última call escolhida (mesmo desconectado)
 const panels = new Map(); // guildId -> { channelId, messageId, signature } painel que é atualizado em tempo real
 const panelTimers = new Map(); // guildId -> timer de atualização do painel
+const warnedNoPanel = new Set(); // evita repetir o aviso de "nenhum painel registrado"
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -112,6 +113,12 @@ async function refreshPanel(guildId) {
   const signature = signatureOf(state);
   if (ref.signature === signature) return; // painel já está igual, não precisa editar
 
+  console.log(
+    `[CALL] Atualizando painel: call=${state.selectedId ?? "nenhuma"}, status=${
+      state.connected ? "Conectado" : "Desconectado"
+    }`
+  );
+
   let message = null;
   try {
     const channel = await client.channels.fetch(ref.channelId);
@@ -140,7 +147,17 @@ async function refreshPanel(guildId) {
 
 // Agenda a atualização do painel (junta vários eventos seguidos numa única edição)
 function schedulePanelRefresh(guildId, delayMs = TIMINGS.panelDebounce) {
-  if (!panels.has(guildId) || panelTimers.has(guildId)) return;
+  if (!panels.has(guildId)) {
+    if (!warnedNoPanel.has(guildId)) {
+      warnedNoPanel.add(guildId);
+      console.warn(
+        "[CALL] Nenhum painel está registrado para atualização em tempo real. " +
+          "Envie o comando botcall de novo (ou clique em um botão do painel) para registrar."
+      );
+    }
+    return;
+  }
+  if (panelTimers.has(guildId)) return;
   const timer = setTimeout(() => {
     panelTimers.delete(guildId);
     refreshPanel(guildId).catch((err) => console.error("[CALL] Erro ao atualizar painel:", err.message));
@@ -150,7 +167,8 @@ function schedulePanelRefresh(guildId, delayMs = TIMINGS.panelDebounce) {
 
 // Define qual painel é atualizado em tempo real (o último enviado/usado).
 // Se "rendered" for passado, o painel já está desenhado com esse estado e não precisa de nova edição.
-function registerPanel(guildId, channelId, messageId, rendered = null) {
+function registerPanel(discordClient, guildId, channelId, messageId, rendered = null) {
+  client ??= discordClient;
   const current = panels.get(guildId);
   const changed = !current || current.channelId !== channelId || current.messageId !== messageId;
 
@@ -159,8 +177,12 @@ function registerPanel(guildId, channelId, messageId, rendered = null) {
     messageId,
     signature: rendered ? signatureOf(rendered) : null,
   });
+  warnedNoPanel.delete(guildId);
 
-  if (changed) saveState(guildId, { panelChannelId: channelId, panelMessageId: messageId });
+  if (changed) {
+    console.log(`[CALL] Painel registrado para atualização em tempo real (mensagem ${messageId}).`);
+    saveState(guildId, { panelChannelId: channelId, panelMessageId: messageId });
+  }
   if (!rendered) schedulePanelRefresh(guildId);
 }
 
@@ -339,7 +361,7 @@ async function connectToChannel(channel) {
     }
   });
 
-  snapshotAuditCounts(channel.guild).catch(() => {});
+  await snapshotAuditCounts(channel.guild).catch(() => {});
   return connection;
 }
 
@@ -347,6 +369,7 @@ async function connectToChannel(channel) {
 
 // Entra na call e passa a mantê-la. Lança erro se não conseguir conectar.
 function joinCall(channel) {
+  client ??= channel.client;
   const guildId = channel.guild.id;
   return withLock(guildId, async () => {
     const previous = desired.get(guildId);
@@ -392,7 +415,11 @@ function getKeptChannel(guildId) {
 
 // Chamado pelo evento voiceStateUpdate quando o estado de voz É DO PRÓPRIO BOT
 function onBotVoiceStateUpdate(oldState, newState) {
+  client ??= newState.client;
   const guildId = newState.guild.id;
+  console.log(
+    `[CALL] Estado de voz do bot mudou: ${oldState.channelId ?? "fora"} -> ${newState.channelId ?? "fora"}`
+  );
   schedulePanelRefresh(guildId); // qualquer mudança do bot na call atualiza o painel
 
   if (!desired.has(guildId)) return;
@@ -481,6 +508,9 @@ async function startCallKeeper(discordClient) {
     console.error("[CALL] Erro ao carregar calls salvas:", err.message);
   }
 
+  console.log(
+    `[CALL] Sistema de call iniciado. Painel registrado: ${panels.size > 0 ? "sim" : "não"}.`
+  );
   setInterval(runWatchdog, TIMINGS.watchdogInterval).unref?.();
 }
 
