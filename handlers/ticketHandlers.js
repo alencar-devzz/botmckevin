@@ -1,6 +1,7 @@
 const { ChannelType, MessageFlags, EmbedBuilder } = require("discord.js");
 const GuildConfig = require("../database/models/GuildConfig");
-const { STAFF_ROLE_IDS, TICKET_OPTIONS } = require("../utils/ticketConfig");
+const { getTicketSettings, applyVars, getOption } = require("../utils/ticketSettings");
+const { loadTicketMedia } = require("../utils/ticketMedia");
 const {
   buildTicketPanel,
   buildTicketContainer,
@@ -8,9 +9,9 @@ const {
   buildTicketCreatedEphemeral,
 } = require("../ui/ticket");
 
-// Apenas quem tem um dos cargos da equipe
-function isStaff(member) {
-  return member.roles.cache.hasAny(...STAFF_ROLE_IDS);
+// Apenas quem tem um dos cargos de atendimento (configurados no menu)
+function isStaff(member, settings) {
+  return settings.attendRoles.length > 0 && member.roles.cache.hasAny(...settings.attendRoles);
 }
 
 // Aviso de falta de permissão: efêmera dentro de uma embed tradicional
@@ -24,14 +25,37 @@ function replyNoPermission(interaction, action) {
 
 // Select menu do painel: cria o tópico privado
 async function handleTicketSelect(interaction) {
+  const settings = await getTicketSettings(interaction.guild.id);
   const optionKey = interaction.values[0];
-  if (!TICKET_OPTIONS[optionKey]) return;
+  const option = settings.options.find((o) => o.key === optionKey);
+  if (!option) {
+    // A opção foi removida/alterada depois que esse painel foi enviado
+    loadTicketMedia(settings)
+      .then((media) =>
+        interaction.message.edit({
+          components: buildTicketPanel(settings, media),
+          flags: MessageFlags.IsComponentsV2,
+        })
+      )
+      .catch(() => {});
+    return interaction.reply({
+      content: "Essa opção não está mais disponível. Tente novamente pelo painel atualizado.",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // Reseta o select do painel (ele não fica marcado na opção escolhida)
+  // Mídia (imagens enviadas ficam no MongoDB e são anexadas na mensagem)
+  const media = await loadTicketMedia(settings, { withData: true });
+
+  // Reseta o select do painel (ele não fica marcado na opção escolhida).
+  // Sem "files": os anexos que já estão no painel continuam lá.
   interaction.message
-    .edit({ components: buildTicketPanel(), flags: MessageFlags.IsComponentsV2 })
+    .edit({
+      components: buildTicketPanel(settings, { panel: { items: media.panel.items } }),
+      flags: MessageFlags.IsComponentsV2,
+    })
     .catch(() => {});
 
   const user = interaction.user;
@@ -45,8 +69,18 @@ async function handleTicketSelect(interaction) {
       { new: true, upsert: true, setDefaultsOnInsert: true, strict: false }
     ).lean();
 
+    const threadName =
+      applyVars(settings.threadName, {
+        username: user.username,
+        number: config.ticketCounter,
+        option: option.label,
+        server: interaction.guild.name,
+      })
+        .trim()
+        .slice(0, 100) || `ticket-${config.ticketCounter}`;
+
     const thread = await interaction.channel.threads.create({
-      name: `📌・${user.username}・N°${config.ticketCounter}`.slice(0, 100),
+      name: threadName,
       type: ChannelType.PrivateThread,
       invitable: false,
       autoArchiveDuration: 10080,
@@ -56,14 +90,24 @@ async function handleTicketSelect(interaction) {
     await thread.members.add(user.id);
 
     // Fileira de menção (fora do container). Marcar os cargos adiciona a equipe no tópico privado.
-    const mentions = [`<@${user.id}>`, ...STAFF_ROLE_IDS.map((id) => `<@&${id}>`)].join(", ");
+    const mentionRoles = settings.mentionRoles;
+    const mentions = [`<@${user.id}>`, ...mentionRoles.map((id) => `<@&${id}>`)].join(", ");
     await thread.send({
       content: mentions,
-      allowedMentions: { users: [user.id], roles: STAFF_ROLE_IDS },
+      allowedMentions: { users: [user.id], roles: mentionRoles },
     });
 
     await thread.send({
-      components: [buildTicketContainer({ author: user, optionKey })],
+      components: [
+        buildTicketContainer({
+          author: user,
+          optionKey,
+          settings,
+          guildName: interaction.guild.name,
+          media,
+        }),
+      ],
+      files: media.internal.files,
       flags: MessageFlags.IsComponentsV2,
     });
 
@@ -84,20 +128,34 @@ async function handleTicketSelect(interaction) {
 // Botões Assumir / Finalizar dentro do tópico
 async function handleTicketButton(interaction) {
   const { customId } = interaction;
+  const settings = await getTicketSettings(interaction.guild.id);
 
   const isClaim = customId.startsWith("ticket_claim:");
 
-  if (!isStaff(interaction.member)) {
+  if (!isStaff(interaction.member, settings)) {
     return replyNoPermission(interaction, isClaim ? "assumir" : "finalizar");
   }
 
   if (isClaim) {
     const [, authorId, optionKey] = customId.split(":");
     const author = await interaction.client.users.fetch(authorId);
+    getOption(settings, optionKey); // garante fallback caso a opção tenha sido removida
+    const media = await loadTicketMedia(settings, { withData: true });
 
     // Atualiza o painel do ticket (botão vira "Assumido" cinza e desativado)
     await interaction.update({
-      components: [buildTicketContainer({ author, optionKey, claimedBy: interaction.user })],
+      components: [
+        buildTicketContainer({
+          author,
+          optionKey,
+          claimedBy: interaction.user,
+          settings,
+          guildName: interaction.guild.name,
+          media,
+        }),
+      ],
+      files: media.internal.files,
+      attachments: [],
     });
 
     // 1) menção do autor, sozinha
@@ -109,7 +167,13 @@ async function handleTicketButton(interaction) {
     // 2) container sozinho, sem pingar o staff
     await interaction.channel.send({
       components: [
-        buildClaimedContainer(interaction.user.id, Math.floor(Date.now() / 1000)),
+        buildClaimedContainer({
+          staffId: interaction.user.id,
+          authorId,
+          timestamp: Math.floor(Date.now() / 1000),
+          settings,
+          guildName: interaction.guild.name,
+        }),
       ],
       flags: MessageFlags.IsComponentsV2,
       allowedMentions: { parse: [] },
