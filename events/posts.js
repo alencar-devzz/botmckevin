@@ -116,7 +116,8 @@ async function handlePostMessage(message) {
     };
     const container = buildPostContainer(
       draft,
-      names.map((name) => `attachment://${name}`)
+      names.map((name) => `attachment://${name}`),
+      cfg
     );
 
     const sent = await sendPost(channel, {
