@@ -55,6 +55,20 @@ const ticketPanelSchema = new Schema(
     archiveMinutes: { type: Number, default: null },
     showOptionLine: { type: Boolean, default: true }, // mostra "Opção selecionada" no ticket
     showTicketFooter: { type: Boolean, default: true }, // mostra o rodapé "Painel · Ticket N° · Aberto há"
+    showAuthorLine: { type: Boolean, default: true }, // mostra "Aberto por" no ticket
+    internalColor: { type: Number }, // cor fixa do container do ticket (não muda ao assumir)
+    claimedColor: { type: Number }, // cor da mensagem enviada quando alguém assume
+
+    // Efêmera de "limite de tickets atingido"
+    limitTitle: { type: String, default: null },
+    limitMessage: { type: String, default: null },
+    limitColor: { type: Number },
+
+    // Confirmação antes de finalizar/excluir o ticket
+    closeConfirmTitle: { type: String, default: null },
+    closeConfirmMessage: { type: String, default: null },
+    closeConfirmButtonLabel: { type: String, default: null },
+    closeConfirmColor: { type: Number },
 
     // Cargos: undefined = padrão, [] = nenhum
     attendRoles: { type: [String], default: undefined },
