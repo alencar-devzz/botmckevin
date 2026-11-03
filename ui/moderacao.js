@@ -20,11 +20,18 @@ function buildModeracaoPanel() {
   const select = new StringSelectMenuBuilder()
     .setCustomId("moderacao_menu")
     .setPlaceholder("Selecione uma opção")
-    .addOptions({
-      label: "Sistema de tickets",
-      description: "Painel, textos, imagens, cargos e opções dos tickets.",
-      value: "tickets",
-    });
+    .addOptions(
+      {
+        label: "Sistema de tickets",
+        description: "Painel, textos, imagens, cargos e opções dos tickets.",
+        value: "tickets",
+      },
+      {
+        label: "Logs e registros",
+        description: "Mensagens, banimentos, calls, canais, cargos e mais.",
+        value: "logs",
+      }
+    );
 
   selectContainer.addActionRowComponents(new ActionRowBuilder().addComponents(select));
   addBackButton(selectContainer, "back_main");
