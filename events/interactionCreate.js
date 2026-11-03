@@ -2,11 +2,17 @@ const { MessageFlags } = require("discord.js");
 const { handleButton } = require("../handlers/buttonHandlers");
 const { handleSelect } = require("../handlers/selectHandlers");
 const { handleModal } = require("../handlers/modalHandlers");
+const { touchMenu } = require("../utils/menuSession");
 
 module.exports = {
   name: "interactionCreate",
   async execute(interaction) {
     try {
+      // Renova o prazo de expiração do menu principal
+      if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+        touchMenu(interaction);
+      }
+
       if (interaction.isButton()) {
         return await handleButton(interaction);
       }
