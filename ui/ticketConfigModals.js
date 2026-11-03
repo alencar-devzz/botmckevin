@@ -295,6 +295,105 @@ function buildArchiveModal(panel) {
   );
 }
 
+// ---------- cor genérica (ticket, assumido, limite, confirmação de exclusão) ----------
+
+const COLOR_FIELD_TITLES = {
+  internalColor: "Cor do ticket",
+  claimedColor: "Cor ao assumir",
+  limitColor: "Cor do limite atingido",
+  closeConfirmColor: "Cor da confirmação de exclusão",
+};
+
+function buildFieldColorModal(panel, fieldKey) {
+  const color = panel[fieldKey];
+  const current = Object.entries(COLOR_PRESETS).find(([, c]) => c.value === color)?.[0];
+  return modal(
+    `tcfg_modal_color:${panel.id}:${fieldKey}`,
+    COLOR_FIELD_TITLES[fieldKey] || "Cor",
+    selectLabel({
+      id: "preset",
+      label: "Cor predefinida",
+      description: "Cor da barra lateral.",
+      options: Object.entries(COLOR_PRESETS).map(([value, c]) => ({
+        label: c.label,
+        value,
+        default: value === (current ?? (color == null ? "none" : null)),
+      })),
+    }),
+    textLabel({
+      id: "hex",
+      label: "Cor personalizada (opcional)",
+      description: "Se preencher, vale no lugar da predefinida.",
+      max: 7,
+      value: current ? null : colorToHex(color),
+      placeholder: "#00c853",
+    })
+  );
+}
+
+// ---------- confirmação de exclusão ----------
+
+function buildCloseConfirmTextModal(panel) {
+  return modal(
+    `tcfg_modal_cc_text:${panel.id}`,
+    "Confirmação de exclusão",
+    textLabel({
+      id: "title",
+      label: "Título",
+      description: "Deixe vazio para usar o padrão.",
+      max: 100,
+      value: panel.closeConfirmTitle === DEFAULTS.closeConfirmTitle ? null : panel.closeConfirmTitle,
+      placeholder: DEFAULTS.closeConfirmTitle,
+    }),
+    textLabel({
+      id: "message",
+      label: "Mensagem",
+      description: "Deixe vazio para usar o padrão.",
+      style: TextInputStyle.Paragraph,
+      max: 300,
+      value: panel.closeConfirmMessage === DEFAULTS.closeConfirmMessage ? null : panel.closeConfirmMessage,
+      placeholder: DEFAULTS.closeConfirmMessage,
+    }),
+    textLabel({
+      id: "button",
+      label: "Texto do botão",
+      description: "Deixe vazio para usar o padrão.",
+      max: 80,
+      value:
+        panel.closeConfirmButtonLabel === DEFAULTS.closeConfirmButtonLabel
+          ? null
+          : panel.closeConfirmButtonLabel,
+      placeholder: DEFAULTS.closeConfirmButtonLabel,
+    })
+  );
+}
+
+// ---------- limite atingido ----------
+
+function buildLimitTextModal(panel) {
+  return modal(
+    `tcfg_modal_lim_text:${panel.id}`,
+    "Limite atingido",
+    textLabel({
+      id: "title",
+      label: "Título",
+      description: "Deixe vazio para usar o padrão.",
+      max: 100,
+      value: panel.limitTitle === DEFAULTS.limitTitle ? null : panel.limitTitle,
+      placeholder: DEFAULTS.limitTitle,
+    }),
+    textLabel({
+      id: "message",
+      label: "Mensagem",
+      description: "Deixe vazio para usar o padrão. Variável: {max}",
+      style: TextInputStyle.Paragraph,
+      max: 300,
+      value: panel.limitMessage === DEFAULTS.limitMessage ? null : panel.limitMessage,
+      placeholder: DEFAULTS.limitMessage,
+    })
+  );
+}
+
 // ---------- mensagem de sucesso ----------
 
 function buildSuccessTextModal(panel) {
@@ -318,32 +417,6 @@ function buildSuccessTextModal(panel) {
       max: 300,
       value: panel.successMessage === DEFAULTS.successMessage ? null : panel.successMessage,
       placeholder: DEFAULTS.successMessage,
-    })
-  );
-}
-
-function buildSuccessColorModal(panel) {
-  const current = Object.entries(COLOR_PRESETS).find(([, c]) => c.value === panel.successColor)?.[0];
-  return modal(
-    `tcfg_modal_su_color:${panel.id}`,
-    "Cor da confirmação",
-    selectLabel({
-      id: "preset",
-      label: "Cor predefinida",
-      description: "Cor da barra lateral da mensagem de confirmação.",
-      options: Object.entries(COLOR_PRESETS).map(([value, c]) => ({
-        label: c.label,
-        value,
-        default: value === (current ?? (panel.successColor == null ? "none" : null)),
-      })),
-    }),
-    textLabel({
-      id: "hex",
-      label: "Cor personalizada (opcional)",
-      description: "Se preencher, vale no lugar da predefinida.",
-      max: 7,
-      value: current ? null : colorToHex(panel.successColor),
-      placeholder: "#00c853",
     })
   );
 }
@@ -505,8 +578,10 @@ module.exports = {
   buildButtonModal,
   buildPlaceholderModal,
   buildInternalTextModal,
+  buildFieldColorModal,
+  buildCloseConfirmTextModal,
+  buildLimitTextModal,
   buildSuccessTextModal,
-  buildSuccessColorModal,
   buildSuccessButtonModal,
   buildArchiveModal,
   buildLimitModal,

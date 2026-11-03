@@ -128,11 +128,9 @@ function buildTicketContainer({
   const heading = applyVars(panel.internalHeading, vars);
   const message = applyVars(opt.message || panel.internalMessage, vars);
 
-  const info = [
-    `**Aberto por:** <@${author.id}>`,
-    `**Assumido por:** ${claimedBy ? `<@${claimedBy.id}>` : "`Ninguém`"}`,
-  ];
-  if (panel.showOptionLine) info.push(`**Opção selecionada:** \`${opt.label}\``);
+  const info = [`**Assumido por:** ${claimedBy ? `<@${claimedBy.id}>` : "`ninguém`"}`];
+  if (panel.showAuthorLine) info.push(`**Aberto por:** <@${author.id}>`);
+  if (panel.showOptionLine) info.push(`**Opção selecionada:**\n\`\`\`${opt.label}\`\`\``);
 
   const section = new SectionBuilder()
     .addTextDisplayComponents(text(`## ${heading}`), text(info.join("\n")))
@@ -141,12 +139,12 @@ function buildTicketContainer({
     );
 
   const container = new ContainerBuilder()
-    // Verde quando já tem alguém atendendo; sem cor enquanto aguarda
     .addSectionComponents(section)
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(text(`## ${opt.title}\n ${message}`));
 
-  if (claimedBy) container.setAccentColor(0x00c853);
+  // Cor fixa, configurável pelo painel. Não muda quando o ticket é assumido.
+  if (panel.internalColor != null) container.setAccentColor(panel.internalColor);
 
   if (record?.reason) {
     container.addSeparatorComponents(new SeparatorBuilder());
@@ -188,9 +186,11 @@ function buildClaimedContainer({ panel, staffId, authorId, timestamp, guildName 
     server: guildName,
   });
 
-  return new ContainerBuilder()
-    .setAccentColor(0x00c853)
-    .addTextDisplayComponents(text(`### ${body}\n-# <t:${timestamp}:t>`));
+  const container = new ContainerBuilder().addTextDisplayComponents(
+    text(`### ${body}\n-# <t:${timestamp}:t>`)
+  );
+  if (panel.claimedColor != null) container.setAccentColor(panel.claimedColor);
+  return container;
 }
 
 // Efêmera de sucesso: título, mensagem e cor configuráveis; botão para o ticket opcional, com label editável
@@ -215,42 +215,45 @@ function buildTicketCreatedEphemeral(panel, url, vars = {}) {
   return [container];
 }
 
-// Efêmera quando o usuário atingiu o limite de tickets abertos
-function buildLimitReached(records, guildId, max) {
+// Efêmera quando o usuário atingiu o limite de tickets abertos. Título, mensagem e cor configuráveis.
+function buildLimitReached(panel, records) {
   const links = records
     .slice(0, 5)
     .map((r) => `• <#${r.threadId}>`)
     .join("\n");
 
-  return [
-    new ContainerBuilder()
-      .setAccentColor(0xe50000)
-      .addTextDisplayComponents(
-        text("### Você já tem um ticket aberto."),
-        text(`-# Limite neste painel: ${max} ticket(s) por pessoa. Finalize o atual antes de abrir outro.`),
-        text(links)
-      ),
-  ];
+  const vars = { max: panel.maxPerUser };
+  const title = applyVars(panel.limitTitle, vars);
+  const message = applyVars(panel.limitMessage, vars);
+
+  const container = new ContainerBuilder().addTextDisplayComponents(
+    text(`### ${title}`),
+    text(`-# ${message}`),
+    text(links)
+  );
+  if (panel.limitColor != null) container.setAccentColor(panel.limitColor);
+
+  return [container];
 }
 
-// Pergunta de confirmação antes de finalizar
-function buildCloseConfirm(panelId, optionKey) {
-  return [
-    new ContainerBuilder()
-      .setAccentColor(0xe50000)
-      .addTextDisplayComponents(
-        text("### Finalizar este ticket?"),
-        text("-# O tópico será excluído e a conversa não poderá ser recuperada.")
+// Pergunta de confirmação antes de finalizar. Título, mensagem, cor e texto do botão configuráveis.
+function buildCloseConfirm(panel, panelId, optionKey) {
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(
+      text(`### ${panel.closeConfirmTitle}`),
+      text(`-# ${panel.closeConfirmMessage}`)
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`ticket_closeok:${panelId}:${optionKey}`)
+          .setLabel((panel.closeConfirmButtonLabel || "Confirmar").slice(0, 80))
+          .setStyle(ButtonStyle.Danger)
       )
-      .addActionRowComponents(
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`ticket_closeok:${panelId}:${optionKey}`)
-            .setLabel("Confirmar")
-            .setStyle(ButtonStyle.Danger)
-        )
-      ),
-  ];
+    );
+  if (panel.closeConfirmColor != null) container.setAccentColor(panel.closeConfirmColor);
+
+  return [container];
 }
 
 module.exports = {

@@ -200,8 +200,8 @@ function buildPanelManager({ panel, open = 0 }) {
         value: "interno",
       },
       {
-        label: "Mensagem de sucesso",
-        description: "Texto, cor e botão da confirmação ao abrir o ticket.",
+        label: "Mensagens do sistema",
+        description: "Confirmação ao abrir, ao excluir e aviso de limite.",
         value: "sucesso",
       },
       {
@@ -483,6 +483,18 @@ function buildSecInterno(panel, guild) {
     .addSectionComponents(
       item(
         [
+          "**Linha \"Aberto por\"**",
+          "-# Mostra quem abriu o ticket, dentro do ticket.",
+          `-# Estado: \`${panel.showAuthorLine ? "Ativada" : "Desativada"}\``,
+        ],
+        `tcfg_i_authorline:${panel.id}`,
+        panel.showAuthorLine ? "Desativar" : "Ativar"
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        [
           "**Linha \"Opção selecionada\"**",
           "-# Mostra qual categoria o membro escolheu, dentro do ticket.",
           `-# Estado: \`${panel.showOptionLine ? "Ativada" : "Desativada"}\``,
@@ -501,6 +513,20 @@ function buildSecInterno(panel, guild) {
         ],
         `tcfg_i_footer:${panel.id}`,
         panel.showTicketFooter ? "Desativar" : "Ativar"
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        ["**Cor do ticket**", `-# Barra lateral: \`${colorName(panel.internalColor)}\``, "-# Não muda ao assumir."],
+        `tcfg_color:${panel.id}:internalColor`
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        ["**Cor ao assumir**", `-# Barra lateral da mensagem de "assumido": \`${colorName(panel.claimedColor)}\``],
+        `tcfg_color:${panel.id}:claimedColor`
       )
     )
     .addSeparatorComponents(sep())
@@ -528,10 +554,11 @@ function buildSecInterno(panel, guild) {
 
 function buildSecSucesso(panel) {
   const container = new ContainerBuilder()
+    .addTextDisplayComponents(text("**Ao abrir o ticket**"))
     .addSectionComponents(
       item(
         [
-          "**Textos da confirmação**",
+          "Textos da confirmação",
           `-# Título: \`${short(panel.successTitle)}\``,
           `-# Mensagem: \`${short(panel.successMessage, 60)}\``,
         ],
@@ -541,15 +568,15 @@ function buildSecSucesso(panel) {
     .addSeparatorComponents(sep())
     .addSectionComponents(
       item(
-        ["**Cor da confirmação**", `-# Barra lateral: \`${colorName(panel.successColor)}\``],
-        `tcfg_su_color:${panel.id}`
+        ["Cor da confirmação", `-# Barra lateral: \`${colorName(panel.successColor)}\``],
+        `tcfg_color:${panel.id}:successColor`
       )
     )
     .addSeparatorComponents(sep())
     .addSectionComponents(
       item(
         [
-          "**Botão para o ticket**",
+          "Botão para o ticket",
           `-# Texto: \`${short(panel.successButtonLabel, 30)}\``,
           `-# Estado: \`${panel.successButtonEnabled ? "Ativado" : "Desativado"}\``,
         ],
@@ -561,18 +588,54 @@ function buildSecSucesso(panel) {
     .addSeparatorComponents(sep())
     .addSectionComponents(
       item(
-        [
-          "**Mostrar botão**",
-          "-# Desative para a confirmação aparecer sem o botão de ir ao ticket.",
-        ],
+        ["Mostrar botão", "-# Desative para a confirmação aparecer sem o botão de ir ao ticket."],
         `tcfg_su_toggle:${panel.id}`,
         panel.successButtonEnabled ? "Desativar" : "Ativar",
         { style: panel.successButtonEnabled ? ButtonStyle.Danger : ButtonStyle.Success }
       )
+    )
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text("**Ao finalizar o ticket**"))
+    .addSectionComponents(
+      item(
+        [
+          "Textos e botão da confirmação",
+          `-# Título: \`${short(panel.closeConfirmTitle)}\``,
+          `-# Mensagem: \`${short(panel.closeConfirmMessage, 60)}\``,
+          `-# Botão: \`${short(panel.closeConfirmButtonLabel, 30)}\``,
+        ],
+        `tcfg_cc_text:${panel.id}`
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        ["Cor da confirmação", `-# Barra lateral: \`${colorName(panel.closeConfirmColor)}\``],
+        `tcfg_color:${panel.id}:closeConfirmColor`
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text("**Limite de tickets atingido**"))
+    .addSectionComponents(
+      item(
+        [
+          "Textos do aviso",
+          `-# Título: \`${short(panel.limitTitle)}\``,
+          `-# Mensagem: \`${short(panel.limitMessage, 60)}\``,
+        ],
+        `tcfg_lim_text:${panel.id}`
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        ["Cor do aviso", `-# Barra lateral: \`${colorName(panel.limitColor)}\``],
+        `tcfg_color:${panel.id}:limitColor`
+      )
     );
   addBackButton(container, `tcfg_manage:${panel.id}`);
 
-  return [tabHeader("Mensagem de sucesso", panel, "confirmação efêmera ao abrir"), container];
+  return [tabHeader("Mensagens do sistema", panel, "confirmação ao abrir, excluir e limite"), container];
 }
 
 // ---------- Cargos ----------
