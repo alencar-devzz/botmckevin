@@ -1,7 +1,7 @@
 const path = require("node:path");
 const { AttachmentBuilder, MessageFlags, PermissionFlagsBits } = require("discord.js");
 const Post = require("../database/models/Post");
-const { getPostConfig } = require("../utils/posts/store");
+const { getPostConfig } = require("../utils/post/store");
 const { buildPostContainer } = require("../ui/posts");
 
 const WEBHOOK_NAME = "Posts";
