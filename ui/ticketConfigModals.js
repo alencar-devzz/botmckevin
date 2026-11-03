@@ -9,6 +9,20 @@ const {
 } = require("../utils/ticketSettings");
 const { clip, textLabel, selectLabel, modal } = require("./modalHelpers");
 
+// Select "sem texto padrão": marcados = o campo, se ficar vazio, não usa o padrão e fica sem texto.
+// Os ids (value) são os mesmos ids dos campos de texto do modal. Ocupa 1 dos 5 espaços do modal.
+function blankSelect(items) {
+  return selectLabel({
+    id: "blank",
+    label: "Não usar texto padrão",
+    description: "Marque o que deve ficar SEM texto. Só vale para campos deixados vazios.",
+    min: 0,
+    max: items.length,
+    required: false,
+    options: items.map((i) => ({ label: i.label, value: i.id, default: i.blank })),
+  });
+}
+
 // ---------- novo painel / renomear ----------
 
 function buildNewPanelModal() {
@@ -227,11 +241,12 @@ function buildPlaceholderModal(panel) {
     textLabel({
       id: "placeholder",
       label: "Texto do select menu",
-      description: "Deixe vazio para usar o padrão.",
+      description: "Deixe vazio para usar o padrão (ou marque abaixo para ficar sem texto).",
       max: 100,
       value: panel.placeholder === DEFAULTS.placeholder ? null : panel.placeholder,
       placeholder: DEFAULTS.placeholder,
-    })
+    }),
+    blankSelect([{ id: "placeholder", label: "Texto do select menu", blank: panel.placeholder === "" }])
   );
 }
 
@@ -274,7 +289,12 @@ function buildInternalTextModal(panel) {
       max: 100,
       value: panel.threadName === DEFAULTS.threadName ? null : panel.threadName,
       placeholder: DEFAULTS.threadName,
-    })
+    }),
+    blankSelect([
+      { id: "heading", label: "Título", blank: panel.internalHeading === "" },
+      { id: "message", label: "Mensagem dentro do ticket", blank: panel.internalMessage === "" },
+      { id: "claimed", label: "Aviso ao assumir", blank: panel.claimedMessage === "" },
+    ])
   );
 }
 
@@ -364,7 +384,11 @@ function buildCloseConfirmTextModal(panel) {
           ? null
           : panel.closeConfirmButtonLabel,
       placeholder: DEFAULTS.closeConfirmButtonLabel,
-    })
+    }),
+    blankSelect([
+      { id: "title", label: "Título", blank: panel.closeConfirmTitle === "" },
+      { id: "message", label: "Mensagem", blank: panel.closeConfirmMessage === "" },
+    ])
   );
 }
 
@@ -390,7 +414,11 @@ function buildLimitTextModal(panel) {
       max: 300,
       value: panel.limitMessage === DEFAULTS.limitMessage ? null : panel.limitMessage,
       placeholder: DEFAULTS.limitMessage,
-    })
+    }),
+    blankSelect([
+      { id: "title", label: "Título", blank: panel.limitTitle === "" },
+      { id: "message", label: "Mensagem", blank: panel.limitMessage === "" },
+    ])
   );
 }
 
@@ -417,7 +445,11 @@ function buildSuccessTextModal(panel) {
       max: 300,
       value: panel.successMessage === DEFAULTS.successMessage ? null : panel.successMessage,
       placeholder: DEFAULTS.successMessage,
-    })
+    }),
+    blankSelect([
+      { id: "title", label: "Título", blank: panel.successTitle === "" },
+      { id: "message", label: "Mensagem", blank: panel.successMessage === "" },
+    ])
   );
 }
 
@@ -485,18 +517,18 @@ function buildOptionModal({ customId, title, option = {}, options = [], position
     textLabel({
       id: "title",
       label: "Título no ticket",
-      description: "Deixe vazio para usar o nome em maiúsculas.",
+      description: "Vazio = nome em maiúsculas. Digite - (traço) para ficar sem título.",
       max: 100,
-      value: option.title,
+      value: option.title === "" ? "-" : option.title,
       placeholder: "Ex: SUPORTE",
     }),
     textLabel({
       id: "message",
       label: "Mensagem própria no ticket (opcional)",
-      description: "Vazio = usa a mensagem padrão do ticket interno.",
+      description: "Vazio = mensagem padrão do ticket. Digite - (traço) para ficar sem mensagem.",
       style: TextInputStyle.Paragraph,
       max: 1000,
-      value: option.message,
+      value: option.message === "" ? "-" : option.message,
     })
   );
 

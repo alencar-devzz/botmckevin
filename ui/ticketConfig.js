@@ -30,7 +30,8 @@ const text = (content) => new TextDisplayBuilder().setContent(String(content).sl
 
 // Texto curto e seguro para mostrar dentro de `crase`
 function short(value, max = 45) {
-  if (value == null || value === "") return "Não definido";
+  if (value == null) return "Não definido";
+  if (value === "") return "Vazio (sem texto)";
   const clean = String(value).replaceAll("`", "'").replaceAll("\n", " ");
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
 }
