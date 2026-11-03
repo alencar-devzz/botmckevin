@@ -117,6 +117,8 @@ function resolvePanel(doc) {
     internalSources: internalImages,
     ticketChannelId: d.ticketChannelId || null,
     archiveMinutes: ARCHIVE_OPTIONS[d.archiveMinutes] ? d.archiveMinutes : DEFAULTS.archiveMinutes,
+    showOptionLine: d.showOptionLine !== false,
+    showTicketFooter: d.showTicketFooter !== false,
 
     attendRoles: d.attendRoles != null ? [...d.attendRoles] : [...STAFF_ROLE_IDS],
     mentionRoles: d.mentionRoles != null ? [...d.mentionRoles] : [...STAFF_ROLE_IDS],
