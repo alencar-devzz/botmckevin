@@ -131,8 +131,8 @@ function buildTicketContainer({
   const info = [
     `**Aberto por:** <@${author.id}>`,
     `**Assumido por:** ${claimedBy ? `<@${claimedBy.id}>` : "`Ninguém`"}`,
-    `**Opção selecionada:** \`${opt.label}\``,
   ];
+  if (panel.showOptionLine) info.push(`**Opção selecionada:** \`${opt.label}\``);
 
   const section = new SectionBuilder()
     .addTextDisplayComponents(text(`## ${heading}`), text(info.join("\n")))
@@ -158,11 +158,13 @@ function buildTicketContainer({
   const items = media?.internal.items ?? panel.internalImages.filter((u) => /^https?:/i.test(u));
   if (items.length) container.addMediaGalleryComponents(buildGallery(items));
 
-  const footer = [`Painel: ${panel.name}`];
-  if (record?.number) footer.push(`Ticket N°${record.number}`);
-  if (record?.createdAt) footer.push(`Aberto <t:${Math.floor(new Date(record.createdAt).getTime() / 1000)}:R>`);
-  container.addSeparatorComponents(new SeparatorBuilder());
-  container.addTextDisplayComponents(text(`-# ${footer.join(" · ")}`));
+  if (panel.showTicketFooter) {
+    const footer = [`Painel: ${panel.name}`];
+    if (record?.number) footer.push(`Ticket N°${record.number}`);
+    if (record?.createdAt) footer.push(`Aberto <t:${Math.floor(new Date(record.createdAt).getTime() / 1000)}:R>`);
+    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addTextDisplayComponents(text(`-# ${footer.join(" · ")}`));
+  }
 
   const claimButton = new ButtonBuilder()
     .setCustomId(`ticket_claim:${author.id}:${panel.id}:${opt.key}`)

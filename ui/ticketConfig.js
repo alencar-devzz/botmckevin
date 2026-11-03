@@ -480,6 +480,30 @@ function buildSecInterno(panel, guild) {
       )
     )
     .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        [
+          "**Linha \"Opção selecionada\"**",
+          "-# Mostra qual categoria o membro escolheu, dentro do ticket.",
+          `-# Estado: \`${panel.showOptionLine ? "Ativada" : "Desativada"}\``,
+        ],
+        `tcfg_i_optline:${panel.id}`,
+        panel.showOptionLine ? "Desativar" : "Ativar"
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        [
+          "**Rodapé do ticket**",
+          "-# Texto pequeno: nome do painel, número e quando foi aberto.",
+          `-# Estado: \`${panel.showTicketFooter ? "Ativado" : "Desativado"}\``,
+        ],
+        `tcfg_i_footer:${panel.id}`,
+        panel.showTicketFooter ? "Desativar" : "Ativar"
+      )
+    )
+    .addSeparatorComponents(sep())
     .addTextDisplayComponents(
       text(
         `**Canal dos tickets**\n-# Atual: ${
