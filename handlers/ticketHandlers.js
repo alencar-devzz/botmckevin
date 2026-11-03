@@ -36,9 +36,9 @@ function isStaff(member, panel, option) {
 
 // Aviso de falta de permissão: efêmera dentro de uma embed tradicional
 function replyNoPermission(interaction, action) {
-  const embed = new EmbedBuilder()
-    .setColor(0xe50000)
-    .setDescription(`<@${interaction.user.id}> Você não tem permissão para ${action} tickets.`);
+  const embed = new EmbedBuilder().setDescription(
+    `<@${interaction.user.id}> Você não tem permissão para ${action} tickets.`
+  );
 
   return interaction.reply({ embeds: [embed], flags: EPHEMERAL });
 }
@@ -115,7 +115,7 @@ async function handleTicketOpen(interaction) {
     const open = await getOpenTickets(interaction.client, guild.id, panel.id, user.id);
     if (open.length >= panel.maxPerUser) {
       return interaction.reply({
-        components: buildLimitReached(open, guild.id, panel.maxPerUser),
+        components: buildLimitReached(panel, open),
         flags: V2 | EPHEMERAL,
       });
     }
@@ -154,7 +154,7 @@ async function handleTicketModal(interaction) {
     const open = await getOpenTickets(interaction.client, interaction.guild.id, panel.id, interaction.user.id);
     if (open.length >= panel.maxPerUser) {
       return interaction.editReply({
-        components: buildLimitReached(open, interaction.guild.id, panel.maxPerUser),
+        components: buildLimitReached(panel, open),
         flags: V2,
       });
     }
@@ -336,7 +336,7 @@ async function handleTicketButton(interaction) {
   if (action === "ticket_close") {
     if (panel.confirmClose) {
       return interaction.reply({
-        components: buildCloseConfirm(panel.id, optionKey ?? "geral"),
+        components: buildCloseConfirm(panel, panel.id, optionKey ?? "geral"),
         flags: V2 | EPHEMERAL,
       });
     }

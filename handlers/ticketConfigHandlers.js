@@ -47,8 +47,10 @@ const {
   buildPlaceholderModal,
   buildInternalTextModal,
   buildSuccessTextModal,
-  buildSuccessColorModal,
   buildSuccessButtonModal,
+  buildFieldColorModal,
+  buildCloseConfirmTextModal,
+  buildLimitTextModal,
   buildArchiveModal,
   buildLimitModal,
   buildOptionModal,
@@ -83,6 +85,16 @@ const parse = (customId) => {
 const clean = (value) => {
   const v = value?.trim();
   return v ? v : null;
+};
+
+// Campos de cor que usam o modal genérico tcfg_color / tcfg_modal_color
+const COLOR_FIELDS = new Set(["internalColor", "claimedColor", "successColor", "closeConfirmColor", "limitColor"]);
+const COLOR_FIELD_SECTION = {
+  internalColor: "interno",
+  claimedColor: "interno",
+  successColor: "sucesso",
+  closeConfirmColor: "sucesso",
+  limitColor: "sucesso",
 };
 
 // Lê os valores de um select do modal (vazio se o select não existir)
@@ -369,6 +381,10 @@ async function handleTicketConfigButton(interaction) {
       const updated = await updatePanel(id, {}, ["ticketChannelId"]);
       return interaction.update({ components: buildSection("interno", updated, guild) });
     }
+    case "tcfg_i_authorline": {
+      const updated = await updatePanel(id, { showAuthorLine: !panel.showAuthorLine });
+      return interaction.update({ components: buildSection("interno", updated, guild) });
+    }
     case "tcfg_i_optline": {
       const updated = await updatePanel(id, { showOptionLine: !panel.showOptionLine });
       return interaction.update({ components: buildSection("interno", updated, guild) });
@@ -378,16 +394,22 @@ async function handleTicketConfigButton(interaction) {
       return interaction.update({ components: buildSection("interno", updated, guild) });
     }
 
-    // ----- mensagem de sucesso -----
+    // ----- mensagens do sistema (abrir / finalizar / limite) -----
     case "tcfg_su_text":
       return interaction.showModal(buildSuccessTextModal(panel));
-    case "tcfg_su_color":
-      return interaction.showModal(buildSuccessColorModal(panel));
     case "tcfg_su_btn":
       return interaction.showModal(buildSuccessButtonModal(panel));
     case "tcfg_su_toggle": {
       const updated = await updatePanel(id, { successButtonEnabled: !panel.successButtonEnabled });
       return interaction.update({ components: buildSection("sucesso", updated, guild) });
+    }
+    case "tcfg_cc_text":
+      return interaction.showModal(buildCloseConfirmTextModal(panel));
+    case "tcfg_lim_text":
+      return interaction.showModal(buildLimitTextModal(panel));
+    case "tcfg_color": {
+      if (!COLOR_FIELDS.has(extra)) return;
+      return interaction.showModal(buildFieldColorModal(panel, extra));
     }
 
     // ----- cargos -----
@@ -714,7 +736,34 @@ async function handleTicketConfigModal(interaction) {
       return interaction.update({ components: buildSection("sucesso", updated, guild) });
     }
 
-    case "tcfg_modal_su_color": {
+    case "tcfg_modal_su_btn": {
+      const { set, unset } = setOrUnset({ successButtonLabel: clean(field("label")) });
+      const updated = await updatePanel(id, set, unset);
+      return interaction.update({ components: buildSection("sucesso", updated, guild) });
+    }
+
+    case "tcfg_modal_cc_text": {
+      const { set, unset } = setOrUnset({
+        closeConfirmTitle: clean(field("title")),
+        closeConfirmMessage: clean(field("message")),
+        closeConfirmButtonLabel: clean(field("button")),
+      });
+      const updated = await updatePanel(id, set, unset);
+      return interaction.update({ components: buildSection("sucesso", updated, guild) });
+    }
+
+    case "tcfg_modal_lim_text": {
+      const { set, unset } = setOrUnset({
+        limitTitle: clean(field("title")),
+        limitMessage: clean(field("message")),
+      });
+      const updated = await updatePanel(id, set, unset);
+      return interaction.update({ components: buildSection("sucesso", updated, guild) });
+    }
+
+    // ----- cor genérica (ticket, assumido, sucesso, exclusão, limite) -----
+    case "tcfg_modal_color": {
+      if (!COLOR_FIELDS.has(extra)) return;
       const hex = clean(field("hex"));
       let color;
       if (hex) {
@@ -728,15 +777,8 @@ async function handleTicketConfigModal(interaction) {
       } else {
         color = COLOR_PRESETS[selectValues(interaction, "preset")[0]]?.value ?? null;
       }
-      // Sempre grava explicitamente (mesmo "Sem cor"), diferente do padrão (verde) quando nunca configurado
-      const updated = await updatePanel(id, { successColor: color });
-      return interaction.update({ components: buildSection("sucesso", updated, guild) });
-    }
-
-    case "tcfg_modal_su_btn": {
-      const { set, unset } = setOrUnset({ successButtonLabel: clean(field("label")) });
-      const updated = await updatePanel(id, set, unset);
-      return interaction.update({ components: buildSection("sucesso", updated, guild) });
+      const updated = await updatePanel(id, { [extra]: color });
+      return interaction.update({ components: buildSection(COLOR_FIELD_SECTION[extra], updated, guild) });
     }
 
     // ----- regras -----
