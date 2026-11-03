@@ -3,6 +3,7 @@ const { getGuildConfig } = require("../database/getGuildConfig");
 const { buildPortariaConfig } = require("../ui/portaria");
 const { handleTicketConfigModal } = require("./ticketConfigHandlers");
 const { handleAparenciaModal } = require("./aparenciaHandlers");
+const { handleTicketModal } = require("./ticketHandlers");
 
 async function handleModal(interaction) {
   const { customId } = interaction;
@@ -13,6 +14,10 @@ async function handleModal(interaction) {
 
   if (customId.startsWith("apar_modal_")) {
     return handleAparenciaModal(interaction);
+  }
+
+  if (customId.startsWith("ticket_reason:")) {
+    return handleTicketModal(interaction);
   }
 
   switch (customId) {

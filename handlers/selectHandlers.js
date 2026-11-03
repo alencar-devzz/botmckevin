@@ -6,9 +6,9 @@ const { buildPortariaIntro, buildPortariaConfig } = require("../ui/portaria");
 const { buildAutoRolesPanel } = require("../ui/autoroles");
 const { handleTicketSelect } = require("./ticketHandlers");
 const { handleBotcallSelect } = require("./botcallHandlers");
-const { handleTicketConfigSelect } = require("./ticketConfigHandlers");
-const { buildTicketMenuPanel } = require("../ui/ticketConfig");
+const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHandlers");
 const { buildModeracaoPanel } = require("../ui/moderacao");
+const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
 
 async function handleSelect(interaction) {
   const { customId, values } = interaction;
@@ -21,8 +21,17 @@ async function handleSelect(interaction) {
     return handleTicketConfigSelect(interaction);
   }
 
+  // Painel público de tickets (select do painel novo ou de mensagens antigas)
+  if (customId.startsWith("ticket_")) {
+    return handleTicketSelect(interaction);
+  }
+
   if (customId.startsWith("apar_")) {
     return handleAparenciaSelect(interaction);
+  }
+
+  if (customId.startsWith("logs_")) {
+    return handleLogsSelect(interaction);
   }
 
   switch (customId) {
@@ -49,7 +58,10 @@ async function handleSelect(interaction) {
     case "moderacao_menu": {
       const value = values[0];
       if (value === "tickets") {
-        return interaction.update({ components: buildTicketMenuPanel() });
+        return openTicketHome(interaction);
+      }
+      if (value === "logs") {
+        return openLogsPanel(interaction);
       }
       return;
     }
@@ -86,9 +98,6 @@ async function handleSelect(interaction) {
       await config.save();
       return interaction.update({ components: buildAutoRolesPanel(config) });
     }
-
-    case "ticket_select":
-      return handleTicketSelect(interaction);
 
     default:
       return;
