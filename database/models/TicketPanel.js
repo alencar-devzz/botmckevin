@@ -6,7 +6,7 @@ const optionSchema = new Schema(
     key: { type: String, required: true },
     label: { type: String, required: true },
     description: { type: String, default: null },
-    title: { type: String, required: true },
+    title: { type: String, default: null }, // "" = sem título; null = nome em maiúsculas
     message: { type: String, default: null }, // mensagem interna própria desta opção
     staffRoles: { type: [String], default: undefined }, // cargos próprios desta opção (undefined = usa os do painel)
   },
