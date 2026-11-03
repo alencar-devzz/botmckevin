@@ -3,7 +3,7 @@ const { DEFAULT_PREFIX } = require("../utils/getPrefix");
 const { getBotConfig, applyPresence } = require("../utils/botPresence");
 
 module.exports = {
-  name: "ready",
+  name: "clientReady",
   once: true,
   async execute(client) {
     console.log(`[BOT] Online como ${client.user.tag}`);
