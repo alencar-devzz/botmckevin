@@ -843,9 +843,41 @@ const SECTIONS = {
   gerenciar: buildSecGerenciar,
 };
 
+// O Discord limita a 40 componentes por mensagem (contando os aninhados:
+// container, seção, texto, botão, separador, linha de ações...).
+const MAX_COMPONENTS = 40;
+
+function countComponents(builder) {
+  const json = typeof builder.toJSON === "function" ? builder.toJSON() : builder;
+  const walk = (c) =>
+    1 + (c.components ?? []).reduce((sum, x) => sum + walk(x), 0) + (c.accessory ? walk(c.accessory) : 0);
+  return walk(json);
+}
+
+// Se a tela passar do limite, remove separadores (do fim para o começo),
+// preservando o último, que fica acima do botão "Voltar".
+function fitComponentLimit(blocks) {
+  let total = blocks.reduce((sum, b) => sum + countComponents(b), 0);
+  if (total <= MAX_COMPONENTS) return blocks;
+
+  for (let b = blocks.length - 1; b >= 0 && total > MAX_COMPONENTS; b--) {
+    const list = blocks[b].components;
+    if (!Array.isArray(list)) continue;
+    const isSep = (c) => c instanceof SeparatorBuilder;
+    const lastSep = list.map(isSep).lastIndexOf(true);
+    for (let i = list.length - 1; i >= 0 && total > MAX_COMPONENTS; i--) {
+      if (isSep(list[i]) && i !== lastSep) {
+        list.splice(i, 1);
+        total -= 1;
+      }
+    }
+  }
+  return blocks;
+}
+
 function buildSection(section, panel, guild) {
   const build = SECTIONS[section] ?? SECTIONS.aparencia;
-  return build(panel, guild);
+  return fitComponentLimit(build(panel, guild));
 }
 
 module.exports = {
