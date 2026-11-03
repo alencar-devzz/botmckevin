@@ -53,6 +53,8 @@ const ticketPanelSchema = new Schema(
     internalImages: { type: [String], default: undefined },
     ticketChannelId: { type: String, default: null }, // onde os tópicos são criados (padrão: canal do painel)
     archiveMinutes: { type: Number, default: null },
+    showOptionLine: { type: Boolean, default: true }, // mostra "Opção selecionada" no ticket
+    showTicketFooter: { type: Boolean, default: true }, // mostra o rodapé "Painel · Ticket N° · Aberto há"
 
     // Cargos: undefined = padrão, [] = nenhum
     attendRoles: { type: [String], default: undefined },
