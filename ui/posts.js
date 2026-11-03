@@ -91,15 +91,8 @@ function buildPostsPanel(guild, cfg) {
 function buildPostContainer(post, mediaUrls) {
   const container = new ContainerBuilder();
 
-  container.addSectionComponents(
-    new SectionBuilder()
-      .addTextDisplayComponents(text(`${emojiMarkup(EMOJIS.instagram)}<@${post.authorId}>`))
-      .setButtonAccessory(
-        new ButtonBuilder()
-          .setCustomId("post_view")
-          .setEmoji(EMOJIS.view)
-          .setStyle(ButtonStyle.Secondary)
-      )
+  container.addTextDisplayComponents(
+    text(`${emojiMarkup(EMOJIS.instagram)}<@${post.authorId}>`)
   );
 
   if (post.content && post.content.trim()) {
@@ -125,6 +118,10 @@ function buildPostContainer(post, mediaUrls) {
         .setCustomId("post_comment")
         .setEmoji(EMOJIS.comment)
         .setLabel(String(post.comments.length))
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId("post_view")
+        .setEmoji(EMOJIS.view)
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId("post_delete")
