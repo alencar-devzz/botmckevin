@@ -4,7 +4,7 @@ const { buildPortariaConfig } = require("../ui/portaria");
 const { handleTicketConfigModal } = require("./ticketConfigHandlers");
 const { handleAparenciaModal } = require("./aparenciaHandlers");
 const { handleTicketModal } = require("./ticketHandlers");
-const { handlePostModal } = require("./postsHandlers");
+const { handlePostModal, handlePostsConfigModal } = require("./postsHandlers");
 
 async function handleModal(interaction) {
   const { customId } = interaction;
@@ -19,6 +19,10 @@ async function handleModal(interaction) {
 
   if (customId.startsWith("ticket_reason:")) {
     return handleTicketModal(interaction);
+  }
+
+  if (customId.startsWith("pcfg_modal:")) {
+    return handlePostsConfigModal(interaction);
   }
 
   if (customId.startsWith("post_modal:")) {

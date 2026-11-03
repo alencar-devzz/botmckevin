@@ -6,10 +6,19 @@ const {
 } = require("discord.js");
 const Post = require("../database/models/Post");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
-const { getPostConfig, updatePostConfig } = require("../utils/post/store");
+const {
+  KEYS,
+  STYLES,
+  POSITIONS,
+  getPostConfig,
+  updatePostConfig,
+  resetPostConfig,
+} = require("../utils/post/store");
+const { parseEmojiInput } = require("../utils/post/emojis");
 const { textLabel, modal } = require("../ui/modalHelpers");
 const {
   buildPostsPanel,
+  buildPostButtonPanel,
   buildPostContainer,
   buildInteractionsView,
   buildPostMissing,
@@ -39,6 +48,17 @@ async function guard(interaction) {
 async function panel(guild) {
   return buildPostsPanel(guild, await getPostConfig(guild.id));
 }
+
+async function buttonPanel(guild, key) {
+  return buildPostButtonPanel(await getPostConfig(guild.id), key);
+}
+
+const BUTTON_TITLES = {
+  like: "Curtir",
+  comment: "Comentar",
+  view: "Ver comentários/curtidas",
+  delete: "Excluir",
+};
 
 async function openPostsPanel(interaction) {
   if (!(await guard(interaction))) return;
@@ -70,13 +90,49 @@ async function handlePostsConfigSelect(interaction) {
     await updatePostConfig(guild.id, { channelId: channel.id, enabled: true });
     return interaction.update({ components: await panel(guild) });
   }
+
+  const [action, key] = interaction.customId.split(":");
+
+  // Escolheu qual botão editar
+  if (action === "pcfg_pick") {
+    const picked = interaction.values[0];
+    if (!KEYS.includes(picked)) return;
+    return interaction.update({ components: await buttonPanel(guild, picked) });
+  }
+
+  if (!KEYS.includes(key)) return;
+  const value = interaction.values[0];
+
+  // Cor (cinza = sem cor)
+  if (action === "pcfg_color") {
+    if (!STYLES.includes(value)) return;
+    await updatePostConfig(guild.id, { [`buttons.${key}.style`]: value });
+    return interaction.update({ components: await buttonPanel(guild, key) });
+  }
+
+  // Posição: topo (só um botão) ou rodapé
+  if (action === "pcfg_pos") {
+    if (!POSITIONS.includes(value)) return;
+    const cfg = await getPostConfig(guild.id);
+    const patch = { [`buttons.${key}.position`]: value };
+    if (value === "top") {
+      for (const other of KEYS) {
+        if (other !== key && cfg.buttons[other].position === "top") {
+          patch[`buttons.${other}.position`] = "bottom";
+        }
+      }
+    }
+    await updatePostConfig(guild.id, patch);
+    return interaction.update({ components: await buttonPanel(guild, key) });
+  }
 }
 
 async function handlePostsConfigButton(interaction) {
   if (!(await guard(interaction))) return;
   const { guild } = interaction;
+  const [action, key] = interaction.customId.split(":");
 
-  switch (interaction.customId) {
+  switch (action) {
     case "pcfg_toggle": {
       const cfg = await getPostConfig(guild.id);
       await updatePostConfig(guild.id, { enabled: !cfg.enabled });
@@ -86,9 +142,94 @@ async function handlePostsConfigButton(interaction) {
       await updatePostConfig(guild.id, { channelId: null });
       return interaction.update({ components: await panel(guild) });
     }
+    case "pcfg_back": {
+      return interaction.update({ components: await panel(guild) });
+    }
+
+    // Linha de botões acima/abaixo da mídia
+    case "pcfg_rowpos": {
+      const cfg = await getPostConfig(guild.id);
+      await updatePostConfig(guild.id, { rowPosition: cfg.rowPosition === "above" ? "below" : "above" });
+      return interaction.update({ components: await panel(guild) });
+    }
+
+    // Volta tudo (emojis, cores, posições e ordem) ao padrão
+    case "pcfg_reset_all": {
+      await resetPostConfig(guild.id, ["buttons", "order", "rowPosition"]);
+      return interaction.update({ components: await panel(guild) });
+    }
+
+    case "pcfg_emoji": {
+      if (!KEYS.includes(key)) return;
+      const cfg = await getPostConfig(guild.id);
+      return interaction.showModal(
+        modal(
+          `pcfg_modal:emoji:${key}`,
+          `Emoji: ${BUTTON_TITLES[key]}`,
+          textLabel({
+            id: "emoji",
+            label: "Emoji do botão",
+            description: "Emoji normal ou personalizado (copie com \\:nome: no chat). Vazio = padrão.",
+            max: 60,
+            required: false,
+            value: cfg.buttons[key].emoji ?? undefined,
+            placeholder: "Ex.: ❤️ ou <:nome:123456789012345678>",
+          })
+        )
+      );
+    }
+
+    // Move o botão uma casa na linha do rodapé
+    case "pcfg_left":
+    case "pcfg_right": {
+      if (!KEYS.includes(key)) return;
+      const cfg = await getPostConfig(guild.id);
+      const order = [...cfg.order];
+      const bottom = order.filter((k) => cfg.buttons[k].position === "bottom");
+      const at = bottom.indexOf(key);
+      const target = bottom[at + (action === "pcfg_left" ? -1 : 1)];
+      if (at !== -1 && target) {
+        const a = order.indexOf(key);
+        const b = order.indexOf(target);
+        [order[a], order[b]] = [order[b], order[a]];
+        await updatePostConfig(guild.id, { order });
+      }
+      return interaction.update({ components: await buttonPanel(guild, key) });
+    }
+
+    // Restaura emoji, cor e posição de um botão
+    case "pcfg_resetbtn": {
+      if (!KEYS.includes(key)) return;
+      await resetPostConfig(guild.id, [`buttons.${key}`]);
+      return interaction.update({ components: await buttonPanel(guild, key) });
+    }
+
     default:
       return;
   }
+}
+
+// Modal de emoji do botão
+async function handlePostsConfigModal(interaction) {
+  if (!(await guard(interaction))) return;
+  const { guild } = interaction;
+  const [, field, key] = interaction.customId.split(":");
+  if (field !== "emoji" || !KEYS.includes(key)) return;
+
+  const raw = interaction.fields.getTextInputValue("emoji").trim();
+  let value = null; // vazio = emoji padrão
+  if (raw) {
+    const parsed = parseEmojiInput(raw, interaction.client);
+    if (!parsed.ok) {
+      return interaction.reply({ content: parsed.error, flags: EPHEMERAL });
+    }
+    value = parsed.value;
+  }
+
+  await updatePostConfig(guild.id, { [`buttons.${key}.emoji`]: value });
+  const components = await buttonPanel(guild, key);
+  if (interaction.isFromMessage()) return interaction.update({ components });
+  return interaction.reply({ components, flags: V2 | EPHEMERAL });
 }
 
 // ======================= Interações com o post =======================
@@ -110,10 +251,11 @@ function extractMediaUrls(message) {
   return urls;
 }
 
-function postComponents(message, post) {
+async function postComponents(message, post) {
+  const cfg = await getPostConfig(message.guildId);
   const urls = extractMediaUrls(message);
   const media = urls.length ? urls : post.mediaFiles.map((name) => `attachment://${name}`);
-  return [buildPostContainer(post, media)];
+  return [buildPostContainer(post, media, cfg)];
 }
 
 async function resolveAvatars(guild, ids) {
@@ -159,7 +301,7 @@ async function handlePostButton(interaction) {
         ? { $pull: { likes: userId } }
         : { $addToSet: { likes: userId } };
       const post = await Post.findOneAndUpdate({ messageId: id }, update, { new: true }).lean();
-      return interaction.update({ components: postComponents(interaction.message, post) });
+      return interaction.update({ components: await postComponents(interaction.message, post) });
     }
 
     case "post_comment": {
@@ -246,7 +388,7 @@ async function handlePostModal(interaction) {
 
   // Atualiza o contador de comentários no post
   if (interaction.isFromMessage()) {
-    await interaction.update({ components: postComponents(interaction.message, post) });
+    await interaction.update({ components: await postComponents(interaction.message, post) });
     return interaction.followUp({ content: "Seu comentário foi enviado!", flags: EPHEMERAL });
   }
   return interaction.reply({ content: "Seu comentário foi enviado!", flags: EPHEMERAL });
@@ -256,6 +398,7 @@ module.exports = {
   openPostsPanel,
   handlePostsConfigSelect,
   handlePostsConfigButton,
+  handlePostsConfigModal,
   handlePostButton,
   handlePostModal,
 };
