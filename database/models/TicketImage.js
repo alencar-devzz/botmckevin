@@ -4,6 +4,7 @@ const { Schema, model } = require("mongoose");
 // Ficam guardadas aqui (e não só como link do Discord) porque links de anexo do Discord expiram.
 const ticketImageSchema = new Schema({
   guildId: { type: String, required: true, index: true },
+  panelId: { type: String, default: null, index: true },
   scope: { type: String, enum: ["panel", "internal"], required: true },
   name: { type: String, default: "imagem" },
   contentType: { type: String, required: true },
