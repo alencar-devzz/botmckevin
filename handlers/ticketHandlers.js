@@ -235,8 +235,16 @@ async function createTicket(interaction, panel, option, reason) {
     });
 
     const url = `https://discord.com/channels/${guild.id}/${thread.id}`;
+    const successVars = {
+      user: `<@${user.id}>`,
+      username: user.username,
+      option: option.label,
+      server: guild.name,
+      number,
+      panel: panel.name,
+    };
     return interaction.editReply({
-      components: buildTicketCreatedEphemeral(url, panel.name),
+      components: buildTicketCreatedEphemeral(panel, url, successVars),
       flags: V2,
     });
   } catch (err) {

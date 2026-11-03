@@ -46,6 +46,9 @@ const {
   buildButtonModal,
   buildPlaceholderModal,
   buildInternalTextModal,
+  buildSuccessTextModal,
+  buildSuccessColorModal,
+  buildSuccessButtonModal,
   buildArchiveModal,
   buildLimitModal,
   buildOptionModal,
@@ -367,6 +370,18 @@ async function handleTicketConfigButton(interaction) {
       return interaction.update({ components: buildSection("interno", updated, guild) });
     }
 
+    // ----- mensagem de sucesso -----
+    case "tcfg_su_text":
+      return interaction.showModal(buildSuccessTextModal(panel));
+    case "tcfg_su_color":
+      return interaction.showModal(buildSuccessColorModal(panel));
+    case "tcfg_su_btn":
+      return interaction.showModal(buildSuccessButtonModal(panel));
+    case "tcfg_su_toggle": {
+      const updated = await updatePanel(id, { successButtonEnabled: !panel.successButtonEnabled });
+      return interaction.update({ components: buildSection("sucesso", updated, guild) });
+    }
+
     // ----- cargos -----
     case "tcfg_r_reset": {
       const field = extra === "attend" ? "attendRoles" : "mentionRoles";
@@ -679,6 +694,41 @@ async function handleTicketConfigModal(interaction) {
       if (!ARCHIVE_OPTIONS[minutes]) return;
       const updated = await updatePanel(id, { archiveMinutes: minutes });
       return interaction.update({ components: buildSection("interno", updated, guild) });
+    }
+
+    // ----- mensagem de sucesso -----
+    case "tcfg_modal_su_text": {
+      const { set, unset } = setOrUnset({
+        successTitle: clean(field("title")),
+        successMessage: clean(field("message")),
+      });
+      const updated = await updatePanel(id, set, unset);
+      return interaction.update({ components: buildSection("sucesso", updated, guild) });
+    }
+
+    case "tcfg_modal_su_color": {
+      const hex = clean(field("hex"));
+      let color;
+      if (hex) {
+        color = parseHexColor(hex);
+        if (color == null) {
+          return interaction.reply({
+            content: "Cor inválida. Use o formato #RRGGBB, por exemplo #00c853.",
+            flags: EPHEMERAL,
+          });
+        }
+      } else {
+        color = COLOR_PRESETS[selectValues(interaction, "preset")[0]]?.value ?? null;
+      }
+      // Sempre grava explicitamente (mesmo "Sem cor"), diferente do padrão (verde) quando nunca configurado
+      const updated = await updatePanel(id, { successColor: color });
+      return interaction.update({ components: buildSection("sucesso", updated, guild) });
+    }
+
+    case "tcfg_modal_su_btn": {
+      const { set, unset } = setOrUnset({ successButtonLabel: clean(field("label")) });
+      const updated = await updatePanel(id, set, unset);
+      return interaction.update({ components: buildSection("sucesso", updated, guild) });
     }
 
     // ----- regras -----
