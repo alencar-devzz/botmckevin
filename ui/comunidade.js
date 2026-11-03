@@ -22,7 +22,8 @@ function buildComunidadePanel() {
     .setPlaceholder("Selecione uma opção")
     .addOptions(
       { label: "Portaria", description: "Configure as mensagens de boas-vindas no servidor.", value: "portaria" },
-      { label: "Auto-roles", description: "Configure os cargos automáticos.", value: "autoroles" }
+      { label: "Auto-roles", description: "Configure os cargos automáticos.", value: "autoroles" },
+      { label: "Posts e Instagram", description: "Fotos e vídeos com curtidas e comentários.", value: "posts" }
     );
 
   const selectRow = new ActionRowBuilder().addComponents(select);
