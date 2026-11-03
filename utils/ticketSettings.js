@@ -14,6 +14,9 @@ const DEFAULTS = {
   threadName: "{username}・N°{number}",
   maxPerUser: 1,
   archiveMinutes: 10080,
+  successTitle: "Atendimento aberto com sucesso.",
+  successMessage: "Painel: {panel}. Sua conversa com a equipe acontece no tópico privado.",
+  successButtonLabel: "Ir para o ticket",
 };
 
 const BUTTON_STYLES = {
@@ -121,6 +124,13 @@ function resolvePanel(doc) {
     maxPerUser: d.maxPerUser ?? DEFAULTS.maxPerUser,
     askReason: Boolean(d.askReason),
     confirmClose: Boolean(d.confirmClose),
+
+    // Mensagem efêmera de confirmação ao abrir o ticket
+    successTitle: d.successTitle || DEFAULTS.successTitle,
+    successMessage: d.successMessage || DEFAULTS.successMessage,
+    successColor: d.successColor !== undefined ? d.successColor : 0x00c853,
+    successButtonLabel: d.successButtonLabel || DEFAULTS.successButtonLabel,
+    successButtonEnabled: d.successButtonEnabled !== false,
 
     sent: (d.sent ?? []).map((p) => ({ channelId: p.channelId, messageId: p.messageId })),
 
