@@ -13,7 +13,7 @@ const {
   ActionRowBuilder,
 } = require("discord.js");
 const { addBackButton } = require("./backButton");
-const { EMOJIS, emojiMarkup } = require("../utils/posts/emojis");
+const { EMOJIS, emojiMarkup } = require("../utils/post/emojis");
 
 const PER_PAGE = 3; // comentários/curtidas por página
 const DEFAULT_AVATAR = "https://cdn.discordapp.com/embed/avatars/0.png";
