@@ -52,7 +52,7 @@ async function loadTicketMedia(settings, options = {}) {
 }
 
 // Baixa e guarda as imagens enviadas no modal. Retorna os ids guardados e os motivos de recusa.
-async function saveUploads({ guildId, scope, files, existingSources, room }) {
+async function saveUploads({ guildId, panelId = null, scope, files, existingSources, room }) {
   const stored = [];
   const rejected = [];
 
@@ -91,6 +91,7 @@ async function saveUploads({ guildId, scope, files, existingSources, room }) {
 
       const doc = await TicketImage.create({
         guildId,
+        panelId,
         scope,
         name,
         contentType: type,
@@ -113,6 +114,23 @@ async function saveUploads({ guildId, scope, files, existingSources, room }) {
 async function deleteUploads(sources) {
   const ids = sources.filter(isStored).map(storedId);
   if (ids.length) await TicketImage.deleteMany({ _id: { $in: ids } });
+}
+
+// Copia os envios guardados (usado ao duplicar um painel). Links são mantidos como estão.
+async function cloneUploads(sources, panelId, scope) {
+  const result = [];
+  for (const source of sources) {
+    if (!isStored(source)) {
+      result.push(source);
+      continue;
+    }
+    const doc = await TicketImage.findById(storedId(source)).lean();
+    if (!doc) continue;
+    const { _id, ...rest } = doc;
+    const copy = await TicketImage.create({ ...rest, panelId, scope });
+    result.push(`db:${copy._id}`);
+  }
+  return result;
 }
 
 // Nome amigável de cada fonte (para listar nos selects dos modais de imagens)
@@ -143,4 +161,5 @@ module.exports = {
   saveUploads,
   deleteUploads,
   describeSources,
+  cloneUploads,
 };

@@ -1,15 +1,48 @@
-const TicketConfig = require("../database/models/TicketConfig");
-const { STAFF_ROLE_IDS, PANEL_IMAGE, TICKET_OPTIONS } = require("./ticketConfig");
+const { PANEL_IMAGE, STAFF_ROLE_IDS, TICKET_OPTIONS } = require("./ticketConfig");
 
 const MAX_IMAGES = 5;
 const MAX_OPTIONS = 25;
+const MAX_PANELS = 15;
 
 const DEFAULTS = {
-  panelPlaceholder: "Selecione uma opção",
+  placeholder: "Selecione uma opção",
+  buttonLabel: "Abrir ticket",
+  description: "Precisa de ajuda? Abra um ticket e nossa equipe irá atender você.",
   internalHeading: "Ticket - {username}",
   internalMessage: "Por favor, aguarde as instruções do staff responsável.",
   claimedMessage: "{staff} **Assumiu** este ticket e irá lhe atender.",
-  threadName: "📌・{username}・N°{number}",
+  threadName: "{username}・N°{number}",
+  maxPerUser: 1,
+  archiveMinutes: 10080,
+};
+
+const BUTTON_STYLES = {
+  primary: "Azul",
+  secondary: "Cinza",
+  success: "Verde",
+  danger: "Vermelho",
+};
+
+// Cores da barra lateral do painel (null = sem cor)
+const COLOR_PRESETS = {
+  none: { label: "Sem cor", value: null },
+  green: { label: "Verde", value: 0x00c853 },
+  red: { label: "Vermelho", value: 0xe50000 },
+  white: { label: "Branco", value: 0xffffff },
+  blue: { label: "Azul", value: 0x2979ff },
+  purple: { label: "Roxo", value: 0x9c27b0 },
+  orange: { label: "Laranja", value: 0xff6d00 },
+  yellow: { label: "Amarelo", value: 0xffd600 },
+  pink: { label: "Rosa", value: 0xff4081 },
+  gray: { label: "Cinza", value: 0x9e9e9e },
+};
+
+// Tempos válidos de arquivamento automático do Discord (em minutos)
+const ARCHIVE_OPTIONS = {
+  60: "1 hora",
+  1440: "24 horas",
+  4320: "3 dias",
+  10080: "7 dias",
 };
 
 function defaultOptions() {
@@ -22,66 +55,84 @@ function defaultOptions() {
   }));
 }
 
+// "#ff00aa" ou "ff00aa" -> número. Inválido -> null
+function parseHexColor(text) {
+  const match = String(text ?? "").trim().match(/^#?([0-9a-f]{6})$/i);
+  return match ? parseInt(match[1], 16) : null;
+}
+
+const colorToHex = (value) => (value == null ? null : `#${value.toString(16).padStart(6, "0")}`);
+
+function colorName(value) {
+  if (value == null) return "Sem cor";
+  const preset = Object.values(COLOR_PRESETS).find((c) => c.value === value);
+  return preset ? preset.label : colorToHex(value);
+}
+
 // Junta o que está salvo no MongoDB com os padrões
-function resolve(doc) {
+function resolvePanel(doc) {
   const d = doc ?? {};
+  const options = d.options?.length
+    ? d.options.map((o) => ({
+        key: o.key,
+        label: o.label,
+        description: o.description || null,
+        title: o.title,
+        message: o.message || null,
+        staffRoles: o.staffRoles ? [...o.staffRoles] : null,
+      }))
+    : defaultOptions().map((o) => ({ ...o, staffRoles: null }));
+
+  const panelImages = d.panelImages ? [...d.panelImages] : [];
+  const internalImages = d.internalImages ? [...d.internalImages] : [];
+
   return {
-    panelTitle: d.panelTitle || null,
-    panelDescription: d.panelDescription || null,
-    panelPlaceholder: d.panelPlaceholder || DEFAULTS.panelPlaceholder,
-    panelImages: d.panelImages?.length ? [...d.panelImages] : [PANEL_IMAGE],
-    panelSources: d.panelImages?.length ? [...d.panelImages] : [], // só o que o usuário definiu
+    id: d._id ? String(d._id) : "removed",
+    guildId: d.guildId ?? null,
+    name: d.name || "Painel de tickets",
+    mode: d.mode === "button" ? "button" : "select",
+    enabled: d.enabled !== false,
+
+    title: d.title || null,
+    description: d.description || null,
+    footer: d.footer || null,
+    color: d.color ?? null,
+    showInfo: d.showInfo !== false,
+    panelImages,
+    panelSources: panelImages, // fontes definidas pelo usuário (links ou "db:<id>")
+
+    placeholder: d.placeholder || DEFAULTS.placeholder,
+    buttonLabel: d.buttonLabel || DEFAULTS.buttonLabel,
+    buttonStyle: BUTTON_STYLES[d.buttonStyle] ? d.buttonStyle : "primary",
+    options,
 
     internalHeading: d.internalHeading || DEFAULTS.internalHeading,
     internalMessage: d.internalMessage || DEFAULTS.internalMessage,
     claimedMessage: d.claimedMessage || DEFAULTS.claimedMessage,
     threadName: d.threadName || DEFAULTS.threadName,
-    internalImages: d.internalImages ? [...d.internalImages] : [],
-    internalSources: d.internalImages ? [...d.internalImages] : [],
-
-    options: d.options?.length
-      ? d.options.map((o) => ({
-          key: o.key,
-          label: o.label,
-          description: o.description || null,
-          title: o.title,
-          message: o.message || null,
-        }))
-      : defaultOptions(),
+    internalImages,
+    internalSources: internalImages,
+    ticketChannelId: d.ticketChannelId || null,
+    archiveMinutes: ARCHIVE_OPTIONS[d.archiveMinutes] ? d.archiveMinutes : DEFAULTS.archiveMinutes,
 
     attendRoles: d.attendRoles != null ? [...d.attendRoles] : [...STAFF_ROLE_IDS],
     mentionRoles: d.mentionRoles != null ? [...d.mentionRoles] : [...STAFF_ROLE_IDS],
 
-    panels: (d.panels ?? []).map((p) => ({ channelId: p.channelId, messageId: p.messageId })),
+    maxPerUser: d.maxPerUser ?? DEFAULTS.maxPerUser,
+    askReason: Boolean(d.askReason),
+    confirmClose: Boolean(d.confirmClose),
 
-    // Para o painel de configuração saber o que é personalizado e o que é padrão
+    sent: (d.sent ?? []).map((p) => ({ channelId: p.channelId, messageId: p.messageId })),
+
     custom: {
-      panelImages: Boolean(d.panelImages?.length),
-      options: Boolean(d.options?.length),
       attendRoles: d.attendRoles != null,
       mentionRoles: d.mentionRoles != null,
     },
   };
 }
 
-async function getTicketSettings(guildId) {
-  const doc = await TicketConfig.findOne({ guildId }).lean();
-  return resolve(doc);
-}
-
-// set: campos para salvar | unset: campos para voltar ao padrão
-async function updateTicketConfig(guildId, set = {}, unset = []) {
-  const update = {};
-  if (Object.keys(set).length) update.$set = set;
-  if (unset.length) update.$unset = Object.fromEntries(unset.map((k) => [k, ""]));
-
-  const doc = await TicketConfig.findOneAndUpdate({ guildId }, update, {
-    upsert: true,
-    new: true,
-    setDefaultsOnInsert: true,
-  }).lean();
-  return resolve(doc);
-}
+// Painel "genérico" para tickets cujo painel foi excluído (os botões continuam funcionando)
+const fallbackPanel = (guildId) => resolvePanel({ guildId, name: "Painel removido" });
 
 // Troca {variáveis} no texto. Variáveis desconhecidas ficam como estão.
 function applyVars(text, vars) {
@@ -111,25 +162,52 @@ function parseImageUrls(text) {
 }
 
 // Opção pelo key (tickets antigos podem apontar para uma opção que não existe mais)
-function getOption(settings, key) {
+function getOption(panel, key) {
   return (
-    settings.options.find((o) => o.key === key) ?? {
+    panel.options.find((o) => o.key === key) ?? {
       key,
       label: String(key),
       description: null,
       title: String(key).toUpperCase(),
       message: null,
+      staffRoles: null,
     }
   );
 }
 
+// Gera um key único a partir do nome da opção
+function makeOptionKey(label, existing) {
+  const base =
+    String(label)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 20) || "opcao";
+  let key = base;
+  let n = 2;
+  while (existing.includes(key)) key = `${base}-${n++}`;
+  return key;
+}
+
 module.exports = {
+  PANEL_IMAGE,
   MAX_IMAGES,
   MAX_OPTIONS,
+  MAX_PANELS,
   DEFAULTS,
-  getTicketSettings,
-  updateTicketConfig,
+  BUTTON_STYLES,
+  COLOR_PRESETS,
+  ARCHIVE_OPTIONS,
+  defaultOptions,
+  parseHexColor,
+  colorToHex,
+  colorName,
+  resolvePanel,
+  fallbackPanel,
   applyVars,
   parseImageUrls,
   getOption,
+  makeOptionKey,
 };
