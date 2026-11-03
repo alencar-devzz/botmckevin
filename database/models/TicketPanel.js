@@ -63,6 +63,13 @@ const ticketPanelSchema = new Schema(
     askReason: { type: Boolean, default: false },
     confirmClose: { type: Boolean, default: false },
 
+    // Mensagem efêmera de confirmação ao abrir o ticket
+    successTitle: { type: String, default: null },
+    successMessage: { type: String, default: null },
+    successColor: { type: Number }, // sem default: ausente = usa o padrão (verde)
+    successButtonLabel: { type: String, default: null },
+    successButtonEnabled: { type: Boolean, default: true },
+
     sent: { type: [sentSchema], default: [] },
   },
   { timestamps: true }
