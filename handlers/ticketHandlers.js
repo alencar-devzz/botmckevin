@@ -222,6 +222,7 @@ async function createTicket(interaction, panel, option, reason) {
       ],
       files: media.internal.files,
       flags: V2,
+      allowedMentions: { parse: [] }, // o painel interno cita pessoas, mas nunca pinga
     });
 
     await createRecord({
@@ -306,6 +307,7 @@ async function handleTicketButton(interaction) {
       ],
       files: media.internal.files,
       attachments: [],
+      allowedMentions: { parse: [] },
     });
     await setClaimed(interaction.channelId, interaction.user.id).catch(() => {});
 

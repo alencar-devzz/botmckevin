@@ -608,6 +608,14 @@ async function handleTicketConfigModal(interaction) {
   const { action, id, extra } = parse(interaction.customId);
   const { guild } = interaction;
   const field = (name) => interaction.fields.getTextInputValue(name);
+  // Select "Não usar texto padrão": campo vazio + marcado = salva "" (sem texto); vazio sem marcar = padrão (null)
+  const blank = new Set(selectValues(interaction, "blank"));
+  const textOrBlank = (name) => clean(field(name)) ?? (blank.has(name) ? "" : null);
+  // Modal de opção (sem espaço para o select): "-" = sem texto
+  const dashText = (name) => {
+    const v = clean(field(name));
+    return v === "-" ? "" : v;
+  };
 
   // Criar painel não depende de um painel existente
   if (action === "tcfg_modal_new") {
@@ -699,10 +707,8 @@ async function handleTicketConfigModal(interaction) {
     }
 
     case "tcfg_modal_m_ph": {
-      const value = clean(field("placeholder"));
-      const updated = value
-        ? await updatePanel(id, { placeholder: value })
-        : await updatePanel(id, {}, ["placeholder"]);
+      const { set, unset } = setOrUnset({ placeholder: textOrBlank("placeholder") });
+      const updated = await updatePanel(id, set, unset);
       refreshInBackground(interaction, updated);
       return interaction.update({ components: buildSection("abertura", updated, guild) });
     }
@@ -710,9 +716,9 @@ async function handleTicketConfigModal(interaction) {
     // ----- ticket interno -----
     case "tcfg_modal_i_text": {
       const { set, unset } = setOrUnset({
-        internalHeading: clean(field("heading")),
-        internalMessage: clean(field("message")),
-        claimedMessage: clean(field("claimed")),
+        internalHeading: textOrBlank("heading"),
+        internalMessage: textOrBlank("message"),
+        claimedMessage: textOrBlank("claimed"),
         threadName: clean(field("thread")),
       });
       const updated = await updatePanel(id, set, unset);
@@ -729,8 +735,8 @@ async function handleTicketConfigModal(interaction) {
     // ----- mensagem de sucesso -----
     case "tcfg_modal_su_text": {
       const { set, unset } = setOrUnset({
-        successTitle: clean(field("title")),
-        successMessage: clean(field("message")),
+        successTitle: textOrBlank("title"),
+        successMessage: textOrBlank("message"),
       });
       const updated = await updatePanel(id, set, unset);
       return interaction.update({ components: buildSection("sucesso", updated, guild) });
@@ -744,8 +750,8 @@ async function handleTicketConfigModal(interaction) {
 
     case "tcfg_modal_cc_text": {
       const { set, unset } = setOrUnset({
-        closeConfirmTitle: clean(field("title")),
-        closeConfirmMessage: clean(field("message")),
+        closeConfirmTitle: textOrBlank("title"),
+        closeConfirmMessage: textOrBlank("message"),
         closeConfirmButtonLabel: clean(field("button")),
       });
       const updated = await updatePanel(id, set, unset);
@@ -754,8 +760,8 @@ async function handleTicketConfigModal(interaction) {
 
     case "tcfg_modal_lim_text": {
       const { set, unset } = setOrUnset({
-        limitTitle: clean(field("title")),
-        limitMessage: clean(field("message")),
+        limitTitle: textOrBlank("title"),
+        limitMessage: textOrBlank("message"),
       });
       const updated = await updatePanel(id, set, unset);
       return interaction.update({ components: buildSection("sucesso", updated, guild) });
@@ -806,8 +812,8 @@ async function handleTicketConfigModal(interaction) {
         key: makeOptionKey(label, panel.options.map((o) => o.key)),
         label,
         description: clean(field("description")),
-        title: clean(field("title")) ?? label.toUpperCase().slice(0, 100),
-        message: clean(field("message")),
+        title: dashText("title") ?? label.toUpperCase().slice(0, 100),
+        message: dashText("message"),
         staffRoles: null,
       };
       const position = Number.parseInt(selectValues(interaction, "position")[0], 10);
@@ -830,8 +836,8 @@ async function handleTicketConfigModal(interaction) {
         ...current,
         label,
         description: simple ? current.description : clean(field("description")),
-        title: clean(field("title")) ?? label.toUpperCase().slice(0, 100),
-        message: clean(field("message")),
+        title: dashText("title") ?? label.toUpperCase().slice(0, 100),
+        message: dashText("message"),
       };
 
       let options;
