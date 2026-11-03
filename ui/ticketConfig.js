@@ -200,6 +200,11 @@ function buildPanelManager({ panel, open = 0 }) {
         value: "interno",
       },
       {
+        label: "Mensagem de sucesso",
+        description: "Texto, cor e botão da confirmação ao abrir o ticket.",
+        value: "sucesso",
+      },
+      {
         label: "Cargos",
         description: "Quem atende e quem é marcado nos tickets.",
         value: "cargos",
@@ -495,6 +500,57 @@ function buildSecInterno(panel, guild) {
   return [tabHeader("Ticket interno", panel, "dentro do tópico"), container];
 }
 
+// ---------- Mensagem de sucesso ----------
+
+function buildSecSucesso(panel) {
+  const container = new ContainerBuilder()
+    .addSectionComponents(
+      item(
+        [
+          "**Textos da confirmação**",
+          `-# Título: \`${short(panel.successTitle)}\``,
+          `-# Mensagem: \`${short(panel.successMessage, 60)}\``,
+        ],
+        `tcfg_su_text:${panel.id}`
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        ["**Cor da confirmação**", `-# Barra lateral: \`${colorName(panel.successColor)}\``],
+        `tcfg_su_color:${panel.id}`
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        [
+          "**Botão para o ticket**",
+          `-# Texto: \`${short(panel.successButtonLabel, 30)}\``,
+          `-# Estado: \`${panel.successButtonEnabled ? "Ativado" : "Desativado"}\``,
+        ],
+        `tcfg_su_btn:${panel.id}`,
+        "Editar texto",
+        { disabled: !panel.successButtonEnabled }
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        [
+          "**Mostrar botão**",
+          "-# Desative para a confirmação aparecer sem o botão de ir ao ticket.",
+        ],
+        `tcfg_su_toggle:${panel.id}`,
+        panel.successButtonEnabled ? "Desativar" : "Ativar",
+        { style: panel.successButtonEnabled ? ButtonStyle.Danger : ButtonStyle.Success }
+      )
+    );
+  addBackButton(container, `tcfg_manage:${panel.id}`);
+
+  return [tabHeader("Mensagem de sucesso", panel, "confirmação efêmera ao abrir"), container];
+}
+
 // ---------- Cargos ----------
 
 function buildSecCargos(panel) {
@@ -693,6 +749,7 @@ const SECTIONS = {
   abertura: buildSecAbertura,
   opcoes: buildSecOpcoes,
   interno: buildSecInterno,
+  sucesso: buildSecSucesso,
   cargos: buildSecCargos,
   regras: buildSecRegras,
   publicacao: buildSecPublicacao,

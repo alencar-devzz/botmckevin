@@ -295,6 +295,74 @@ function buildArchiveModal(panel) {
   );
 }
 
+// ---------- mensagem de sucesso ----------
+
+function buildSuccessTextModal(panel) {
+  return modal(
+    `tcfg_modal_su_text:${panel.id}`,
+    "Textos da confirmação",
+    textLabel({
+      id: "title",
+      label: "Título",
+      description: "Deixe vazio para usar o padrão.",
+      max: 100,
+      value: panel.successTitle === DEFAULTS.successTitle ? null : panel.successTitle,
+      placeholder: DEFAULTS.successTitle,
+    }),
+    textLabel({
+      id: "message",
+      label: "Mensagem",
+      description:
+        "Deixe vazio para usar o padrão. Variáveis: {username} {user} {option} {server} {number} {panel}",
+      style: TextInputStyle.Paragraph,
+      max: 300,
+      value: panel.successMessage === DEFAULTS.successMessage ? null : panel.successMessage,
+      placeholder: DEFAULTS.successMessage,
+    })
+  );
+}
+
+function buildSuccessColorModal(panel) {
+  const current = Object.entries(COLOR_PRESETS).find(([, c]) => c.value === panel.successColor)?.[0];
+  return modal(
+    `tcfg_modal_su_color:${panel.id}`,
+    "Cor da confirmação",
+    selectLabel({
+      id: "preset",
+      label: "Cor predefinida",
+      description: "Cor da barra lateral da mensagem de confirmação.",
+      options: Object.entries(COLOR_PRESETS).map(([value, c]) => ({
+        label: c.label,
+        value,
+        default: value === (current ?? (panel.successColor == null ? "none" : null)),
+      })),
+    }),
+    textLabel({
+      id: "hex",
+      label: "Cor personalizada (opcional)",
+      description: "Se preencher, vale no lugar da predefinida.",
+      max: 7,
+      value: current ? null : colorToHex(panel.successColor),
+      placeholder: "#00c853",
+    })
+  );
+}
+
+function buildSuccessButtonModal(panel) {
+  return modal(
+    `tcfg_modal_su_btn:${panel.id}`,
+    "Botão da confirmação",
+    textLabel({
+      id: "label",
+      label: "Texto do botão",
+      description: "Deixe vazio para usar o padrão.",
+      max: 80,
+      value: panel.successButtonLabel === DEFAULTS.successButtonLabel ? null : panel.successButtonLabel,
+      placeholder: DEFAULTS.successButtonLabel,
+    })
+  );
+}
+
 // ---------- regras ----------
 
 function buildLimitModal(panel) {
@@ -437,6 +505,9 @@ module.exports = {
   buildButtonModal,
   buildPlaceholderModal,
   buildInternalTextModal,
+  buildSuccessTextModal,
+  buildSuccessColorModal,
+  buildSuccessButtonModal,
   buildArchiveModal,
   buildLimitModal,
   buildOptionModal,

@@ -191,22 +191,26 @@ function buildClaimedContainer({ panel, staffId, authorId, timestamp, guildName 
     .addTextDisplayComponents(text(`### ${body}\n-# <t:${timestamp}:t>`));
 }
 
-// Efêmera de sucesso com botão para o ticket
-function buildTicketCreatedEphemeral(url, panelName) {
-  const link = new ButtonBuilder()
-    .setStyle(ButtonStyle.Link)
-    .setLabel("Ir para o ticket")
-    .setURL(url);
+// Efêmera de sucesso: título, mensagem e cor configuráveis; botão para o ticket opcional, com label editável
+function buildTicketCreatedEphemeral(panel, url, vars = {}) {
+  const title = applyVars(panel.successTitle, vars);
+  const message = applyVars(panel.successMessage, vars);
 
-  return [
-    new ContainerBuilder()
-      .setAccentColor(0x00c853)
-      .addTextDisplayComponents(
-        text("### Atendimento aberto com sucesso."),
-        text(`-# Painel: ${panelName}. Sua conversa com a equipe acontece no tópico privado.`)
-      )
-      .addActionRowComponents(new ActionRowBuilder().addComponents(link)),
-  ];
+  const container = new ContainerBuilder().addTextDisplayComponents(
+    text(`### ${title}`),
+    text(`-# ${message}`)
+  );
+  if (panel.successColor != null) container.setAccentColor(panel.successColor);
+
+  if (panel.successButtonEnabled) {
+    const link = new ButtonBuilder()
+      .setStyle(ButtonStyle.Link)
+      .setLabel((panel.successButtonLabel || "Ir para o ticket").slice(0, 80))
+      .setURL(url);
+    container.addActionRowComponents(new ActionRowBuilder().addComponents(link));
+  }
+
+  return [container];
 }
 
 // Efêmera quando o usuário atingiu o limite de tickets abertos
