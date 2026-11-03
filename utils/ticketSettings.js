@@ -17,6 +17,11 @@ const DEFAULTS = {
   successTitle: "Atendimento aberto com sucesso.",
   successMessage: "Painel: {panel}. Sua conversa com a equipe acontece no tópico privado.",
   successButtonLabel: "Ir para o ticket",
+  limitTitle: "Você já tem um ticket aberto.",
+  limitMessage: "Limite neste painel: {max} ticket(s) por pessoa. Finalize o atual antes de abrir outro.",
+  closeConfirmTitle: "Finalizar este ticket?",
+  closeConfirmMessage: "O tópico será excluído e a conversa não poderá ser recuperada.",
+  closeConfirmButtonLabel: "Confirmar",
 };
 
 const BUTTON_STYLES = {
@@ -130,9 +135,22 @@ function resolvePanel(doc) {
     // Mensagem efêmera de confirmação ao abrir o ticket
     successTitle: d.successTitle || DEFAULTS.successTitle,
     successMessage: d.successMessage || DEFAULTS.successMessage,
-    successColor: d.successColor !== undefined ? d.successColor : 0x00c853,
+    successColor: d.successColor !== undefined ? d.successColor : null,
     successButtonLabel: d.successButtonLabel || DEFAULTS.successButtonLabel,
     successButtonEnabled: d.successButtonEnabled !== false,
+
+    showAuthorLine: d.showAuthorLine !== false,
+    internalColor: d.internalColor !== undefined ? d.internalColor : null,
+    claimedColor: d.claimedColor !== undefined ? d.claimedColor : null,
+
+    limitTitle: d.limitTitle || DEFAULTS.limitTitle,
+    limitMessage: d.limitMessage || DEFAULTS.limitMessage,
+    limitColor: d.limitColor !== undefined ? d.limitColor : null,
+
+    closeConfirmTitle: d.closeConfirmTitle || DEFAULTS.closeConfirmTitle,
+    closeConfirmMessage: d.closeConfirmMessage || DEFAULTS.closeConfirmMessage,
+    closeConfirmButtonLabel: d.closeConfirmButtonLabel || DEFAULTS.closeConfirmButtonLabel,
+    closeConfirmColor: d.closeConfirmColor !== undefined ? d.closeConfirmColor : null,
 
     sent: (d.sent ?? []).map((p) => ({ channelId: p.channelId, messageId: p.messageId })),
 
