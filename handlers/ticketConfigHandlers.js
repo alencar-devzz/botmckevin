@@ -369,6 +369,14 @@ async function handleTicketConfigButton(interaction) {
       const updated = await updatePanel(id, {}, ["ticketChannelId"]);
       return interaction.update({ components: buildSection("interno", updated, guild) });
     }
+    case "tcfg_i_optline": {
+      const updated = await updatePanel(id, { showOptionLine: !panel.showOptionLine });
+      return interaction.update({ components: buildSection("interno", updated, guild) });
+    }
+    case "tcfg_i_footer": {
+      const updated = await updatePanel(id, { showTicketFooter: !panel.showTicketFooter });
+      return interaction.update({ components: buildSection("interno", updated, guild) });
+    }
 
     // ----- mensagem de sucesso -----
     case "tcfg_su_text":
