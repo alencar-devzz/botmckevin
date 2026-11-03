@@ -9,6 +9,7 @@ const { handleBotcallSelect } = require("./botcallHandlers");
 const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHandlers");
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
+const { openPostsPanel, handlePostsConfigSelect } = require("./postsHandlers");
 
 async function handleSelect(interaction) {
   const { customId, values } = interaction;
@@ -32,6 +33,10 @@ async function handleSelect(interaction) {
 
   if (customId.startsWith("logs_")) {
     return handleLogsSelect(interaction);
+  }
+
+  if (customId.startsWith("pcfg_")) {
+    return handlePostsConfigSelect(interaction);
   }
 
   switch (customId) {
@@ -74,6 +79,9 @@ async function handleSelect(interaction) {
       if (value === "autoroles") {
         const config = await getGuildConfig(interaction.guild.id);
         return interaction.update({ components: buildAutoRolesPanel(config) });
+      }
+      if (value === "posts") {
+        return openPostsPanel(interaction);
       }
       return;
     }

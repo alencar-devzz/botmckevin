@@ -7,6 +7,7 @@ const { buildPortariaIntro, buildPortariaConfig } = require("../ui/portaria");
 const { buildMensagensModal } = require("../ui/portariaModals");
 const { handleAparenciaButton } = require("./aparenciaHandlers");
 const { handleLogsButton } = require("./logsHandlers");
+const { handlePostsConfigButton, handlePostButton } = require("./postsHandlers");
 const { handleTicketButton } = require("./ticketHandlers");
 const { handleRegrasButton } = require("./regrasHandlers");
 const { handleBoosterButton } = require("./boosterHandlers");
@@ -43,6 +44,14 @@ async function handleButton(interaction) {
 
   if (customId.startsWith("logs_")) {
     return handleLogsButton(interaction);
+  }
+
+  if (customId.startsWith("pcfg_")) {
+    return handlePostsConfigButton(interaction);
+  }
+
+  if (customId.startsWith("post_")) {
+    return handlePostButton(interaction);
   }
 
   if (customId === "mod_confirm" || customId === "mod_cancel") {
