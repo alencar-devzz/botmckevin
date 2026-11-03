@@ -6,7 +6,7 @@ const {
 } = require("discord.js");
 const Post = require("../database/models/Post");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
-const { getPostConfig, updatePostConfig } = require("../utils/posts/store");
+const { getPostConfig, updatePostConfig } = require("../utils/post/store");
 const { textLabel, modal } = require("../ui/modalHelpers");
 const {
   buildPostsPanel,
