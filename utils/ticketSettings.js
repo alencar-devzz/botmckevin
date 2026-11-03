@@ -77,6 +77,9 @@ function colorName(value) {
   return preset ? preset.label : colorToHex(value);
 }
 
+// Texto configurável: ausente (null/undefined) = usa o padrão; "" = o dono deixou SEM texto de propósito
+const textOr = (value, fallback) => (value == null ? fallback : value);
+
 // Junta o que está salvo no MongoDB com os padrões
 function resolvePanel(doc) {
   const d = doc ?? {};
@@ -86,7 +89,7 @@ function resolvePanel(doc) {
         label: o.label,
         description: o.description || null,
         title: o.title,
-        message: o.message || null,
+        message: o.message ?? null, // "" = sem texto (de propósito), null = usa a mensagem do painel
         staffRoles: o.staffRoles ? [...o.staffRoles] : null,
       }))
     : defaultOptions().map((o) => ({ ...o, staffRoles: null }));
@@ -109,14 +112,14 @@ function resolvePanel(doc) {
     panelImages,
     panelSources: panelImages, // fontes definidas pelo usuário (links ou "db:<id>")
 
-    placeholder: d.placeholder || DEFAULTS.placeholder,
+    placeholder: textOr(d.placeholder, DEFAULTS.placeholder),
     buttonLabel: d.buttonLabel || DEFAULTS.buttonLabel,
     buttonStyle: BUTTON_STYLES[d.buttonStyle] ? d.buttonStyle : "primary",
     options,
 
-    internalHeading: d.internalHeading || DEFAULTS.internalHeading,
-    internalMessage: d.internalMessage || DEFAULTS.internalMessage,
-    claimedMessage: d.claimedMessage || DEFAULTS.claimedMessage,
+    internalHeading: textOr(d.internalHeading, DEFAULTS.internalHeading),
+    internalMessage: textOr(d.internalMessage, DEFAULTS.internalMessage),
+    claimedMessage: textOr(d.claimedMessage, DEFAULTS.claimedMessage),
     threadName: d.threadName || DEFAULTS.threadName,
     internalImages,
     internalSources: internalImages,
@@ -133,8 +136,8 @@ function resolvePanel(doc) {
     confirmClose: Boolean(d.confirmClose),
 
     // Mensagem efêmera de confirmação ao abrir o ticket
-    successTitle: d.successTitle || DEFAULTS.successTitle,
-    successMessage: d.successMessage || DEFAULTS.successMessage,
+    successTitle: textOr(d.successTitle, DEFAULTS.successTitle),
+    successMessage: textOr(d.successMessage, DEFAULTS.successMessage),
     successColor: d.successColor !== undefined ? d.successColor : null,
     successButtonLabel: d.successButtonLabel || DEFAULTS.successButtonLabel,
     successButtonEnabled: d.successButtonEnabled !== false,
@@ -143,12 +146,12 @@ function resolvePanel(doc) {
     internalColor: d.internalColor !== undefined ? d.internalColor : null,
     claimedColor: d.claimedColor !== undefined ? d.claimedColor : null,
 
-    limitTitle: d.limitTitle || DEFAULTS.limitTitle,
-    limitMessage: d.limitMessage || DEFAULTS.limitMessage,
+    limitTitle: textOr(d.limitTitle, DEFAULTS.limitTitle),
+    limitMessage: textOr(d.limitMessage, DEFAULTS.limitMessage),
     limitColor: d.limitColor !== undefined ? d.limitColor : null,
 
-    closeConfirmTitle: d.closeConfirmTitle || DEFAULTS.closeConfirmTitle,
-    closeConfirmMessage: d.closeConfirmMessage || DEFAULTS.closeConfirmMessage,
+    closeConfirmTitle: textOr(d.closeConfirmTitle, DEFAULTS.closeConfirmTitle),
+    closeConfirmMessage: textOr(d.closeConfirmMessage, DEFAULTS.closeConfirmMessage),
     closeConfirmButtonLabel: d.closeConfirmButtonLabel || DEFAULTS.closeConfirmButtonLabel,
     closeConfirmColor: d.closeConfirmColor !== undefined ? d.closeConfirmColor : null,
 
