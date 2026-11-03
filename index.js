@@ -11,6 +11,7 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildModeration, // banimentos e registro de auditoria (logs)
     GatewayIntentBits.MessageContent,
   ],
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember],
@@ -31,11 +32,14 @@ for (const file of fs.readdirSync(commandsPath).filter((f) => f.endsWith(".js"))
 // Carrega eventos
 const eventsPath = path.join(__dirname, "events");
 for (const file of fs.readdirSync(eventsPath).filter((f) => f.endsWith(".js"))) {
-  const event = require(path.join(eventsPath, file));
-  if (event.once) {
-    client.once(event.name, (...args) => event.execute(...args));
-  } else {
-    client.on(event.name, (...args) => event.execute(...args));
+  const exported = require(path.join(eventsPath, file));
+  // Um arquivo pode exportar um evento ou uma lista de eventos (ex: events/logs.js)
+  for (const event of Array.isArray(exported) ? exported : [exported]) {
+    if (event.once) {
+      client.once(event.name, (...args) => event.execute(...args));
+    } else {
+      client.on(event.name, (...args) => event.execute(...args));
+    }
   }
 }
 
