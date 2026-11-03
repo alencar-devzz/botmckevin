@@ -11,9 +11,41 @@ const {
   ChannelSelectMenuBuilder,
   ChannelType,
   ActionRowBuilder,
+  StringSelectMenuBuilder,
 } = require("discord.js");
 const { addBackButton } = require("./backButton");
-const { EMOJIS, emojiMarkup } = require("../utils/post/emojis");
+const { EMOJIS, emojiMarkup, resolveEmoji } = require("../utils/post/emojis");
+const { KEYS, DEFAULT_BUTTONS, DEFAULT_ORDER } = require("../utils/post/store");
+
+const BUTTON_LABELS = {
+  like: "Curtir",
+  comment: "Comentar",
+  view: "Ver comentários/curtidas",
+  delete: "Excluir",
+};
+const STYLE_LABELS = {
+  secondary: "Cinza (sem cor)",
+  primary: "Azul",
+  success: "Verde",
+  danger: "Vermelho",
+};
+const STYLE_MAP = {
+  secondary: ButtonStyle.Secondary,
+  primary: ButtonStyle.Primary,
+  success: ButtonStyle.Success,
+  danger: ButtonStyle.Danger,
+};
+const POSITION_LABELS = {
+  top: "Topo (canto direito da embed)",
+  bottom: "Rodapé (linha de botões)",
+};
+
+// Config padrão usada quando nenhuma é passada
+const FALLBACK_CFG = {
+  buttons: DEFAULT_BUTTONS,
+  order: DEFAULT_ORDER,
+  rowPosition: "below",
+};
 
 const PER_PAGE = 3; // comentários/curtidas por página
 const DEFAULT_AVATAR = "https://cdn.discordapp.com/embed/avatars/0.png";
@@ -68,6 +100,45 @@ function buildPostsPanel(guild, cfg) {
       )
     );
 
+  const buttonsPanel = new ContainerBuilder()
+    .addTextDisplayComponents(
+      text("**Botões do post**"),
+      text("-# Escolha um botão para trocar o emoji, a cor e a posição dele."),
+      text(
+        `-# Linha de botões: **${cfg.rowPosition === "above" ? "acima" : "abaixo"} da mídia**`
+      )
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId("pcfg_pick")
+          .setPlaceholder("Selecione um botão para editar")
+          .addOptions(
+            KEYS.map((key) => ({
+              label: BUTTON_LABELS[key],
+              description: `Cor: ${STYLE_LABELS[cfg.buttons[key].style]} · ${
+                cfg.buttons[key].position === "top" ? "Topo" : "Rodapé"
+              }`,
+              value: key,
+            }))
+          )
+      )
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("pcfg_rowpos")
+          .setLabel(
+            cfg.rowPosition === "above" ? "Mover linha para baixo" : "Mover linha para cima"
+          )
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("pcfg_reset_all")
+          .setLabel("Restaurar padrão")
+          .setStyle(ButtonStyle.Danger)
+      )
+    );
+
   const info = new ContainerBuilder().addTextDisplayComponents(
     text("### Como funciona"),
     text(
@@ -81,54 +152,157 @@ function buildPostsPanel(guild, cfg) {
   );
   addBackButton(info, "back_comunidade");
 
-  return [header, config, info];
+  return [header, config, buttonsPanel, info];
+}
+
+// ---------- Painel de um botão (emoji / cor / posição) ----------
+
+function previewOf(cfg) {
+  const render = (key) => emojiMarkup(resolveEmoji(cfg.buttons[key].emoji, EMOJIS[key])).trim();
+  const top = KEYS.find((key) => cfg.buttons[key].position === "top");
+  const row = cfg.order.filter((key) => cfg.buttons[key].position === "bottom").map(render);
+  return [
+    `Topo: ${top ? render(top) : "`nenhum`"}`,
+    `Rodapé (${cfg.rowPosition === "above" ? "acima" : "abaixo"} da mídia): ${
+      row.length ? row.join("  ") : "`nenhum`"
+    }`,
+  ].join("\n");
+}
+
+function buildPostButtonPanel(cfg, key) {
+  const button = cfg.buttons[key];
+  const emoji = resolveEmoji(button.emoji, EMOJIS[key]);
+  const bottomKeys = cfg.order.filter((k) => cfg.buttons[k].position === "bottom");
+  const index = bottomKeys.indexOf(key);
+
+  const header = new ContainerBuilder().addTextDisplayComponents(
+    text(`### Botão: ${BUTTON_LABELS[key]}`),
+    text(
+      `-# Emoji: ${emojiMarkup(emoji).trim()}${button.emoji ? "" : " (padrão)"} · Cor: ${
+        STYLE_LABELS[button.style]
+      } · Posição: ${POSITION_LABELS[button.position]}`
+    )
+  );
+
+  const body = new ContainerBuilder()
+    .addTextDisplayComponents(text("**Prévia da posição**"), text(previewOf(cfg)))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(
+      text("**Cor**"),
+      text("-# Escolha \"Cinza\" para remover a cor do botão.")
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`pcfg_color:${key}`)
+          .setPlaceholder("Cor do botão")
+          .addOptions(
+            Object.entries(STYLE_LABELS).map(([value, label]) => ({
+              label,
+              value,
+              default: button.style === value,
+            }))
+          )
+      )
+    )
+    .addTextDisplayComponents(
+      text("**Posição**"),
+      text("-# Só um botão cabe no topo: ao escolher topo, o que estava lá volta para o rodapé.")
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`pcfg_pos:${key}`)
+          .setPlaceholder("Posição do botão")
+          .addOptions(
+            Object.entries(POSITION_LABELS).map(([value, label]) => ({
+              label,
+              value,
+              default: button.position === value,
+            }))
+          )
+      )
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`pcfg_emoji:${key}`)
+          .setLabel("Alterar emoji")
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`pcfg_left:${key}`)
+          .setLabel("◀ Esquerda")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(button.position !== "bottom" || index <= 0),
+        new ButtonBuilder()
+          .setCustomId(`pcfg_right:${key}`)
+          .setLabel("Direita ▶")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(button.position !== "bottom" || index === -1 || index >= bottomKeys.length - 1),
+        new ButtonBuilder()
+          .setCustomId(`pcfg_resetbtn:${key}`)
+          .setLabel("Restaurar")
+          .setStyle(ButtonStyle.Danger)
+      )
+    );
+  addBackButton(body, "pcfg_back");
+
+  return [header, body];
 }
 
 // ---------- O post (container sem cor) ----------
 
 // post: { authorId, content, likes: [], comments: [] }
 // mediaUrls: urls (ou attachment://nome) das fotos/vídeos
-function buildPostContainer(post, mediaUrls) {
-  const container = new ContainerBuilder();
+function buildPostButton(key, post, cfg) {
+  const conf = cfg.buttons[key];
+  const button = new ButtonBuilder()
+    .setCustomId(`post_${key}`)
+    .setEmoji(resolveEmoji(conf.emoji, EMOJIS[key]))
+    .setStyle(STYLE_MAP[conf.style] ?? ButtonStyle.Secondary);
 
-  container.addTextDisplayComponents(
-    text(`${emojiMarkup(EMOJIS.instagram)}<@${post.authorId}>`)
-  );
+  if (key === "like") button.setLabel(String(post.likes.length));
+  if (key === "comment") button.setLabel(String(post.comments.length));
+  return button;
+}
+
+function buildPostContainer(post, mediaUrls, cfg = FALLBACK_CFG) {
+  const container = new ContainerBuilder();
+  const authorLine = text(`${emojiMarkup(EMOJIS.instagram)}<@${post.authorId}>`);
+
+  // Botão do topo: canto direito, em cima da embed (padrão: ver comentários/curtidas)
+  const topKey = KEYS.find((key) => cfg.buttons[key].position === "top");
+  if (topKey) {
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(authorLine)
+        .setButtonAccessory(buildPostButton(topKey, post, cfg))
+    );
+  } else {
+    container.addTextDisplayComponents(authorLine);
+  }
 
   if (post.content && post.content.trim()) {
     container.addTextDisplayComponents(text(clip(post.content, 3500)));
   }
 
+  // Linha de botões do rodapé (na ordem configurada)
+  const rowKeys = cfg.order.filter((key) => cfg.buttons[key].position === "bottom");
+  const row = rowKeys.length
+    ? new ActionRowBuilder().addComponents(rowKeys.map((key) => buildPostButton(key, post, cfg)))
+    : null;
+
   container.addSeparatorComponents(new SeparatorBuilder());
+  if (row && cfg.rowPosition === "above") container.addActionRowComponents(row);
   container.addMediaGalleryComponents(
     new MediaGalleryBuilder().addItems(
       mediaUrls.map((url) => new MediaGalleryItemBuilder().setURL(url))
     )
   );
-  container.addSeparatorComponents(new SeparatorBuilder());
-
-  container.addActionRowComponents(
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("post_like")
-        .setEmoji(EMOJIS.like)
-        .setLabel(String(post.likes.length))
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("post_comment")
-        .setEmoji(EMOJIS.comment)
-        .setLabel(String(post.comments.length))
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("post_view")
-        .setEmoji(EMOJIS.view)
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("post_delete")
-        .setEmoji(EMOJIS.delete)
-        .setStyle(ButtonStyle.Secondary)
-    )
-  );
+  if (row && cfg.rowPosition !== "above") {
+    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addActionRowComponents(row);
+  }
 
   return container;
 }
@@ -233,6 +407,7 @@ function buildPostMissing() {
 
 module.exports = {
   buildPostsPanel,
+  buildPostButtonPanel,
   buildPostContainer,
   buildInteractionsView,
   buildPostMissing,
