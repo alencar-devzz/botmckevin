@@ -21,7 +21,7 @@ function buildComunidadePanel() {
     .setCustomId("comunidade_menu")
     .setPlaceholder("Selecione uma opção")
     .addOptions(
-      { label: "Portaria", description: "Configure as mensagens de boas-vindas no servidor.", value: "portaria" },
+      { label: "Portaria", description: "Boas-vindas, saídas, DM de entrada e filtro de contas.", value: "portaria" },
       { label: "Auto-roles", description: "Configure os cargos automáticos.", value: "autoroles" },
       { label: "Posts e Instagram", description: "Fotos e vídeos com curtidas e comentários.", value: "posts" }
     );

@@ -1,37 +1,68 @@
-const {
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  ActionRowBuilder,
-} = require("discord.js");
+const { TextInputStyle } = require("discord.js");
+const { textLabel, modal } = require("./modalHelpers");
+const { VARIABLES } = require("../utils/formatMessage");
 
-function buildMensagensModal(config) {
-  const modal = new ModalBuilder()
-    .setCustomId("modal_mensagens")
-    .setTitle("Mensagens de boas-vindas e saída");
+const variablesHint = VARIABLES.map(([key]) => key).join(" ");
 
-  const welcomeInput = new TextInputBuilder()
-    .setCustomId("welcome_message")
-    .setLabel("Mensagem de boas-vindas")
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(false)
-    .setPlaceholder("Ex: Seja bem-vindo(a), {user}!");
-  if (config.welcomeMessage) welcomeInput.setValue(config.welcomeMessage);
+const TITLES = {
+  welcome: "Mensagem de boas-vindas",
+  leave: "Mensagem de saída",
+  dm: "Mensagem da DM",
+};
 
-  const leaveInput = new TextInputBuilder()
-    .setCustomId("leave_message")
-    .setLabel("Mensagem de saída")
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(false)
-    .setPlaceholder("Ex: {user} saiu do servidor.");
-  if (config.leaveMessage) leaveInput.setValue(config.leaveMessage);
+const EXAMPLES = {
+  welcome: "Ex: Seja bem-vindo(a), {user}!",
+  leave: "Ex: {username} saiu do servidor.",
+  dm: "Ex: Olá! Leia as regras do {server} antes de começar.",
+};
 
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(welcomeInput),
-    new ActionRowBuilder().addComponents(leaveInput)
+// kind: "welcome" | "leave" | "dm"
+function buildMessageModal(kind, current) {
+  return modal(
+    `port_modal:msg:${kind}`,
+    TITLES[kind],
+    textLabel({
+      id: "message",
+      label: "Mensagem",
+      description: `Variáveis: ${variablesHint}`.slice(0, 100),
+      style: TextInputStyle.Paragraph,
+      max: 1500,
+      value: current,
+      placeholder: EXAMPLES[kind],
+    })
   );
-
-  return modal;
 }
 
-module.exports = { buildMensagensModal };
+function buildDelayModal(kind, current) {
+  return modal(
+    `port_modal:delay:${kind}`,
+    "Apagar mensagem automaticamente",
+    textLabel({
+      id: "seconds",
+      label: "Segundos até apagar",
+      description: "Use 0 para não apagar. Máximo de 3600 (1 hora).",
+      max: 4,
+      required: true,
+      value: String(current ?? 0),
+      placeholder: "Ex: 30",
+    })
+  );
+}
+
+function buildAgeModal(current) {
+  return modal(
+    "port_modal:age",
+    "Idade mínima da conta",
+    textLabel({
+      id: "days",
+      label: "Dias de criação da conta",
+      description: "Contas mais novas que isso serão expulsas. De 1 a 365.",
+      max: 3,
+      required: true,
+      value: String(current ?? 7),
+      placeholder: "Ex: 7",
+    })
+  );
+}
+
+module.exports = { buildMessageModal, buildDelayModal, buildAgeModal };
