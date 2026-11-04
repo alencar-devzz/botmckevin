@@ -53,12 +53,13 @@ function item(lines, customId, label = "Editar", opts = {}) {
 const sep = () => new SeparatorBuilder();
 
 // tokens = true mostra a dica dos marcadores de texto livre ({separador}, {imagem}...)
-function tabHeader(title, panel, hint, { tokens = false } = {}) {
+function tabHeader(title, panel, hint, { tokens = false, extra = null } = {}) {
   return new ContainerBuilder().addTextDisplayComponents(
     text(`## ${title}`),
     text(
       `-# Painel: ${panel.name}${hint ? ` · ${hint}` : ""}` +
-        (tokens ? `\n-# Os textos são livres: use ** **, # etc. se quiser. Marcadores: ${TOKEN_HELP}` : "")
+        (tokens ? `\n-# Os textos são livres: use ** **, # etc. se quiser. Marcadores: ${TOKEN_HELP}` : "") +
+        (extra ? `\n-# ${extra}` : "")
     )
   );
 }
@@ -156,6 +157,7 @@ function buildPanelManager({ panel, open = 0 }) {
           `-# Marcados ao abrir: ${rolesText(panel.mentionRoles)}`,
           `-# Imagens: \`${panel.panelSources.length}\` no painel, \`${panel.internalSources.length}\` no ticket · Cor: \`${colorName(panel.color)}\``,
           `-# Limite por pessoa: \`${panel.maxPerUser === 0 ? "Sem limite" : panel.maxPerUser}\` · Motivo ao abrir: \`${yesNo(panel.askReason)}\``,
+          `-# Reivindicação automática: \`${panel.autoClaim ? "Ativada" : "Desativada"}\``,
           `-# Enviado em: ${sentText}`,
           `-# Tickets abertos agora: \`${open}\``,
         ].join("\n")
@@ -196,6 +198,11 @@ function buildPanelManager({ panel, open = 0 }) {
         label: "Ticket interno",
         description: "Textos, imagens, canal e arquivamento do tópico.",
         value: "interno",
+      },
+      {
+        label: "Reivindicação",
+        description: "Reivindicação automática e mensagem de ticket assumido.",
+        value: "reivindicacao",
       },
       {
         label: "Mensagens do sistema",
@@ -449,7 +456,6 @@ function buildSecInterno(panel, guild) {
           "**Textos do ticket**",
           `-# Título: \`${short(panel.internalHeading)}\``,
           `-# Mensagem: \`${short(panel.internalMessage)}\``,
-          `-# Aviso ao assumir: \`${short(panel.claimedMessage)}\``,
           `-# Nome do tópico: \`${short(panel.threadName)}\``,
           ...(panel.mode === "button" && panel.options[0]
             ? [`-# Título da opção: \`${short(panel.options[0].title)}\``]
@@ -528,13 +534,7 @@ function buildSecInterno(panel, guild) {
         `tcfg_color:${panel.id}:internalColor`
       )
     )
-    .addSeparatorComponents(sep())
-    .addSectionComponents(
-      item(
-        ["**Cor ao assumir**", `-# Barra lateral da mensagem de "assumido": \`${colorName(panel.claimedColor)}\``],
-        `tcfg_color:${panel.id}:claimedColor`
-      )
-    )
+
     .addSeparatorComponents(sep())
     .addTextDisplayComponents(
       text(
@@ -554,6 +554,51 @@ function buildSecInterno(panel, guild) {
   addBackButton(container, `tcfg_manage:${panel.id}`);
 
   return [tabHeader("Ticket interno", panel, "dentro do tópico", { tokens: true }), container];
+}
+
+// ---------- Reivindicação ----------
+
+function buildSecReivindicacao(panel) {
+  const container = new ContainerBuilder()
+    .addSectionComponents(
+      item(
+        [
+          "**Reivindicação automática**",
+          "-# Quando alguém da equipe envia uma mensagem no ticket, assume ele sozinho, sem clicar em Assumir.",
+          `-# Estado: \`${panel.autoClaim ? "Ativada" : "Desativada"}\``,
+        ],
+        `tcfg_c_auto:${panel.id}`,
+        panel.autoClaim ? "Desativar" : "Ativar",
+        { style: panel.autoClaim ? ButtonStyle.Danger : ButtonStyle.Success }
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        [
+          "**Mensagem de ticket assumido**",
+          `-# Mensagem: \`${short(panel.claimedMessage, 60)}\``,
+          `-# Rodapé: \`${short(panel.claimedFooter, 60)}\``,
+        ],
+        `tcfg_c_text:${panel.id}`
+      )
+    )
+    .addSeparatorComponents(sep())
+    .addSectionComponents(
+      item(
+        ["**Cor ao assumir**", `-# Barra lateral da mensagem de "assumido": \`${colorName(panel.claimedColor)}\``],
+        `tcfg_color:${panel.id}:claimedColor`
+      )
+    );
+  addBackButton(container, `tcfg_manage:${panel.id}`);
+
+  return [
+    tabHeader("Reivindicação", panel, "quando a equipe assume o ticket", {
+      tokens: true,
+      extra: "Variáveis: {staff} {user} {server} {tempo_atual} (horário do Discord, só vale aqui)",
+    }),
+    container,
+  ];
 }
 
 // ---------- Mensagem de sucesso ----------
@@ -841,6 +886,7 @@ const SECTIONS = {
   abertura: buildSecAbertura,
   opcoes: buildSecOpcoes,
   interno: buildSecInterno,
+  reivindicacao: buildSecReivindicacao,
   sucesso: buildSecSucesso,
   cargos: buildSecCargos,
   regras: buildSecRegras,

@@ -274,15 +274,6 @@ function buildInternalTextModal(panel) {
       placeholder: DEFAULTS.internalMessage,
     }),
     textLabel({
-      id: "claimed",
-      label: "Aviso ao assumir",
-      description: "Variáveis: {staff} {user} {server}",
-      style: TextInputStyle.Paragraph,
-      max: 300,
-      value: panel.claimedMessage === DEFAULTS.claimedMessage ? null : panel.claimedMessage,
-      placeholder: DEFAULTS.claimedMessage,
-    }),
-    textLabel({
       id: "thread",
       label: "Nome do tópico",
       description: "Variáveis: {username} {number} {option} {server}",
@@ -293,7 +284,36 @@ function buildInternalTextModal(panel) {
     blankSelect([
       { id: "heading", label: "Título", blank: panel.internalHeading === "" },
       { id: "message", label: "Mensagem dentro do ticket", blank: panel.internalMessage === "" },
-      { id: "claimed", label: "Aviso ao assumir", blank: panel.claimedMessage === "" },
+    ])
+  );
+}
+
+// Mensagem enviada quando o ticket é assumido. {tempo_atual} só funciona aqui.
+function buildClaimedTextModal(panel) {
+  return modal(
+    `tcfg_modal_c_text:${panel.id}`,
+    "Mensagem de ticket assumido",
+    textLabel({
+      id: "message",
+      label: "Mensagem",
+      description: "Vazio = padrão. Variáveis: {staff} {user} {server} {tempo_atual}",
+      style: TextInputStyle.Paragraph,
+      max: 1000,
+      value: panel.claimedMessage === DEFAULTS.claimedMessage ? null : panel.claimedMessage,
+      placeholder: DEFAULTS.claimedMessage,
+    }),
+    textLabel({
+      id: "footer",
+      label: "Rodapé",
+      description: "Vazio = padrão. Ex: -# assumiu em: {tempo_atual}",
+      style: TextInputStyle.Paragraph,
+      max: 300,
+      value: panel.claimedFooter === DEFAULTS.claimedFooter ? null : panel.claimedFooter,
+      placeholder: DEFAULTS.claimedFooter,
+    }),
+    blankSelect([
+      { id: "message", label: "Mensagem", blank: panel.claimedMessage === "" },
+      { id: "footer", label: "Rodapé", blank: panel.claimedFooter === "" },
     ])
   );
 }
@@ -627,6 +647,7 @@ module.exports = {
   buildButtonModal,
   buildPlaceholderModal,
   buildInternalTextModal,
+  buildClaimedTextModal,
   buildFieldColorModal,
   buildCloseConfirmTextModal,
   buildLimitTextModal,

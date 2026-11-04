@@ -197,20 +197,25 @@ function buildTicketContainer({
   return container.addActionRowComponents(new ActionRowBuilder().addComponents(claimButton, closeButton));
 }
 
-// Mensagem enviada quando um staff assume o ticket
-function buildClaimedContainer({ panel, staffId, authorId, timestamp, guildName = "" }) {
-  const body = applyVars(panel.claimedMessage, {
+// Mensagem enviada quando um staff assume o ticket (botão ou reivindicação automática).
+// É UMA mensagem só: a menção do autor fica fora do container, em cima, e o container vem logo abaixo.
+// {tempo_atual} vira o horário do Discord (ex: 00:35) e só funciona aqui.
+function buildClaimedMessage({ panel, staffId, authorId, timestamp, guildName = "" }) {
+  const vars = {
     staff: `<@${staffId}>`,
     user: `<@${authorId}>`,
     server: guildName,
-  });
+    tempo_atual: `<t:${timestamp}:t>`,
+  };
 
-  // Texto livre (sem ### automático); só o horário fica pequeno
   const container = new ContainerBuilder();
-  addTemplate(container, body);
-  container.addTextDisplayComponents(text(`-# <t:${timestamp}:t>`));
+  let added = addTemplate(container, applyVars(panel.claimedMessage, vars));
+  added += addTemplate(container, applyVars(panel.claimedFooter, vars));
+  // Container não pode ficar vazio
+  if (!added) container.addTextDisplayComponents(text(applyVars(DEFAULTS.claimedMessage, vars)));
   if (panel.claimedColor != null) container.setAccentColor(panel.claimedColor);
-  return container;
+
+  return [text(`<@${authorId}>`), container];
 }
 
 // Efêmera de sucesso: título, mensagem e cor configuráveis; botão para o ticket opcional, com label editável
@@ -280,7 +285,7 @@ function buildCloseConfirm(panel, panelId, optionKey) {
 module.exports = {
   buildTicketPanel,
   buildTicketContainer,
-  buildClaimedContainer,
+  buildClaimedMessage,
   buildTicketCreatedEphemeral,
   buildLimitReached,
   buildCloseConfirm,
