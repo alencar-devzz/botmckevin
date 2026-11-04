@@ -14,11 +14,6 @@ const {
 const { addBackButton } = require("./backButton");
 const { ACTIVITY_TYPES, PRESENCE_STATUS, missingFields } = require("../utils/botPresence");
 
-// Mesmas cores dos painéis de logs e tickets: verde = configurado, branco = ainda não, vermelho = pendência
-const GREEN = 0x00c853;
-const RED = 0xe50000;
-const WHITE = 0xffffff;
-
 const DEFAULT_AVATAR = "https://cdn.discordapp.com/embed/avatars/0.png";
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3500));
@@ -77,7 +72,6 @@ function buildAparenciaPanel({ prefix, name, statusText, avatarURL, hasAvatar, h
   );
 
   const avatar = new ContainerBuilder()
-    .setAccentColor(hasAvatar ? GREEN : WHITE)
     .addSectionComponents(
       item(
         [
@@ -88,20 +82,19 @@ function buildAparenciaPanel({ prefix, name, statusText, avatarURL, hasAvatar, h
       )
     );
 
-  const prefixo = new ContainerBuilder().setAccentColor(GREEN).addSectionComponents(
+  const prefixo = new ContainerBuilder().addSectionComponents(
     item(
       ["**Prefixo**", `-# Símbolo antes dos comandos de texto · Atual: \`${short(prefix)}\``],
       "apar_open:prefixo"
     )
   );
 
-  const nome = new ContainerBuilder().setAccentColor(GREEN).addSectionComponents(
+  const nome = new ContainerBuilder().addSectionComponents(
     item(["**Nome**", `-# Nome de exibição do bot · Atual: \`${short(name)}\``], "apar_open:nome")
   );
 
   const hasStatus = statusText && statusText !== "Nenhum";
   const status = new ContainerBuilder()
-    .setAccentColor(hasStatus ? GREEN : WHITE)
     .addSectionComponents(
       item(
         ["**Status**", `-# Atividade exibida abaixo do nome · Atual: \`${short(statusText)}\``],
@@ -125,7 +118,6 @@ function buildAvatarBannerPanel({ hasAvatar, hasBanner, avatarURL, bannerURL }) 
   );
 
   const avatar = new ContainerBuilder()
-    .setAccentColor(hasAvatar ? GREEN : WHITE)
     .addSectionComponents(
       itemWithThumb(
         [
@@ -144,7 +136,6 @@ function buildAvatarBannerPanel({ hasAvatar, hasBanner, avatarURL, bannerURL }) 
     );
 
   const banner = new ContainerBuilder()
-    .setAccentColor(hasBanner ? GREEN : WHITE)
     .addTextDisplayComponents(
       text("### Banner"),
       text("-# Capa exibida no topo do perfil do bot."),
@@ -172,7 +163,6 @@ function buildPrefixoPanel({ prefix }) {
   const p = short(prefix, 5);
 
   const container = new ContainerBuilder()
-    .setAccentColor(GREEN)
     .addSectionComponents(
       item(
         [
@@ -198,7 +188,7 @@ function buildPrefixoPanel({ prefix }) {
 // ---------- Nome ----------
 
 function buildNomePanel({ name, avatarURL }) {
-  const container = new ContainerBuilder().setAccentColor(GREEN);
+  const container = new ContainerBuilder();
   container.addSectionComponents(
     item(
       [
@@ -227,7 +217,6 @@ function buildStatusPanel({ statusText }) {
   const hasStatus = statusText && statusText !== "Nenhum";
 
   const container = new ContainerBuilder()
-    .setAccentColor(hasStatus ? GREEN : WHITE)
     .addSectionComponents(
       item(
         [
@@ -263,7 +252,6 @@ function buildStatusConfigPanel({ cfg }) {
 
   // Verde = status ativo, vermelho = falta preencher algum campo
   const container = new ContainerBuilder()
-    .setAccentColor(missing.length ? RED : GREEN)
     .addTextDisplayComponents(text(`### ${info.label}`), text(`-# ${info.hint}`), text(lines.join("\n")));
 
   if (missing.length) {
