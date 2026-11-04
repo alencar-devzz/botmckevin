@@ -12,8 +12,10 @@ const {
   ActionRowBuilder,
 } = require("discord.js");
 const { addBackButton } = require("./backButton");
-const { COLORS } = require("../utils/logs/format");
 const { VARIABLES } = require("../utils/formatMessage");
+const { TOKENS } = require("../utils/portariaTemplate");
+const { FIELDS, thumbLabel, resolveSettings } = require("../utils/portariaSettings");
+const { colorName } = require("../utils/ticketSettings");
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3500));
 
@@ -33,12 +35,6 @@ function tabHeader(title, tabName) {
     text(`## ${title}`),
     text(`-# Você está na aba de configurações de **${tabName}** do bot.`)
   );
-}
-
-// Verde = funcionando, vermelho = desativado, sem cor = ainda não configurado
-function colorOf(enabled, ready) {
-  if (!ready) return COLORS.white;
-  return enabled ? COLORS.green : COLORS.red;
 }
 
 const stateOf = (enabled, ready = true) => (!ready ? "Sem configuração" : enabled ? "Ativo" : "Desativado");
@@ -64,10 +60,50 @@ function channelSelect(customId, channelId, guild, placeholder) {
 
 function variablesContainer() {
   return new ContainerBuilder().addTextDisplayComponents(
-    text("### Variáveis"),
-    text("-# Use nas mensagens, elas são trocadas automaticamente."),
-    text(VARIABLES.map(([key, desc]) => `\`${key}\` · ${desc}`).join("\n"))
+    text("### Variáveis e marcadores"),
+    text(
+      [
+        "-# Use no título, na mensagem e no rodapé. São trocados automaticamente.",
+        ...VARIABLES.map(([key, desc]) => `\`${key}\` · ${desc}`),
+      ].join("\n")
+    ),
+    text(TOKENS.map(([key, desc]) => `\`${key}\` · ${desc}`).join("\n"))
   );
+}
+
+// Resumo do que está configurado (o que o dono escreveu ou o padrão)
+function appearanceSummary(kind, config) {
+  const f = FIELDS[kind];
+  const settings = resolveSettings(kind, config);
+  const show = (value, fallback) => (value === "" ? `\`${fallback}\`` : `\`${short(value, 70)}\``);
+  const isCustom = (field) => config[field] != null;
+  const tag = (field) => (isCustom(field) ? "" : " (padrão)");
+
+  return [
+    `**Título:** ${show(settings.title, "Sem título")}${tag(f.title)}`,
+    `**Mensagem:** ${show(settings.message, "Sem mensagem")}${tag(f.message)}`,
+    `**Rodapé:** ${show(settings.footer, "Sem rodapé")}${tag(f.footer)}`,
+    `**Cor:** ${colorName(settings.color)} · **Miniatura:** ${thumbLabel(settings.thumb)}`,
+    `**Imagens:** ${settings.images.length} · **Formato:** ${settings.style === "container" ? "Container" : "Texto"}`,
+  ].join("\n");
+}
+
+// Linhas de botões de aparência (iguais para boas-vindas, saídas e DM)
+function appearanceRows(kind, config, { withDelay = false } = {}) {
+  const f = FIELDS[kind];
+  const style = config[f.style] === "text" ? "text" : "container";
+  const rows = [
+    new ActionRowBuilder().addComponents(
+      button(`port_msg:${kind}`, "Textos"),
+      button(`port_color:${kind}`, "Cor"),
+      button(`port_img:${kind}`, "Imagens"),
+      button(`port_thumb:${kind}`, "Miniatura", { disabled: style !== "container" })
+    ),
+  ];
+  const second = [button(`port_style:${kind}`, `Formato: ${style === "container" ? "Container" : "Texto"}`)];
+  if (withDelay) second.push(button(`port_delay:${kind}`, `Apagar: ${formatDelay(config[f.delay])}`));
+  rows.push(new ActionRowBuilder().addComponents(...second));
+  return rows;
 }
 
 // ---------- Painel principal ----------
@@ -144,15 +180,6 @@ const KINDS = {
     channelTitle: "Canal de boas-vindas",
     channelHint: "Escolha o canal onde a mensagem de boas-vindas será enviada.",
     placeholder: "Selecione o canal de boas-vindas",
-    messageTitle: "Mensagem de boas-vindas",
-    example: "Ex: Seja bem-vindo(a), {user}!",
-    fields: {
-      channel: "welcomeChannel",
-      message: "welcomeMessage",
-      enabled: "welcomeEnabled",
-      style: "welcomeStyle",
-      delay: "welcomeDeleteAfter",
-    },
     events: [
       "Enviada quando um membro entra no servidor.",
       "Só membros entram aqui, bots não recebem a mensagem.",
@@ -163,15 +190,6 @@ const KINDS = {
     channelTitle: "Canal de saídas",
     channelHint: "Escolha o canal onde a mensagem de saída será enviada.",
     placeholder: "Selecione o canal de saídas",
-    messageTitle: "Mensagem de saída",
-    example: "Ex: {username} saiu do servidor.",
-    fields: {
-      channel: "leaveChannel",
-      message: "leaveMessage",
-      enabled: "leaveEnabled",
-      style: "leaveStyle",
-      delay: "leaveDeleteAfter",
-    },
     events: [
       "Enviada quando um membro sai, é expulso ou banido.",
       "Bots não geram mensagem de saída.",
@@ -181,20 +199,19 @@ const KINDS = {
 
 function buildGreetingPanel(guild, config, kind) {
   const info = KINDS[kind];
-  const channelId = config[info.fields.channel];
-  const enabled = config[info.fields.enabled];
-  const message = config[info.fields.message];
-  const style = config[info.fields.style];
-  const delay = config[info.fields.delay];
+  const f = FIELDS[kind];
+  const channelId = config[f.channel];
+  const enabled = config[f.enabled];
   const ready = Boolean(channelId);
 
   const panel = new ContainerBuilder()
-    .setAccentColor(colorOf(enabled, ready))
     .addTextDisplayComponents(
-      text(`### ${info.channelTitle}`),
-      text(`-# ${info.channelHint}`),
       text(
-        `-# Atual: ${channelId ? `<#${channelId}>` : "`Não definido`"} · Estado: \`${stateOf(enabled, ready)}\``
+        [
+          `### ${info.channelTitle}`,
+          `-# ${info.channelHint}`,
+          `-# Atual: ${channelId ? `<#${channelId}>` : "`Não definido`"} · Estado: \`${stateOf(enabled, ready)}\``,
+        ].join("\n")
       )
     )
     .addActionRowComponents(channelSelect(`port_channel:${kind}`, channelId, guild, info.placeholder))
@@ -210,22 +227,19 @@ function buildGreetingPanel(guild, config, kind) {
 
   const options = new ContainerBuilder()
     .addTextDisplayComponents(
-      text(`### ${info.messageTitle}`),
-      text(`-# Atual: \`${short(message, 120)}\``),
-      text("-# Sem mensagem definida, o bot usa um texto padrão.")
+      text(`### Aparência da mensagem\n-# Edite tudo o que aparece. Use "Enviar teste" para ver o resultado.\n${appearanceSummary(kind, config)}`)
     )
-    .addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        button(`port_msg:${kind}`, "Editar mensagem"),
-        button(`port_style:${kind}`, `Formato: ${style === "container" ? "Container" : "Texto"}`),
-        button(`port_delay:${kind}`, `Apagar: ${formatDelay(delay)}`)
-      )
-    );
+    .addActionRowComponents(...appearanceRows(kind, config, { withDelay: true }));
 
   const events = new ContainerBuilder().addTextDisplayComponents(
     text("### Como funciona"),
-    text(info.events.map((line) => `• ${line}`).join("\n")),
-    text("-# Formato Container mostra a foto do membro ao lado da mensagem.")
+    text(
+      [
+        ...info.events.map((line) => `• ${line}`),
+        "• Sem cor por padrão: escolha uma em \"Cor\" se quiser.",
+        "• Formato Container permite miniatura, imagens e separadores. Formato Texto é uma mensagem comum.",
+      ].join("\n")
+    )
   );
   addBackButton(events, "port_back");
 
@@ -238,7 +252,6 @@ function buildDmPanel(guild, config) {
   const enabled = config.dmEnabled;
 
   const panel = new ContainerBuilder()
-    .setAccentColor(colorOf(enabled, true))
     .addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(
@@ -254,15 +267,11 @@ function buildDmPanel(guild, config) {
     )
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
-      text("**Mensagem**"),
-      text(`-# Atual: \`${short(config.dmMessage, 120)}\``),
-      text("-# Sem mensagem definida, o bot usa um texto padrão.")
+      text(`**Aparência da mensagem**\n-# Edite tudo o que aparece na DM.\n${appearanceSummary("dm", config)}`)
     )
+    .addActionRowComponents(...appearanceRows("dm", config))
     .addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        button("port_msg:dm", "Editar mensagem"),
-        button("port_test:dm", "Enviar teste para mim")
-      )
+      new ActionRowBuilder().addComponents(button("port_test:dm", "Enviar teste para mim"))
     );
 
   const notes = new ContainerBuilder().addTextDisplayComponents(
@@ -270,7 +279,7 @@ function buildDmPanel(guild, config) {
     text(
       [
         "• Membros com a DM fechada para o servidor não recebem a mensagem, e isso não gera erro.",
-        "• A DM chega com o nome do servidor no rodapé, então o membro sabe de onde veio.",
+        "• O rodapé padrão informa de qual servidor a DM veio. Se você mudar o rodapé, lembre de manter essa informação.",
         "• Bots não recebem DM.",
       ].join("\n")
     )
@@ -295,7 +304,6 @@ function buildBotRolesPanel(guild, config) {
   if (roles.length) select.setDefaultRoles(roles);
 
   const container = new ContainerBuilder()
-    .setAccentColor(roles.length ? COLORS.green : COLORS.white)
     .addTextDisplayComponents(
       text("### Cargos de bots"),
       text("-# Cargos entregues automaticamente só para bots que entram no servidor."),
@@ -317,7 +325,6 @@ function buildFilterPanel(guild, config) {
   const enabled = config.accountFilterEnabled;
 
   const panel = new ContainerBuilder()
-    .setAccentColor(colorOf(enabled, true))
     .addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(
