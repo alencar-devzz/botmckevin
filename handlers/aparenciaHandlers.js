@@ -52,7 +52,12 @@ const warn = (interaction, content) =>
 
 async function imageState(client) {
   await client.user.fetch().catch(() => {}); // o banner só vem nesse fetch
-  return { hasAvatar: Boolean(client.user.avatar), hasBanner: Boolean(client.user.banner) };
+  return {
+    hasAvatar: Boolean(client.user.avatar),
+    hasBanner: Boolean(client.user.banner),
+    avatarURL: client.user.displayAvatarURL({ extension: "png", size: 256 }),
+    bannerURL: client.user.bannerURL({ size: 1024 }) ?? null,
+  };
 }
 
 async function summaryState(interaction) {
@@ -60,6 +65,7 @@ async function summaryState(interaction) {
     prefix: await getPrefix(interaction.guild.id),
     name: interaction.client.user.username,
     statusText: describePresence(interaction.client),
+    ...(await imageState(interaction.client)),
   };
 }
 
