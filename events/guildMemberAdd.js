@@ -1,7 +1,6 @@
 const { MessageFlags, ContainerBuilder, TextDisplayBuilder } = require("discord.js");
 const { getGuildConfig } = require("../database/getGuildConfig");
 const { sendGreeting, sendWelcomeDm, accountAgeDays } = require("../utils/portaria");
-const { COLORS } = require("../utils/logs/format");
 
 async function addRoles(member, roleIds) {
   for (const roleId of roleIds ?? []) {
@@ -20,7 +19,6 @@ async function filterNewAccount(member, config) {
     .send({
       components: [
         new ContainerBuilder()
-          .setAccentColor(COLORS.red)
           .addTextDisplayComponents(
             new TextDisplayBuilder().setContent("### Entrada não permitida"),
             new TextDisplayBuilder().setContent(
