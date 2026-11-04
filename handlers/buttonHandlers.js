@@ -1,10 +1,8 @@
 const { MessageFlags } = require("discord.js");
-const { getGuildConfig } = require("../database/getGuildConfig");
 const { buildMainMenu } = require("../ui/mainMenu");
 const { buildComunidadePanel } = require("../ui/comunidade");
 const { buildModeracaoPanel } = require("../ui/moderacao");
-const { buildPortariaIntro, buildPortariaConfig } = require("../ui/portaria");
-const { buildMensagensModal } = require("../ui/portariaModals");
+const { handlePortariaButton } = require("./portariaHandlers");
 const { handleAparenciaButton } = require("./aparenciaHandlers");
 const { handleLogsButton } = require("./logsHandlers");
 const { handlePostsConfigButton, handlePostButton } = require("./postsHandlers");
@@ -42,6 +40,10 @@ async function handleButton(interaction) {
     return handleAparenciaButton(interaction);
   }
 
+  if (customId.startsWith("port_")) {
+    return handlePortariaButton(interaction);
+  }
+
   if (customId.startsWith("logs_")) {
     return handleLogsButton(interaction);
   }
@@ -69,16 +71,6 @@ async function handleButton(interaction) {
 
     case "back_comunidade": {
       return interaction.update({ components: buildComunidadePanel() });
-    }
-
-    case "btn_portaria_abrir": {
-      const config = await getGuildConfig(interaction.guild.id);
-      return interaction.update({ components: buildPortariaConfig(config) });
-    }
-
-    case "btn_portaria_mensagens": {
-      const config = await getGuildConfig(interaction.guild.id);
-      return interaction.showModal(buildMensagensModal(config));
     }
 
     default:

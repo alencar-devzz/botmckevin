@@ -1,6 +1,5 @@
 const { MessageFlags } = require("discord.js");
-const { getGuildConfig } = require("../database/getGuildConfig");
-const { buildPortariaConfig } = require("../ui/portaria");
+const { handlePortariaModal } = require("./portariaHandlers");
 const { handleTicketConfigModal } = require("./ticketConfigHandlers");
 const { handleAparenciaModal } = require("./aparenciaHandlers");
 const { handleTicketModal } = require("./ticketHandlers");
@@ -25,26 +24,15 @@ async function handleModal(interaction) {
     return handlePostsConfigModal(interaction);
   }
 
+  if (customId.startsWith("port_modal:")) {
+    return handlePortariaModal(interaction);
+  }
+
   if (customId.startsWith("post_modal:")) {
     return handlePostModal(interaction);
   }
 
-  switch (customId) {
-    case "modal_mensagens": {
-      const welcome = interaction.fields.getTextInputValue("welcome_message");
-      const leave = interaction.fields.getTextInputValue("leave_message");
-
-      const config = await getGuildConfig(interaction.guild.id);
-      config.welcomeMessage = welcome || null;
-      config.leaveMessage = leave || null;
-      await config.save();
-
-      return interaction.update({ components: buildPortariaConfig(config) });
-    }
-
-    default:
-      return;
-  }
+  return;
 }
 
 module.exports = { handleModal };

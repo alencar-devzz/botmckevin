@@ -2,7 +2,7 @@ const { MessageFlags } = require("discord.js");
 const { getGuildConfig } = require("../database/getGuildConfig");
 const { openAparencia, handleAparenciaSelect } = require("./aparenciaHandlers");
 const { buildComunidadePanel } = require("../ui/comunidade");
-const { buildPortariaIntro, buildPortariaConfig } = require("../ui/portaria");
+const { openPortaria, handlePortariaSelect } = require("./portariaHandlers");
 const { buildAutoRolesPanel } = require("../ui/autoroles");
 const { handleTicketSelect } = require("./ticketHandlers");
 const { handleBotcallSelect } = require("./botcallHandlers");
@@ -29,6 +29,10 @@ async function handleSelect(interaction) {
 
   if (customId.startsWith("apar_")) {
     return handleAparenciaSelect(interaction);
+  }
+
+  if (customId.startsWith("port_")) {
+    return handlePortariaSelect(interaction);
   }
 
   if (customId.startsWith("logs_")) {
@@ -74,7 +78,7 @@ async function handleSelect(interaction) {
     case "comunidade_menu": {
       const value = values[0];
       if (value === "portaria") {
-        return interaction.update({ components: buildPortariaIntro() });
+        return openPortaria(interaction);
       }
       if (value === "autoroles") {
         const config = await getGuildConfig(interaction.guild.id);
@@ -84,20 +88,6 @@ async function handleSelect(interaction) {
         return openPostsPanel(interaction);
       }
       return;
-    }
-
-    case "portaria_welcome_channel": {
-      const config = await getGuildConfig(interaction.guild.id);
-      config.welcomeChannel = values[0];
-      await config.save();
-      return interaction.update({ components: buildPortariaConfig(config) });
-    }
-
-    case "portaria_leave_channel": {
-      const config = await getGuildConfig(interaction.guild.id);
-      config.leaveChannel = values[0];
-      await config.save();
-      return interaction.update({ components: buildPortariaConfig(config) });
     }
 
     case "autoroles_select": {
