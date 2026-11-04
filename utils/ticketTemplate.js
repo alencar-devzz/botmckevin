@@ -58,10 +58,12 @@ function buildGallery(urls) {
 
 // Adiciona o texto no container, trocando os marcadores por separadores/imagens.
 // prefix = texto colocado antes de cada trecho (ex: "-# " para texto pequeno).
+// Retorna quantos componentes foram adicionados (0 = nada, o container pode ficar vazio).
+// {tempo_atual} só vale na mensagem de "assumido" (já trocado antes): aqui ele é removido.
 function addTemplate(container, content, { images = [], prefix = "" } = {}) {
-  if (isBlank(content)) return container;
+  const value = String(content ?? "").replace(/\{tempo_atual\}/gi, "");
+  if (isBlank(value)) return 0;
 
-  const value = String(content);
   let blocks = 0;
   let cursor = 0;
 
@@ -101,7 +103,7 @@ function addTemplate(container, content, { images = [], prefix = "" } = {}) {
   }
   pushText(value.slice(cursor));
 
-  return container;
+  return blocks;
 }
 
 module.exports = {
