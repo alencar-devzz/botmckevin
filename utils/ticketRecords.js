@@ -16,6 +16,9 @@ async function getOpenTickets(client, guildId, panelId, userId) {
 const createRecord = (data) => TicketRecord.create(data);
 const findRecord = (threadId) => TicketRecord.findOne({ threadId }).lean();
 const setClaimed = (threadId, userId) => TicketRecord.updateOne({ threadId }, { claimedBy: userId });
+// Assume o ticket de forma atômica: só funciona se ninguém assumiu ainda. Retorna o registro ou null.
+const claimTicket = (threadId, userId) =>
+  TicketRecord.findOneAndUpdate({ threadId, claimedBy: null }, { claimedBy: userId }, { new: true }).lean();
 const deleteRecord = (threadId) => TicketRecord.deleteOne({ threadId });
 const deleteRecordsByPanel = (panelId) => TicketRecord.deleteMany({ panelId });
 const countOpen = (guildId, panelId = null) =>
@@ -26,6 +29,7 @@ module.exports = {
   createRecord,
   findRecord,
   setClaimed,
+  claimTicket,
   deleteRecord,
   deleteRecordsByPanel,
   countOpen,

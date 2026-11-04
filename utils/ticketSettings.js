@@ -11,6 +11,7 @@ const DEFAULTS = {
   internalHeading: "Ticket - {username}",
   internalMessage: "Por favor, aguarde as instruções do staff responsável.",
   claimedMessage: "{staff} assumiu este ticket e irá lhe atender.",
+  claimedFooter: "-# {tempo_atual}",
   threadName: "{username}・N°{number}",
   maxPerUser: 1,
   archiveMinutes: 10080,
@@ -120,6 +121,8 @@ function resolvePanel(doc) {
     internalHeading: textOr(d.internalHeading, DEFAULTS.internalHeading),
     internalMessage: textOr(d.internalMessage, DEFAULTS.internalMessage),
     claimedMessage: textOr(d.claimedMessage, DEFAULTS.claimedMessage),
+    claimedFooter: textOr(d.claimedFooter, DEFAULTS.claimedFooter),
+    autoClaim: Boolean(d.autoClaim),
     threadName: d.threadName || DEFAULTS.threadName,
     internalImages,
     internalSources: internalImages,
@@ -168,10 +171,12 @@ function resolvePanel(doc) {
 const fallbackPanel = (guildId) => resolvePanel({ guildId, name: "Painel removido" });
 
 // Troca {variáveis} no texto. Variáveis desconhecidas ficam como estão.
+// {tempo_atual} só existe na mensagem de "assumido": em qualquer outro lugar ela some do texto.
 function applyVars(text, vars) {
-  return String(text).replace(/\{(\w+)\}/g, (match, name) =>
-    Object.prototype.hasOwnProperty.call(vars, name) ? vars[name] : match
-  );
+  return String(text).replace(/\{(\w+)\}/g, (match, name) => {
+    if (Object.prototype.hasOwnProperty.call(vars, name)) return vars[name];
+    return name === "tempo_atual" ? "" : match;
+  });
 }
 
 // Lê links de imagem (um por linha). Retorna os válidos e quantos foram ignorados.
