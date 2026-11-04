@@ -12,6 +12,11 @@ const guildConfigSchema = new Schema({
   welcomeEnabled: { type: Boolean, default: true },
   welcomeStyle: { type: String, enum: ["text", "container"], default: "text" },
   welcomeDeleteAfter: { type: Number, default: 0 }, // segundos (0 = não apagar)
+  welcomeTitle: { type: String, default: null }, // null = padrão, "" = sem título
+  welcomeFooter: { type: String, default: null }, // null = padrão, "" = sem rodapé
+  welcomeColor: { type: Number, default: null }, // null = sem cor
+  welcomeImages: { type: [String], default: [] }, // links ou "db:<id>"
+  welcomeThumb: { type: String, default: "avatar" }, // avatar | server | none | link
 
   // Portaria: saídas
   leaveChannel: { type: String, default: null },
@@ -19,10 +24,21 @@ const guildConfigSchema = new Schema({
   leaveEnabled: { type: Boolean, default: true },
   leaveStyle: { type: String, enum: ["text", "container"], default: "text" },
   leaveDeleteAfter: { type: Number, default: 0 },
+  leaveTitle: { type: String, default: null },
+  leaveFooter: { type: String, default: null },
+  leaveColor: { type: Number, default: null },
+  leaveImages: { type: [String], default: [] },
+  leaveThumb: { type: String, default: "avatar" },
 
   // Portaria: mensagem na DM do membro que entrou
   dmEnabled: { type: Boolean, default: false },
   dmMessage: { type: String, default: null },
+  dmStyle: { type: String, enum: ["text", "container"], default: "container" },
+  dmTitle: { type: String, default: null },
+  dmFooter: { type: String, default: null },
+  dmColor: { type: Number, default: null },
+  dmImages: { type: [String], default: [] },
+  dmThumb: { type: String, default: "none" },
 
   // Portaria: cargos automáticos exclusivos para bots
   botAutoRoles: { type: [String], default: [] },
