@@ -49,6 +49,8 @@ const ticketPanelSchema = new Schema(
     internalHeading: { type: String, default: null },
     internalMessage: { type: String, default: null },
     claimedMessage: { type: String, default: null },
+    claimedFooter: { type: String, default: null }, // rodapé da mensagem de "assumido" (aceita {tempo_atual})
+    autoClaim: { type: Boolean, default: false }, // staff que enviar mensagem no ticket assume sozinho
     threadName: { type: String, default: null },
     internalImages: { type: [String], default: undefined },
     ticketChannelId: { type: String, default: null }, // onde os tópicos são criados (padrão: canal do painel)
