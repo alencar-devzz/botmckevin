@@ -1,4 +1,9 @@
-const { MessageFlags, PermissionFlagsBits } = require("discord.js");
+const {
+  MessageFlags,
+  PermissionFlagsBits,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+} = require("discord.js");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 const {
   MAX_OPTIONS,
@@ -52,6 +57,7 @@ const {
   buildCloseConfirmTextModal,
   buildLimitTextModal,
   buildArchiveModal,
+  buildOptionTitleModal,
   buildLimitModal,
   buildOptionModal,
   buildRemoveOptionsModal,
@@ -367,6 +373,28 @@ async function handleTicketConfigButton(interaction) {
     // ----- ticket interno -----
     case "tcfg_i_text":
       return interaction.showModal(buildInternalTextModal(panel));
+
+    // Título da opção (o texto grande dentro do ticket, ex: SUPORTE)
+    case "tcfg_i_opttitle": {
+      if (panel.options.length === 1) {
+        return interaction.showModal(buildOptionTitleModal(panel, panel.options[0]));
+      }
+      const pick = new StringSelectMenuBuilder()
+        .setCustomId(`tcfg_i_opttitle_pick:${panel.id}`)
+        .setPlaceholder("Selecione a opção")
+        .addOptions(
+          panel.options.slice(0, 25).map((o) => ({
+            label: o.label.slice(0, 100),
+            description: `Título atual: ${o.title === "" ? "sem título" : o.title}`.slice(0, 100),
+            value: o.key,
+          }))
+        );
+      return interaction.reply({
+        content: "Qual opção você quer editar o título?",
+        components: [new ActionRowBuilder().addComponents(pick)],
+        flags: EPHEMERAL,
+      });
+    }
     case "tcfg_i_images":
       return interaction.showModal(
         buildImagesModal({
@@ -548,6 +576,12 @@ async function handleTicketConfigSelect(interaction) {
       return interaction.update({ components: buildOptionDetail(panel, option) });
     }
 
+    case "tcfg_i_opttitle_pick": {
+      const option = panel.options.find((o) => o.key === interaction.values[0]);
+      if (!option) return missingPanel(interaction);
+      return interaction.showModal(buildOptionTitleModal(panel, option));
+    }
+
     case "tcfg_o_roles": {
       const roles = interaction.values;
       const options = panel.options.map((o) =>
@@ -723,6 +757,20 @@ async function handleTicketConfigModal(interaction) {
       });
       const updated = await updatePanel(id, set, unset);
       return interaction.update({ components: buildSection("interno", updated, guild) });
+    }
+
+    case "tcfg_modal_i_opttitle": {
+      const current = panel.options.find((o) => o.key === extra);
+      if (!current) return interaction.reply({ content: "Essa opção não existe mais.", flags: EPHEMERAL });
+
+      const title = dashText("title") ?? current.label.toUpperCase().slice(0, 100);
+      const options = panel.options.map((o) => (o.key === extra ? { ...o, title } : o));
+      const updated = await updatePanel(id, { options: serializeOptions(options) });
+      refreshInBackground(interaction, updated);
+      return interaction.reply({
+        content: `Título de **${current.label}** atualizado. Vale para os próximos tickets abertos.`,
+        flags: EPHEMERAL,
+      });
     }
 
     case "tcfg_modal_i_arch": {
