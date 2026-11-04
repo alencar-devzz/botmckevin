@@ -51,6 +51,7 @@ const {
   buildButtonModal,
   buildPlaceholderModal,
   buildInternalTextModal,
+  buildClaimedTextModal,
   buildSuccessTextModal,
   buildSuccessButtonModal,
   buildFieldColorModal,
@@ -97,7 +98,7 @@ const clean = (value) => {
 const COLOR_FIELDS = new Set(["internalColor", "claimedColor", "successColor", "closeConfirmColor", "limitColor"]);
 const COLOR_FIELD_SECTION = {
   internalColor: "interno",
-  claimedColor: "interno",
+  claimedColor: "reivindicacao",
   successColor: "sucesso",
   closeConfirmColor: "sucesso",
   limitColor: "sucesso",
@@ -374,6 +375,14 @@ async function handleTicketConfigButton(interaction) {
     case "tcfg_i_text":
       return interaction.showModal(buildInternalTextModal(panel));
 
+    // ----- reivindicação -----
+    case "tcfg_c_auto": {
+      const updated = await updatePanel(id, { autoClaim: !panel.autoClaim });
+      return interaction.update({ components: buildSection("reivindicacao", updated, guild) });
+    }
+    case "tcfg_c_text":
+      return interaction.showModal(buildClaimedTextModal(panel));
+
     // Título da opção (o texto grande dentro do ticket, ex: SUPORTE)
     case "tcfg_i_opttitle": {
       if (panel.options.length === 1) {
@@ -508,6 +517,8 @@ async function handleTicketConfigButton(interaction) {
         internalHeading: panel.internalHeading === DEFAULTS.internalHeading ? null : panel.internalHeading,
         internalMessage: panel.internalMessage === DEFAULTS.internalMessage ? null : panel.internalMessage,
         claimedMessage: panel.claimedMessage === DEFAULTS.claimedMessage ? null : panel.claimedMessage,
+        claimedFooter: panel.claimedFooter === DEFAULTS.claimedFooter ? null : panel.claimedFooter,
+        autoClaim: panel.autoClaim,
         threadName: panel.threadName === DEFAULTS.threadName ? null : panel.threadName,
         ticketChannelId: panel.ticketChannelId,
         archiveMinutes: panel.archiveMinutes,
@@ -752,11 +763,19 @@ async function handleTicketConfigModal(interaction) {
       const { set, unset } = setOrUnset({
         internalHeading: textOrBlank("heading"),
         internalMessage: textOrBlank("message"),
-        claimedMessage: textOrBlank("claimed"),
         threadName: clean(field("thread")),
       });
       const updated = await updatePanel(id, set, unset);
       return interaction.update({ components: buildSection("interno", updated, guild) });
+    }
+
+    case "tcfg_modal_c_text": {
+      const { set, unset } = setOrUnset({
+        claimedMessage: textOrBlank("message"),
+        claimedFooter: textOrBlank("footer"),
+      });
+      const updated = await updatePanel(id, set, unset);
+      return interaction.update({ components: buildSection("reivindicacao", updated, guild) });
     }
 
     case "tcfg_modal_i_opttitle": {
