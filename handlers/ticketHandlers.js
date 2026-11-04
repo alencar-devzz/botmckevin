@@ -18,7 +18,7 @@ const {
 const {
   buildTicketPanel,
   buildTicketContainer,
-  buildClaimedContainer,
+  buildClaimedMessage,
   buildTicketCreatedEphemeral,
   buildLimitReached,
   buildCloseConfirm,
@@ -311,25 +311,17 @@ async function handleTicketButton(interaction) {
     });
     await setClaimed(interaction.channelId, interaction.user.id).catch(() => {});
 
-    // 1) menção do autor, sozinha
+    // Uma mensagem só: menção do autor em cima (fora do container) + container. Só o autor é pingado.
     await interaction.channel.send({
-      content: `<@${authorId}>`,
-      allowedMentions: { users: [authorId] },
-    });
-
-    // 2) container sozinho, sem pingar o staff
-    await interaction.channel.send({
-      components: [
-        buildClaimedContainer({
-          panel,
-          staffId: interaction.user.id,
-          authorId,
-          timestamp: Math.floor(Date.now() / 1000),
-          guildName: guild.name,
-        }),
-      ],
+      components: buildClaimedMessage({
+        panel,
+        staffId: interaction.user.id,
+        authorId,
+        timestamp: Math.floor(Date.now() / 1000),
+        guildName: guild.name,
+      }),
       flags: V2,
-      allowedMentions: { parse: [] },
+      allowedMentions: { users: [authorId] },
     });
     return;
   }
