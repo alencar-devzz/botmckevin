@@ -298,6 +298,23 @@ function buildInternalTextModal(panel) {
   );
 }
 
+// Título da opção dentro do ticket (o texto grande, ex: SUPORTE). Texto livre.
+function buildOptionTitleModal(panel, option) {
+  return modal(
+    `tcfg_modal_i_opttitle:${panel.id}:${option.key}`,
+    "Título da opção no ticket",
+    textLabel({
+      id: "title",
+      label: `Título (${option.label})`.slice(0, 45),
+      description: "Texto livre. Vazio = nome em maiúsculas. - (traço) = sem título.",
+      style: TextInputStyle.Paragraph,
+      max: 300,
+      value: option.title === "" ? "-" : option.title,
+      placeholder: "Ex: SUPORTE ou **SUPORTE** ou # SUPORTE",
+    })
+  );
+}
+
 function buildArchiveModal(panel) {
   return modal(
     `tcfg_modal_i_arch:${panel.id}`,
@@ -616,6 +633,7 @@ module.exports = {
   buildSuccessTextModal,
   buildSuccessButtonModal,
   buildArchiveModal,
+  buildOptionTitleModal,
   buildLimitModal,
   buildOptionModal,
   buildRemoveOptionsModal,

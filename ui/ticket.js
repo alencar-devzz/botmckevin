@@ -4,16 +4,22 @@ const {
   SectionBuilder,
   ThumbnailBuilder,
   SeparatorBuilder,
-  MediaGalleryBuilder,
-  MediaGalleryItemBuilder,
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
   ActionRowBuilder,
 } = require("discord.js");
 const { applyVars, getOption, DEFAULTS } = require("../utils/ticketSettings");
+const {
+  addTemplate,
+  buildGallery,
+  usesImageToken,
+  startsWithSeparator,
+  splitAtFirstToken,
+} = require("../utils/ticketTemplate");
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3000));
+const isBlank = (value) => !value || !String(value).trim();
 
 const STYLE_MAP = {
   primary: ButtonStyle.Primary,
@@ -21,12 +27,6 @@ const STYLE_MAP = {
   success: ButtonStyle.Success,
   danger: ButtonStyle.Danger,
 };
-
-function buildGallery(urls) {
-  return new MediaGalleryBuilder().addItems(
-    urls.slice(0, 10).map((url) => new MediaGalleryItemBuilder().setURL(url))
-  );
-}
 
 // Texto informativo do painel (como funciona + categorias)
 function infoText(panel) {
@@ -54,12 +54,13 @@ function buildTicketPanel(panel, media = null, { preview = false } = {}) {
   if (panel.color != null) container.setAccentColor(panel.color);
 
   const items = media?.panel.items ?? panel.panelImages.filter((u) => /^https?:/i.test(u));
-  if (items.length) container.addMediaGalleryComponents(buildGallery(items));
+  // Sem marcador {imagem} nos textos, as imagens ficam no topo (padrão). Com marcador, vão onde a pessoa pôs.
+  const customImages = usesImageToken(panel.title, panel.description, panel.footer);
+  if (items.length && !customImages) container.addMediaGalleryComponents(buildGallery(items));
 
-  const head = [];
-  if (panel.title) head.push(`### ${panel.title}`);
-  if (panel.description) head.push(panel.description);
-  if (head.length) container.addTextDisplayComponents(text(head.join("\n")));
+  // Texto livre: título e descrição aparecem exatamente como foram digitados
+  addTemplate(container, panel.title, { images: items });
+  addTemplate(container, panel.description, { images: items });
 
   if (panel.showInfo) {
     container.addSeparatorComponents(new SeparatorBuilder());
@@ -99,7 +100,7 @@ function buildTicketPanel(panel, media = null, { preview = false } = {}) {
 
   if (panel.footer) {
     container.addSeparatorComponents(new SeparatorBuilder());
-    container.addTextDisplayComponents(text(`-# ${panel.footer}`));
+    addTemplate(container, panel.footer, { images: items, prefix: "-# " });
   }
 
   return [container];
@@ -134,9 +135,12 @@ function buildTicketContainer({
   if (panel.showAuthorLine) info.push(`**Aberto por:** <@${author.id}>`);
   if (panel.showOptionLine) info.push(`**Opção selecionada:**\n\`\`\`${opt.label}\`\`\``);
 
+  // Texto livre (sem ## automático). Dentro da seção só cabe texto: se o título tiver um marcador
+  // ({separador}, {imagem}...), o que vem depois dele é colocado logo abaixo da seção.
   // Textos vazios não geram componente (o Discord recusa texto em branco)
+  const { head: headingHead, rest: headingRest } = splitAtFirstToken(heading);
   const sectionTexts = [];
-  if (heading) sectionTexts.push(text(`## ${heading}`));
+  if (headingHead.trim()) sectionTexts.push(text(headingHead.trim()));
   sectionTexts.push(text(info.join("\n")));
 
   const section = new SectionBuilder()
@@ -147,12 +151,16 @@ function buildTicketContainer({
 
   const container = new ContainerBuilder().addSectionComponents(section);
 
-  const bodyLines = [];
-  if (opt.title) bodyLines.push(`## ${opt.title}`);
-  if (message) bodyLines.push(message);
-  if (bodyLines.length) {
-    container.addSeparatorComponents(new SeparatorBuilder());
-    container.addTextDisplayComponents(text(bodyLines.join("\n ")));
+  const items = media?.internal.items ?? panel.internalImages.filter((u) => /^https?:/i.test(u));
+  const customImages = usesImageToken(heading, opt.title, message);
+
+  addTemplate(container, headingRest, { images: items });
+
+  // Título da opção + mensagem: texto livre (sem ## automático)
+  const body = [opt.title, message].filter((part) => part && String(part).trim()).join("\n");
+  if (body) {
+    if (!startsWithSeparator(body)) container.addSeparatorComponents(new SeparatorBuilder());
+    addTemplate(container, body, { images: items });
   }
 
   // Cor fixa, configurável pelo painel. Não muda quando o ticket é assumido.
@@ -165,8 +173,7 @@ function buildTicketContainer({
     );
   }
 
-  const items = media?.internal.items ?? panel.internalImages.filter((u) => /^https?:/i.test(u));
-  if (items.length) container.addMediaGalleryComponents(buildGallery(items));
+  if (items.length && !customImages) container.addMediaGalleryComponents(buildGallery(items));
 
   if (panel.showTicketFooter) {
     const footer = [`Painel: ${panel.name}`];
@@ -198,9 +205,10 @@ function buildClaimedContainer({ panel, staffId, authorId, timestamp, guildName 
     server: guildName,
   });
 
-  const container = new ContainerBuilder().addTextDisplayComponents(
-    text(`${body ? `### ${body}\n` : ""}-# <t:${timestamp}:t>`)
-  );
+  // Texto livre (sem ### automático); só o horário fica pequeno
+  const container = new ContainerBuilder();
+  addTemplate(container, body);
+  container.addTextDisplayComponents(text(`-# <t:${timestamp}:t>`));
   if (panel.claimedColor != null) container.setAccentColor(panel.claimedColor);
   return container;
 }
@@ -211,11 +219,11 @@ function buildTicketCreatedEphemeral(panel, url, vars = {}) {
   const message = applyVars(panel.successMessage, vars);
 
   const container = new ContainerBuilder();
-  if (title) container.addTextDisplayComponents(text(`### ${title}`));
-  if (message) container.addTextDisplayComponents(text(`-# ${message}`));
+  addTemplate(container, title);
+  addTemplate(container, message);
   // Container não pode ficar vazio: sem texto e sem botão, mantém ao menos o título padrão
-  if (!title && !message && !panel.successButtonEnabled) {
-    container.addTextDisplayComponents(text(`### ${DEFAULTS.successTitle}`));
+  if (isBlank(title) && isBlank(message) && !panel.successButtonEnabled) {
+    container.addTextDisplayComponents(text(DEFAULTS.successTitle));
   }
   if (panel.successColor != null) container.setAccentColor(panel.successColor);
 
@@ -242,8 +250,8 @@ function buildLimitReached(panel, records) {
   const message = applyVars(panel.limitMessage, vars);
 
   const container = new ContainerBuilder();
-  if (title) container.addTextDisplayComponents(text(`### ${title}`));
-  if (message) container.addTextDisplayComponents(text(`-# ${message}`));
+  addTemplate(container, title);
+  addTemplate(container, message);
   container.addTextDisplayComponents(text(links));
   if (panel.limitColor != null) container.setAccentColor(panel.limitColor);
 
@@ -253,8 +261,8 @@ function buildLimitReached(panel, records) {
 // Pergunta de confirmação antes de finalizar. Título, mensagem, cor e texto do botão configuráveis.
 function buildCloseConfirm(panel, panelId, optionKey) {
   const container = new ContainerBuilder();
-  if (panel.closeConfirmTitle) container.addTextDisplayComponents(text(`### ${panel.closeConfirmTitle}`));
-  if (panel.closeConfirmMessage) container.addTextDisplayComponents(text(`-# ${panel.closeConfirmMessage}`));
+  addTemplate(container, panel.closeConfirmTitle);
+  addTemplate(container, panel.closeConfirmMessage);
   container
     .addActionRowComponents(
       new ActionRowBuilder().addComponents(

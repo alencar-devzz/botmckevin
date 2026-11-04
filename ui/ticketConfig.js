@@ -12,6 +12,7 @@ const {
   ActionRowBuilder,
 } = require("discord.js");
 const { addBackButton } = require("./backButton");
+const { TOKEN_HELP } = require("../utils/ticketTemplate");
 const {
   MAX_OPTIONS,
   MAX_IMAGES,
@@ -22,9 +23,7 @@ const {
   colorName,
 } = require("../utils/ticketSettings");
 
-const GREEN = 0x00c853;
 const RED = 0xe50000;
-const WHITE = 0xffffff;
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3500));
 
@@ -53,17 +52,15 @@ function item(lines, customId, label = "Editar", opts = {}) {
 
 const sep = () => new SeparatorBuilder();
 
-function tabHeader(title, panel, hint) {
+// tokens = true mostra a dica dos marcadores de texto livre ({separador}, {imagem}...)
+function tabHeader(title, panel, hint, { tokens = false } = {}) {
   return new ContainerBuilder().addTextDisplayComponents(
     text(`## ${title}`),
-    text(`-# Painel: ${panel.name}${hint ? ` · ${hint}` : ""}`)
+    text(
+      `-# Painel: ${panel.name}${hint ? ` · ${hint}` : ""}` +
+        (tokens ? `\n-# Os textos são livres: use ** **, # etc. se quiser. Marcadores: ${TOKEN_HELP}` : "")
+    )
   );
-}
-
-// Cor do container de acordo com o estado do painel
-function stateColor(panel) {
-  if (!panel.enabled) return RED;
-  return panel.sent.length ? GREEN : WHITE;
 }
 
 function stateText(panel) {
@@ -146,8 +143,8 @@ function buildPanelManager({ panel, open = 0 }) {
     ? panel.sent.slice(0, 4).map((r) => `<#${r.channelId}>`).join(" ")
     : "`Ainda não enviado`";
 
+  // Sem cor na barra lateral (o estado já aparece no texto)
   const overview = new ContainerBuilder()
-    .setAccentColor(stateColor(panel))
     .addTextDisplayComponents(
       text(
         [
@@ -285,7 +282,7 @@ function buildSecAparencia(panel) {
     );
   addBackButton(container, `tcfg_manage:${panel.id}`);
 
-  return [tabHeader("Aparência do painel", panel, "o que os membros veem"), container];
+  return [tabHeader("Aparência do painel", panel, "o que os membros veem", { tokens: true }), container];
 }
 
 // ---------- Abertura ----------
@@ -346,7 +343,7 @@ function buildSecOpcoes(panel) {
       )
     );
     addBackButton(container, `tcfg_manage:${panel.id}`);
-    return [tabHeader("Conteúdo do ticket", panel, "aberto pelo botão"), container];
+    return [tabHeader("Conteúdo do ticket", panel, "aberto pelo botão", { tokens: true }), container];
   }
 
   const container = new ContainerBuilder().addTextDisplayComponents(
@@ -391,7 +388,7 @@ function buildSecOpcoes(panel) {
     );
   addBackButton(container, `tcfg_manage:${panel.id}`);
 
-  return [tabHeader("Opções do menu", panel, "categorias de atendimento"), container];
+  return [tabHeader("Opções do menu", panel, "categorias de atendimento", { tokens: true }), container];
 }
 
 function buildOptionDetail(panel, opt) {
@@ -429,7 +426,7 @@ function buildOptionDetail(panel, opt) {
     .addActionRowComponents(new ActionRowBuilder().addComponents(roleSelect));
   addBackButton(container, `tcfg_go:${panel.id}:opcoes`);
 
-  return [tabHeader("Editar opção", panel, "cargos próprios são marcados e podem atender"), container];
+  return [tabHeader("Editar opção", panel, "cargos próprios são marcados e podem atender", { tokens: true }), container];
 }
 
 // ---------- Ticket interno ----------
@@ -454,8 +451,16 @@ function buildSecInterno(panel, guild) {
           `-# Mensagem: \`${short(panel.internalMessage)}\``,
           `-# Aviso ao assumir: \`${short(panel.claimedMessage)}\``,
           `-# Nome do tópico: \`${short(panel.threadName)}\``,
+          ...(panel.mode === "button" && panel.options[0]
+            ? [`-# Título da opção: \`${short(panel.options[0].title)}\``]
+            : []),
         ],
         `tcfg_i_text:${panel.id}`
+      )
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        button(`tcfg_i_opttitle:${panel.id}`, "Editar título da opção (ex: SUPORTE)")
       )
     )
     .addSeparatorComponents(sep())
@@ -548,7 +553,7 @@ function buildSecInterno(panel, guild) {
     );
   addBackButton(container, `tcfg_manage:${panel.id}`);
 
-  return [tabHeader("Ticket interno", panel, "dentro do tópico"), container];
+  return [tabHeader("Ticket interno", panel, "dentro do tópico", { tokens: true }), container];
 }
 
 // ---------- Mensagem de sucesso ----------
@@ -636,7 +641,7 @@ function buildSecSucesso(panel) {
     );
   addBackButton(container, `tcfg_manage:${panel.id}`);
 
-  return [tabHeader("Mensagens do sistema", panel, "confirmação ao abrir, excluir e limite"), container];
+  return [tabHeader("Mensagens do sistema", panel, "confirmação ao abrir, excluir e limite", { tokens: true }), container];
 }
 
 // ---------- Cargos ----------
@@ -758,7 +763,6 @@ function buildSecPublicacao(panel, guild) {
     : "`Nenhuma mensagem enviada ainda`";
 
   const container = new ContainerBuilder()
-    .setAccentColor(stateColor(panel))
     .addTextDisplayComponents(
       text("**Enviar painel**\n-# Escolha o canal. O painel enviado é atualizado sozinho quando você edita a configuração."),
       text(`**Mensagens enviadas** (${panel.sent.length})\n${sentLines}`)
