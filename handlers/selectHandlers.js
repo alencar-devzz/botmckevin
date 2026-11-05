@@ -10,9 +10,23 @@ const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHand
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
 const { openPostsPanel, handlePostsConfigSelect } = require("./postsHandlers");
+const {
+  openRoleManagePanel,
+  handleRoleManageSelect,
+  handleRoleManageConfigSelect,
+} = require("./roleManageHandlers");
 
 async function handleSelect(interaction) {
   const { customId, values } = interaction;
+
+  // Painel do comando groles e a configuração dele no n!menu
+  if (customId.startsWith("grl:")) {
+    return handleRoleManageSelect(interaction);
+  }
+
+  if (customId.startsWith("rmcfg_")) {
+    return handleRoleManageConfigSelect(interaction);
+  }
 
   if (customId.startsWith("botcall_")) {
     return handleBotcallSelect(interaction);
@@ -71,6 +85,9 @@ async function handleSelect(interaction) {
       }
       if (value === "logs") {
         return openLogsPanel(interaction);
+      }
+      if (value === "cargos") {
+        return openRoleManagePanel(interaction);
       }
       return;
     }
