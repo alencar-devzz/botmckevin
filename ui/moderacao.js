@@ -30,6 +30,11 @@ function buildModeracaoPanel() {
         label: "Logs e registros",
         description: "Mensagens, banimentos, calls, canais, cargos e mais.",
         value: "logs",
+      },
+      {
+        label: "Gerenciamento de cargos",
+        description: "Quem gerencia quais cargos e a aparência do painel do groles.",
+        value: "cargos",
       }
     );
 
