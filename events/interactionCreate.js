@@ -20,7 +20,8 @@ module.exports = {
       if (
         interaction.isStringSelectMenu() ||
         interaction.isChannelSelectMenu() ||
-        interaction.isRoleSelectMenu()
+        interaction.isRoleSelectMenu() ||
+        interaction.isUserSelectMenu() // select de pessoas do painel groles
       ) {
         return await handleSelect(interaction);
       }
