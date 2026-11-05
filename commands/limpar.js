@@ -1,11 +1,11 @@
 const { MessageFlags, PermissionFlagsBits } = require("discord.js");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 const { getPrefix } = require("../utils/getPrefix");
-const { formatDuration } = require("../utils/formatDuration");
-const { buildLimpandoPanel, buildLimpoPanel } = require("../ui/limpar");
+const { buildLimpandoPanel, buildLimpoPanel } = require("../ui/limparPanel");
 
 const MAX_MESSAGES = 500;
-const DELETE_DELAY_MS = 2000; // espera entre cada mensagem apagada (evita rate limit)
+const DELETE_DELAY_MS = 1000; // 1 segundo entre cada mensagem apagada
+const REFRESH_EVERY_MS = 5000; // o painel só se atualiza a cada 5 segundos
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -52,25 +52,30 @@ module.exports = {
         channel,
         deleted,
         total,
-        elapsed: formatDuration(0),
+        startedAt,
       }),
       flags: MessageFlags.IsComponentsV2,
       allowedMentions: { parse: [] },
     });
 
-    const refresh = () =>
-      panel
+    let lastRefresh = Date.now(); // a primeira atualização vem 5s depois de iniciar
+    const refresh = (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastRefresh < REFRESH_EVERY_MS) return Promise.resolve();
+      lastRefresh = now;
+      return panel
         .edit({
           components: buildLimpandoPanel({
             channel,
             deleted,
             total,
-            elapsed: formatDuration(Date.now() - startedAt),
+            startedAt,
           }),
           flags: MessageFlags.IsComponentsV2,
           allowedMentions: { parse: [] },
         })
         .catch(() => {});
+    };
 
     try {
       while (deleted < total) {
@@ -83,13 +88,13 @@ module.exports = {
 
         const before = deleted;
 
-        // Apaga uma por vez, esperando 2 segundos entre cada deleção
+        // Apaga uma por vez, com uma pequena espera entre cada deleção
         for (const msg of batch) {
           const ok = await msg.delete().then(() => true).catch(() => false);
           if (!ok) continue;
 
           deleted++;
-          await refresh();
+          refresh(); // sem await: a atualização do painel não segura a próxima deleção
 
           if (deleted < total) await sleep(DELETE_DELAY_MS);
         }
