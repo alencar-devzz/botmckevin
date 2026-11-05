@@ -12,9 +12,19 @@ const { handleBoosterButton } = require("./boosterHandlers");
 const { handleModerationButton } = require("./moderationHandlers");
 const { handleBotcallButton } = require("./botcallHandlers");
 const { handleTicketConfigButton } = require("./ticketConfigHandlers");
+const { handleRoleManageButton, handleRoleManageConfigButton } = require("./roleManageHandlers");
 
 async function handleButton(interaction) {
   const { customId } = interaction;
+
+  // Painel do comando groles e a configuração dele no n!menu
+  if (customId.startsWith("grl:")) {
+    return handleRoleManageButton(interaction);
+  }
+
+  if (customId.startsWith("rmcfg_")) {
+    return handleRoleManageConfigButton(interaction);
+  }
 
   if (customId.startsWith("ticket_")) {
     return handleTicketButton(interaction);
