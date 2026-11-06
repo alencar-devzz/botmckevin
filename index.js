@@ -64,6 +64,14 @@ client.on("debug", (msg) => {
   const token = (process.env.TOKEN ?? "").trim();
   console.log(`[LOGIN] Token ${token ? `recebido (${token.length} caracteres)` : "VAZIO ou não definido"}`);
 
+  // Teste direto de rede/token: mostra o que o Discord responde a partir deste servidor
+  fetch("https://discord.com/api/v10/gateway/bot", {
+    headers: { Authorization: `Bot ${token}` },
+    signal: AbortSignal.timeout(15_000),
+  })
+    .then(async (res) => console.log("[TESTE] HTTP", res.status, (await res.text()).slice(0, 200).replace(/\s+/g, " ")))
+    .catch((err) => console.error("[TESTE] Falhou:", err.name, err.message, err.cause?.code ?? ""));
+
   // Se em 30s o bot não ficou pronto, avisa (login travado)
   setTimeout(() => {
     if (!client.isReady()) console.error("[LOGIN] 30s sem ficar online. Status do bot:", client.ws.status);
