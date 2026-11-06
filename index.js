@@ -45,7 +45,33 @@ for (const file of fs.readdirSync(eventsPath).filter((f) => f.endsWith(".js"))) 
 
 startKeepAliveServer(client);
 
+// Diagnóstico de login: mostra nos logs da Render o que o Discord respondeu
+client.on("error", (err) => console.error("[DISCORD] Erro:", err));
+client.on("warn", (msg) => console.warn("[DISCORD] Aviso:", msg));
+client.on("shardError", (err) => console.error("[DISCORD] Erro no gateway:", err));
+client.rest.on("rateLimited", (info) =>
+  console.warn(`[DISCORD] Rate limit em ${info.route}, espera de ${info.timeToReset}ms`)
+);
+client.on("debug", (msg) => {
+  if (/Preparing to connect|Session Info|Sending a heartbeat|Heartbeat acknowledged|Provided token/i.test(msg) === false) {
+    console.log("[DISCORD][debug]", msg.slice(0, 200));
+  }
+});
+
 (async () => {
   await connectDatabase();
-  await client.login(process.env.TOKEN);
+
+  const token = (process.env.TOKEN ?? "").trim();
+  console.log(`[LOGIN] Token ${token ? `recebido (${token.length} caracteres)` : "VAZIO ou não definido"}`);
+
+  // Se em 30s o bot não ficou pronto, avisa (login travado)
+  setTimeout(() => {
+    if (!client.isReady()) console.error("[LOGIN] 30s sem ficar online. Status do bot:", client.ws.status);
+  }, 30_000);
+
+  try {
+    await client.login(token);
+  } catch (err) {
+    console.error("[LOGIN] Falha ao logar no Discord:", err);
+  }
 })();
