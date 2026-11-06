@@ -8,7 +8,8 @@ const LOG_CATEGORIES = {
     botsHint: "Ignora mensagens enviadas por bots.",
     events: [
       "Mensagens apagadas (conteúdo, autor e quem apagou)",
-      "Apagamentos em massa e limpezas por comando (uma embed só com total e executor)",
+      "Apagamentos em massa e limpezas por comando — limpar e cl (uma embed só com total e executor)",
+      "Não registra as mensagens de comando que o próprio bot apaga",
       "Mensagens editadas (texto antes e depois, com atalho para abrir)",
     ],
   },
