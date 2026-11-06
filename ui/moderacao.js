@@ -35,6 +35,11 @@ function buildModeracaoPanel() {
         label: "Gerenciamento de cargos",
         description: "Quem gerencia quais cargos e a aparência do painel do groles.",
         value: "cargos",
+      },
+      {
+        label: "Comando cl",
+        description: "Apaga as mensagens de quem digita cl. Quem usa, canais e limites.",
+        value: "cl",
       }
     );
 
