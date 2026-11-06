@@ -10,6 +10,7 @@ const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHand
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
 const { openPostsPanel, handlePostsConfigSelect } = require("./postsHandlers");
+const { openClPanel, handleClConfigSelect } = require("./clHandlers");
 const {
   openRoleManagePanel,
   handleRoleManageSelect,
@@ -26,6 +27,11 @@ async function handleSelect(interaction) {
 
   if (customId.startsWith("rmcfg_")) {
     return handleRoleManageConfigSelect(interaction);
+  }
+
+  // Configuração do comando cl no n!menu
+  if (customId.startsWith("clcfg_")) {
+    return handleClConfigSelect(interaction);
   }
 
   if (customId.startsWith("botcall_")) {
@@ -88,6 +94,9 @@ async function handleSelect(interaction) {
       }
       if (value === "cargos") {
         return openRoleManagePanel(interaction);
+      }
+      if (value === "cl") {
+        return openClPanel(interaction);
       }
       return;
     }

@@ -12,6 +12,7 @@ const { handleBoosterButton } = require("./boosterHandlers");
 const { handleModerationButton } = require("./moderationHandlers");
 const { handleBotcallButton } = require("./botcallHandlers");
 const { handleTicketConfigButton } = require("./ticketConfigHandlers");
+const { handleClConfigButton } = require("./clHandlers");
 const { handleRoleManageButton, handleRoleManageConfigButton } = require("./roleManageHandlers");
 
 async function handleButton(interaction) {
@@ -24,6 +25,11 @@ async function handleButton(interaction) {
 
   if (customId.startsWith("rmcfg_")) {
     return handleRoleManageConfigButton(interaction);
+  }
+
+  // Configuração do comando cl no n!menu
+  if (customId.startsWith("clcfg_")) {
+    return handleClConfigButton(interaction);
   }
 
   if (customId.startsWith("ticket_")) {

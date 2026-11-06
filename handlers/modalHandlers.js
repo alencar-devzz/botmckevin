@@ -4,6 +4,7 @@ const { handleTicketConfigModal } = require("./ticketConfigHandlers");
 const { handleAparenciaModal } = require("./aparenciaHandlers");
 const { handleTicketModal } = require("./ticketHandlers");
 const { handlePostModal, handlePostsConfigModal } = require("./postsHandlers");
+const { handleClConfigModal } = require("./clHandlers");
 const { handleRoleManageModal, handleRoleManageConfigModal } = require("./roleManageHandlers");
 
 async function handleModal(interaction) {
@@ -15,6 +16,10 @@ async function handleModal(interaction) {
 
   if (customId.startsWith("rmcfg_modal:")) {
     return handleRoleManageConfigModal(interaction);
+  }
+
+  if (customId.startsWith("clcfg_modal:")) {
+    return handleClConfigModal(interaction);
   }
 
   if (customId.startsWith("tcfg_modal_")) {
