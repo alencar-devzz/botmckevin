@@ -1,12 +1,140 @@
 const { AuditLogEvent } = require("discord.js");
 const { activeCategory, deliver } = require("./send");
 const { findAudit, executorText } = require("./audit");
+const { add, listLimited } = require("./batch");
 const { COLORS, code, channelBlock, channelTypeName, diffOverwrites } = require("./format");
 
 const categoryName = (channel) => channel.parent?.name ?? "Nenhuma";
 
 // Ignora quando o executor é bot e a categoria pede isso
 const skipByBot = (cfg, entry) => Boolean(cfg.ignoreBots && entry?.executor?.bot);
+
+// Procura o executor: pelo canal quando é um só; pela ação mais recente quando são vários
+const lookup = (guild, types, items) =>
+  findAudit(guild, types, items.length === 1 ? items[0].id : null, { maxAge: 40000 });
+
+const typeSummary = (items) => {
+  const counts = {};
+  for (const i of items) counts[i.typeName] = (counts[i.typeName] ?? 0) + 1;
+  return Object.entries(counts)
+    .map(([name, n]) => `${code(name)} ×${n}`)
+    .join(" · ");
+};
+
+// ---------- criados / excluídos (um log só por rajada) ----------
+async function flushCreateDelete(guild, cfg, items, { created }) {
+  const entry = await lookup(guild, created ? AuditLogEvent.ChannelCreate : AuditLogEvent.ChannelDelete, items);
+  if (skipByBot(cfg, entry)) return;
+
+  if (items.length === 1) {
+    const i = items[0];
+    return deliver(guild, cfg, {
+      title: `${created ? "Canal criado" : "Canal excluído"} — ${guild.name}`,
+      color: created ? COLORS.green : COLORS.red,
+      groups: [
+        [
+          created ? channelBlock(i.channel) : `**Canal:** ${code(`#${i.name}`)} (${code(i.id)})`,
+          `**Tipo:** ${i.typeName}`,
+          `**Categoria:** ${i.parent}`,
+          `**Executado por:** ${executorText(entry)}`,
+        ],
+      ],
+    });
+  }
+
+  const lines = items.map((i) =>
+    created ? `<#${i.id}> — ${code(i.name)} (${i.typeName})` : `${code(`#${i.name}`)} (${i.typeName})`
+  );
+  return deliver(guild, cfg, {
+    title: `${created ? "Canais criados" : "Canais excluídos"} em massa — ${guild.name}`,
+    color: created ? COLORS.green : COLORS.red,
+    groups: [
+      [
+        `**Executado por:** ${executorText(entry)}`,
+        `**Total:** ${code(items.length)}`,
+        `**Tipos:** ${typeSummary(items)}`,
+      ],
+      listLimited(lines, 20),
+    ],
+  });
+}
+
+// ---------- editados (categoria sincronizada gera um evento por canal filho) ----------
+const UPDATE_TYPES = [
+  AuditLogEvent.ChannelUpdate,
+  AuditLogEvent.ChannelOverwriteCreate,
+  AuditLogEvent.ChannelOverwriteUpdate,
+  AuditLogEvent.ChannelOverwriteDelete,
+];
+
+function renderChanges(item) {
+  const groups = [];
+  if (item.changes.length) groups.push(item.changes.slice(0, 8));
+  let budget = 12;
+  for (const group of item.permGroups.slice(0, 4)) {
+    const lines = group.lines.slice(0, budget);
+    budget -= lines.length;
+    if (!lines.length) break;
+    groups.push([`**Permissões de ${group.who} alteradas:**`, ...lines]);
+  }
+  return groups;
+}
+
+async function flushUpdate(guild, cfg, items) {
+  const entry = await lookup(guild, UPDATE_TYPES, items);
+  if (skipByBot(cfg, entry)) return;
+
+  if (items.length === 1) {
+    const i = items[0];
+    return deliver(guild, cfg, {
+      title: `Canal editado — ${guild.name}`,
+      color: COLORS.white,
+      groups: [
+        [
+          channelBlock(i.channel),
+          `**Tipo:** ${i.typeName}`,
+          `**Categoria:** ${i.parent}`,
+          `**Executado por:** ${executorText(entry)}`,
+        ],
+        ...renderChanges(i),
+      ],
+    });
+  }
+
+  // Junta canais que sofreram exatamente a mesma alteração (ex: categoria sincronizada)
+  const bySignature = new Map();
+  for (const i of items) {
+    const sig = JSON.stringify([i.changes, i.permGroups]);
+    if (!bySignature.has(sig)) bySignature.set(sig, []);
+    bySignature.get(sig).push(i);
+  }
+
+  const groups = [
+    [
+      `**Executado por:** ${executorText(entry)}`,
+      `**Canais editados:** ${code(new Set(items.map((i) => i.id)).size)}`,
+    ],
+  ];
+
+  let shown = 0;
+  for (const list of bySignature.values()) {
+    if (shown >= 3) break;
+    shown++;
+    const ids = [...new Set(list.map((i) => i.id))];
+    groups.push([
+      `**Alteração em ${ids.length} canal(is):**`,
+      ids.slice(0, 15).map((id) => `<#${id}>`).join(" ") + (ids.length > 15 ? ` … +${ids.length - 15}` : ""),
+    ]);
+    groups.push(...renderChanges(list[0]).slice(0, 2));
+  }
+  if (bySignature.size > shown) groups.push([`… e mais ${bySignature.size - shown} tipo(s) de alteração`]);
+
+  return deliver(guild, cfg, {
+    title: `Canais editados em massa — ${guild.name}`,
+    color: COLORS.white,
+    groups,
+  });
+}
 
 module.exports = [
   {
@@ -17,21 +145,17 @@ module.exports = [
       const cfg = await activeCategory(guild, "canais");
       if (!cfg) return;
 
-      const entry = await findAudit(guild, AuditLogEvent.ChannelCreate, channel.id);
-      if (skipByBot(cfg, entry)) return;
-
-      await deliver(guild, cfg, {
-        title: `Canal criado — ${guild.name}`,
-        color: COLORS.green,
-        groups: [
-          [
-            channelBlock(channel),
-            `**Tipo:** ${channelTypeName(channel.type)}`,
-            `**Categoria:** ${categoryName(channel)}`,
-            `**Executado por:** ${executorText(entry)}`,
-          ],
-        ],
-      });
+      add(
+        `chcreate:${guild.id}`,
+        {
+          id: channel.id,
+          name: channel.name,
+          channel,
+          typeName: channelTypeName(channel.type),
+          parent: categoryName(channel),
+        },
+        (items) => flushCreateDelete(guild, cfg, items, { created: true })
+      );
     },
   },
 
@@ -43,21 +167,16 @@ module.exports = [
       const cfg = await activeCategory(guild, "canais");
       if (!cfg) return;
 
-      const entry = await findAudit(guild, AuditLogEvent.ChannelDelete, channel.id);
-      if (skipByBot(cfg, entry)) return;
-
-      await deliver(guild, cfg, {
-        title: `Canal excluído — ${guild.name}`,
-        color: COLORS.red,
-        groups: [
-          [
-            `**Canal:** ${code(`#${channel.name}`)} (${code(channel.id)})`,
-            `**Tipo:** ${channelTypeName(channel.type)}`,
-            `**Categoria:** ${categoryName(channel)}`,
-            `**Executado por:** ${executorText(entry)}`,
-          ],
-        ],
-      });
+      add(
+        `chdelete:${guild.id}`,
+        {
+          id: channel.id,
+          name: channel.name,
+          typeName: channelTypeName(channel.type),
+          parent: categoryName(channel),
+        },
+        (items) => flushCreateDelete(guild, cfg, items, { created: false })
+      );
     },
   },
 
@@ -88,41 +207,18 @@ module.exports = [
       const cfg = await activeCategory(guild, "canais");
       if (!cfg) return;
 
-      const entry = await findAudit(
-        guild,
-        [
-          AuditLogEvent.ChannelUpdate,
-          AuditLogEvent.ChannelOverwriteCreate,
-          AuditLogEvent.ChannelOverwriteUpdate,
-          AuditLogEvent.ChannelOverwriteDelete,
-        ],
-        newChannel.id
+      add(
+        `chupdate:${guild.id}`,
+        {
+          id: newChannel.id,
+          channel: newChannel,
+          typeName: channelTypeName(newChannel.type),
+          parent: categoryName(newChannel),
+          changes,
+          permGroups,
+        },
+        (items) => flushUpdate(guild, cfg, items)
       );
-      if (skipByBot(cfg, entry)) return;
-
-      const groups = [
-        [
-          channelBlock(newChannel),
-          `**Tipo:** ${channelTypeName(newChannel.type)}`,
-          `**Categoria:** ${categoryName(newChannel)}`,
-          `**Executado por:** ${executorText(entry)}`,
-        ],
-      ];
-      if (changes.length) groups.push(changes.slice(0, 8));
-
-      let budget = 12;
-      for (const group of permGroups.slice(0, 4)) {
-        const lines = group.lines.slice(0, budget);
-        budget -= lines.length;
-        if (!lines.length) break;
-        groups.push([`**Permissões de ${group.who} alteradas:**`, ...lines]);
-      }
-
-      await deliver(guild, cfg, {
-        title: `Canal editado — ${guild.name}`,
-        color: COLORS.white,
-        groups,
-      });
     },
   },
 ];

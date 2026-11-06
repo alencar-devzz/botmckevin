@@ -98,19 +98,23 @@ module.exports = [
       if (entry?.executor?.bot && cfg.ignoreBots) return;
       const byBot = entry?.executor?.bot;
 
-      const send = (role, isAdd) =>
-        deliver(guild, cfg, {
-          title: `Cargo ${isAdd ? "adicionado" : "removido"} ${byBot ? "(Bot)" : "manualmente"} — ${guild.name}`,
-          color: isAdd ? COLORS.green : COLORS.red,
-          thumbnail: user.displayAvatarURL(),
-          groups: [
-            [userBrief(user), `**Executado por:** ${executorText(entry)}`],
-            [`**Cargo:** <@&${role.id}> (${code(role.name)})`],
-          ],
-        });
+      // Todos os cargos da mesma alteração vão numa embed só
+      const roleLine = (role) => `<@&${role.id}> (${code(role.name)})`;
+      const groups = [[userBrief(user), `**Executado por:** ${executorText(entry)}`]];
+      if (added.size) groups.push([`**Cargos adicionados (${added.size}):**`, ...[...added.values()].map(roleLine)]);
+      if (removed.size) groups.push([`**Cargos removidos (${removed.size}):**`, ...[...removed.values()].map(roleLine)]);
 
-      for (const role of added.values()) await send(role, true);
-      for (const role of removed.values()) await send(role, false);
+      const title =
+        added.size && removed.size
+          ? "Cargos alterados"
+          : `Cargo${(added.size || removed.size) > 1 ? "s" : ""} ${added.size ? "adicionado" : "removido"}${(added.size || removed.size) > 1 ? "s" : ""}`;
+
+      await deliver(guild, cfg, {
+        title: `${title} ${byBot ? "(Bot)" : "manualmente"} — ${guild.name}`,
+        color: added.size && removed.size ? COLORS.white : added.size ? COLORS.green : COLORS.red,
+        thumbnail: user.displayAvatarURL(),
+        groups,
+      });
     },
   },
 ];

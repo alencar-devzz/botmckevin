@@ -1,6 +1,7 @@
 const { AuditLogEvent } = require("discord.js");
 const { activeCategory, deliver } = require("./send");
-const { findAudit, executorText } = require("./audit");
+const { findAudit } = require("./audit");
+const { isSuppressed } = require("./suppress");
 const { COLORS, userBlock, channelBlock, codeBlock, code } = require("./format");
 
 module.exports = [
@@ -10,6 +11,7 @@ module.exports = [
     async execute(message) {
       const guild = message.guild;
       if (!guild) return;
+      if (isSuppressed(message.id)) return; // apagada pelo comando limpar: vai num log único
       const cfg = await activeCategory(guild, "mensagens", message.author?.bot);
       if (!cfg) return;
 
@@ -58,6 +60,40 @@ module.exports = [
           [author ? userBlock(author, "Autor") : "**Autor:** `Desconhecido`"],
           info,
           ["**Conteúdo**", codeBlock(content)],
+        ],
+      });
+    },
+  },
+
+  // Apagamento em massa (bulkDelete, ferramentas de moderação etc.): um log só
+  {
+    name: "messageDeleteBulk",
+    async execute(messages, channel) {
+      const guild = channel?.guild;
+      if (!guild) return;
+      const list = [...messages.values()].filter((m) => !isSuppressed(m.id));
+      if (!list.length) return;
+
+      const cfg = await activeCategory(guild, "mensagens");
+      if (!cfg) return;
+
+      const entry = await findAudit(guild, AuditLogEvent.MessageBulkDelete, null, {
+        match: (e) => e.target?.id === channel.id || e.extra?.channel?.id === channel.id,
+        tries: 1,
+        delay: 800,
+      });
+      const authors = new Set(list.map((m) => m.author?.id).filter(Boolean));
+
+      await deliver(guild, cfg, {
+        title: `Mensagens apagadas em massa — ${guild.name}`,
+        color: COLORS.red,
+        groups: [
+          [
+            channelBlock(channel),
+            `**Executado por:** ${entry?.executor ? `<@${entry.executor.id}>` : "`Desconhecido`"}`,
+            `**Total de mensagens apagadas:** ${code(messages.size)}`,
+            `**Autores identificados:** ${code(authors.size)}`,
+          ],
         ],
       });
     },

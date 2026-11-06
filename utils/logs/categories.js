@@ -8,6 +8,7 @@ const LOG_CATEGORIES = {
     botsHint: "Ignora mensagens enviadas por bots.",
     events: [
       "Mensagens apagadas (conteúdo, autor e quem apagou)",
+      "Apagamentos em massa e limpezas por comando (uma embed só com total e executor)",
       "Mensagens editadas (texto antes e depois, com atalho para abrir)",
     ],
   },
@@ -56,6 +57,7 @@ const LOG_CATEGORIES = {
       "Entrada em call (com quem já estava na call)",
       "Saída de call (com quem restou)",
       "Troca de call",
+      "Várias entradas/saídas/trocas seguidas viram uma embed única",
     ],
   },
   canais: {
@@ -68,6 +70,7 @@ const LOG_CATEGORIES = {
       "Canais criados",
       "Canais editados (nome, tópico, categoria, modo lento, permissões)",
       "Canais excluídos",
+      "Ações em massa (vários canais de uma vez) saem numa embed única",
     ],
   },
   cargos: {
@@ -79,7 +82,8 @@ const LOG_CATEGORIES = {
     events: [
       "Cargos criados e excluídos",
       "Cargos editados (nome, cor, permissões)",
-      "Cargos adicionados ou removidos de membros",
+      "Cargos adicionados ou removidos de membros (juntos numa embed)",
+      "Ações em massa (vários cargos de uma vez) saem numa embed única",
     ],
   },
 };
