@@ -99,7 +99,8 @@ module.exports = [
       const byBot = entry?.executor?.bot;
 
       // Todos os cargos da mesma alteração vão numa embed só
-      const roleLine = (role) => `<@&${role.id}> (${code(role.name)})`;
+      // @cargo · `nome` · `id`
+      const roleLine = (role) => `<@&${role.id}> · ${code(role.name)} · ${code(role.id)}`;
       const groups = [[userBrief(user), `**Executado por:** ${executorText(entry)}`]];
       if (added.size) groups.push([`**Cargos adicionados (${added.size}):**`, ...[...added.values()].map(roleLine)]);
       if (removed.size) groups.push([`**Cargos removidos (${removed.size}):**`, ...[...removed.values()].map(roleLine)]);
@@ -110,7 +111,7 @@ module.exports = [
           : `Cargo${(added.size || removed.size) > 1 ? "s" : ""} ${added.size ? "adicionado" : "removido"}${(added.size || removed.size) > 1 ? "s" : ""}`;
 
       await deliver(guild, cfg, {
-        title: `${title} ${byBot ? "(Bot)" : "manualmente"} — ${guild.name}`,
+        title: `${title}${byBot ? " (Bot)" : ""} — ${guild.name}`,
         color: added.size && removed.size ? COLORS.white : added.size ? COLORS.green : COLORS.red,
         thumbnail: user.displayAvatarURL(),
         groups,
