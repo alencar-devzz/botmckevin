@@ -7,7 +7,7 @@ function buildLimpandoPanel({ channel, deleted, total, startedAt }) {
     new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
         [
-          `### Limpando canal — ${channel.name}`,
+          `## Limpando canal — ${channel.name}`,
           `**Progresso:** \`${deleted}/${total}\``,
           `**Iniciado:** <t:${Math.floor(startedAt / 1000)}:R>`,
           `-# **Limpando o canal: <#${channel.id}>**`,
@@ -23,7 +23,7 @@ function buildLimpoPanel({ channel, userId }) {
     new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
         [
-          `### Canal limpo — ${channel.name}`,
+          `## Canal limpo — ${channel.name}`,
           "**Progresso:** `concluído`",
           "**Iniciado há:** `concluída`",
           `-# **Limpeza em <#${channel.id}> concluída** · **Por** <@${userId}>`,
