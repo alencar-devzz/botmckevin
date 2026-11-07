@@ -146,8 +146,11 @@ module.exports = {
       return;
     }
 
-    // Tempo de espera entre usos (administradores não esperam)
-    if (cfg.cooldown && !verdict.admin) {
+    // Tempo de espera entre usos (administradores e cargos isentos não esperam)
+    const exempt =
+      verdict.admin ||
+      (cfg.cooldownExemptRoles.length > 0 && member.roles.cache.hasAny(...cfg.cooldownExemptRoles));
+    if (cfg.cooldown && !exempt) {
       const left = (lastUse.get(key) ?? 0) + cfg.cooldown * 1000 - Date.now();
       if (left > 0) {
         suppressMessage(message.id);
