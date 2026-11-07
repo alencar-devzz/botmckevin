@@ -17,6 +17,7 @@ function toConfig(doc) {
     access: ["staff", "roles", "everyone"].includes(doc?.access) ? doc.access : "staff",
     roles: ids(doc?.roles),
     blockedRoles: ids(doc?.blockedRoles),
+    cooldownExemptRoles: ids(doc?.cooldownExemptRoles),
     allowedChannels: ids(doc?.allowedChannels),
     blockedChannels: ids(doc?.blockedChannels),
     scope: doc?.scope === "guild" ? "guild" : "channel",
