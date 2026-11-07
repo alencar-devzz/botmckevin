@@ -23,6 +23,7 @@ const clConfigSchema = new Schema({
   skipPinned: { type: Boolean, default: false }, // mantém mensagens fixadas
   deleteTrigger: { type: Boolean, default: true }, // apaga o próprio "cl"
   cooldown: { type: Number, default: 0 }, // segundos entre usos (0 = sem espera)
+  cooldownExemptRoles: { type: [String], default: [] }, // cargos que ignoram a espera
 
   notice: { type: Boolean, default: false }, // avisa no canal quantas foram apagadas
   noticeSeconds: { type: Number, default: 5 },
