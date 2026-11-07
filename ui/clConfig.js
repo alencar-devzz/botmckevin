@@ -46,6 +46,7 @@ function buildClHome(guild, cfg) {
         `**Quem pode usar:** ${ACCESS_LABEL[cfg.access]}`,
         `**Cargos permitidos:** ${mentionRoles(cfg.roles.filter((id) => guild.roles.cache.has(id)))}`,
         `**Cargos bloqueados:** ${mentionRoles(cfg.blockedRoles.filter((id) => guild.roles.cache.has(id)))}`,
+        `**Cargos sem espera:** ${mentionRoles(cfg.cooldownExemptRoles.filter((id) => guild.roles.cache.has(id)))}`,
         `**Canais permitidos:** ${cfg.allowedChannels.length ? mentionChannels(cfg.allowedChannels) : "`Todos`"}`,
         `**Canais bloqueados:** ${mentionChannels(cfg.blockedChannels)}`,
         `**Alcance:** ${cfg.scope === "guild" ? "Todos os canais do servidor" : "Somente o canal em que foi usado"}`,
@@ -126,7 +127,19 @@ function buildClRoles(guild, cfg) {
       text("**Cargos bloqueados**"),
       text("-# Quem tiver algum destes cargos não consegue usar (administradores ignoram o bloqueio).")
     )
-    .addActionRowComponents(roleSelect("clcfg_blockedroles", "Selecione os cargos bloqueados", guild, cfg.blockedRoles));
+    .addActionRowComponents(roleSelect("clcfg_blockedroles", "Selecione os cargos bloqueados", guild, cfg.blockedRoles))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(
+      text("**Cargos sem tempo de espera**"),
+      text(
+        cfg.cooldown
+          ? `-# Estes cargos podem usar o cl de novo sem esperar os \`${cfg.cooldown}s\` (administradores já são isentos).`
+          : "-# A espera está em 0s agora. Quando você definir um tempo em \"Quantidade e tempos\", estes cargos ficam isentos."
+      )
+    )
+    .addActionRowComponents(
+      roleSelect("clcfg_cooldownroles", "Selecione os cargos sem espera", guild, cfg.cooldownExemptRoles)
+    );
   addBackButton(container, "clcfg_home");
 
   return [header, container];
