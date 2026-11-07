@@ -93,6 +93,7 @@ async function handleClConfigSelect(interaction) {
   const fields = {
     clcfg_roles: ["roles", buildClRoles],
     clcfg_blockedroles: ["blockedRoles", buildClRoles],
+    clcfg_cooldownroles: ["cooldownExemptRoles", buildClRoles],
     clcfg_allowedch: ["allowedChannels", buildClChannels],
     clcfg_blockedch: ["blockedChannels", buildClChannels],
   };
