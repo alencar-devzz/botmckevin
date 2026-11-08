@@ -35,6 +35,8 @@ const callHubConfigSchema = new Schema({
   thumbnail: { type: String, default: null }, // null = ícone do servidor | "none" | link
 
   msgs: msgFields, // mensagens e respostas do painel (null = texto padrão)
+  hiddenButtons: { type: [String], default: [] }, // botões escondidos do painel
+  panelMode: { type: String, default: null }, // "select" = menus de seleção | null = botões
   styles: styleFields, // cor de cada botão do painel (null = cor padrão)
   panelLegend: { type: Boolean, default: null }, // mostra a legenda com a descrição dos botões (null = sim)
   panelDividers: { type: Boolean, default: null }, // linhas divisórias entre as seções (null = sim)

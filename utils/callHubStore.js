@@ -55,6 +55,8 @@ function toConfig(doc) {
     color: Number.isInteger(doc?.color) ? doc.color : null,
     thumbnail: doc?.thumbnail || null,
     styles,
+    hidden: ids(doc?.hiddenButtons).filter((key) => BUTTON_KEYS.includes(key)),
+    mode: doc?.panelMode === "select" ? "select" : "buttons",
     msgs,
     legend: doc?.panelLegend ?? true,
     dividers: doc?.panelDividers ?? true,

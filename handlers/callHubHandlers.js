@@ -33,9 +33,10 @@ const {
   buildValuesModal,
   buildMainModal,
   buildSectionModal,
-  buildColorsModal,
   buildCallHubMessages,
   buildMessageModal,
+  buildCallHubButtons,
+  buildButtonModal,
 } = require("../ui/callHubConfig");
 const { buildCallPanel, buildNotice, buildPicker, buildLimitModal } = require("../ui/callPanel");
 const { say, MESSAGES, MESSAGE_KEYS, DEFAULT_MESSAGES } = require("../utils/callHubMessages");
@@ -73,6 +74,7 @@ const deny = (interaction, content) => {
 const homePanel = async (guild) =>
   buildCallHubHome(guild, await getCallHubConfig(guild.id), await getPrefix(guild.id));
 const accessPanel = async (guild) => buildCallHubAccess(guild, await getCallHubConfig(guild.id));
+const buttonsPanel = async (guild) => buildCallHubButtons(guild, await getCallHubConfig(guild.id));
 const messagesPanel = async (guild) => buildCallHubMessages(guild, await getCallHubConfig(guild.id));
 const lookPanel = async (guild) =>
   buildCallHubLook(guild, await getCallHubConfig(guild.id), await getPrefix(guild.id));
@@ -115,15 +117,24 @@ async function handleCallHubConfigButton(interaction) {
       return interaction.update({ components: await lookPanel(guild) });
     }
 
-    case "chcfg_colors":
-      if (!SECTIONS.some((s) => s.id === arg)) return;
-      return interaction.showModal(buildColorsModal(arg, cfg));
+    case "chcfg_mode":
+      await updateCallHubConfig(guild.id, { panelMode: cfg.mode === "select" ? null : "select" });
+      return interaction.update({ components: await buttonsPanel(guild) });
+
+    case "chcfg_buttons_reset":
+      await resetCallHubConfig(guild.id, [
+        ...BUTTON_KEYS.flatMap((k) => [`texts.b_${k}`, `texts.d_${k}`, `styles.${k}`]),
+        "hiddenButtons",
+        "panelMode",
+      ]);
+      return interaction.update({ components: await buttonsPanel(guild) });
 
     case "chcfg_home":
       return interaction.update({ components: await homePanel(guild) });
 
     case "chcfg_page":
       if (arg === "messages") return interaction.update({ components: await messagesPanel(guild) });
+      if (arg === "buttons") return interaction.update({ components: await buttonsPanel(guild) });
       return interaction.update({ components: arg === "access" ? await accessPanel(guild) : await lookPanel(guild) });
 
     case "chcfg_reset_msgs":
@@ -145,6 +156,8 @@ async function handleCallHubConfigButton(interaction) {
         ...TEXT_KEYS.map((k) => `texts.${k}`),
         ...BUTTON_KEYS.map((k) => `styles.${k}`),
         ...MESSAGE_KEYS.map((k) => `msgs.${k}`),
+        "hiddenButtons",
+        "panelMode",
         "color",
         "thumbnail",
         "panelLegend",
@@ -164,6 +177,13 @@ async function handleCallHubConfigButton(interaction) {
 async function handleCallHubConfigSelect(interaction) {
   if (!(await guard(interaction))) return;
   const { guild, customId, values } = interaction;
+
+  // Escolheu um botão para editar
+  if (customId === "chcfg_btn") {
+    const key = values[0];
+    if (!BUTTON_KEYS.includes(key)) return;
+    return interaction.showModal(buildButtonModal(key, await getCallHubConfig(guild.id)));
+  }
 
   // Escolheu uma mensagem para editar
   if (customId.startsWith("chcfg_msg:")) {
@@ -268,55 +288,52 @@ async function handleCallHubConfigModal(interaction) {
       patch[`texts.${key}`] = textPatch(key, read(key));
     }
     if (read("footer").toLowerCase() === "nenhum") patch["texts.footer"] = "nenhum";
+  } else if (kind.startsWith("btn_")) {
+    const key = kind.slice("btn_".length);
+    if (!BUTTON_KEYS.includes(key)) return;
+    back = "buttons";
+
+    patch[`texts.b_${key}`] = textPatch(`b_${key}`, read("name").slice(0, 80));
+    patch[`texts.d_${key}`] = textPatch(`d_${key}`, read("desc").slice(0, 150));
+
+    const pick = (id) => {
+      try {
+        return interaction.fields.getStringSelectValues(id)?.[0] ?? null;
+      } catch {
+        return null;
+      }
+    };
+    const style = pick("style");
+    if (STYLE_LABELS[style]) patch[`styles.${key}`] = style === DEFAULT_STYLES[key] ? null : style;
+
+    const visible = pick("visible");
+    if (visible) {
+      const hidden = new Set(cfg.hidden);
+      if (visible === "hide") hidden.add(key);
+      else hidden.delete(key);
+      patch.hiddenButtons = [...hidden];
+    }
   } else if (kind.startsWith("msg_")) {
     const key = kind.slice("msg_".length);
     if (!MESSAGES[key]) return;
     back = "messages";
     const value = read("text");
     patch[`msgs.${key}`] = value && value !== DEFAULT_MESSAGES[key] ? value : null;
-  } else if (kind.startsWith("colors_")) {
-    const section = SECTIONS.find((s) => s.id === kind.slice("colors_".length));
-    if (!section) return;
-    for (const key of section.keys) {
-      let chosen = null;
-      try {
-        chosen = interaction.fields.getStringSelectValues(`style_${key}`)?.[0] ?? null;
-      } catch {
-        chosen = null;
-      }
-      if (!STYLE_LABELS[chosen]) continue;
-      patch[`styles.${key}`] = chosen === DEFAULT_STYLES[key] ? null : chosen; // igual ao padrão = padrão
-    }
   } else {
     const section = SECTIONS.find((s) => s.id === kind);
     if (!section) return;
 
     patch[`texts.${section.titleKey}`] = textPatch(section.titleKey, read("title"));
     patch[`texts.${section.descKey}`] = textPatch(section.descKey, read("desc"));
-
-    const lines = read("lines")
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    section.keys.forEach((key, index) => {
-      const line = lines[index];
-      if (!line) {
-        patch[`texts.b_${key}`] = null;
-        patch[`texts.d_${key}`] = null;
-        return;
-      }
-      const sep = line.indexOf("|");
-      const label = (sep === -1 ? line : line.slice(0, sep)).trim().slice(0, 80);
-      const desc = (sep === -1 ? "" : line.slice(sep + 1)).trim().slice(0, 150);
-      patch[`texts.b_${key}`] = textPatch(`b_${key}`, label);
-      patch[`texts.d_${key}`] = textPatch(`d_${key}`, desc);
-    });
   }
 
   await updateCallHubConfig(guild.id, patch);
   const components =
-    back === "home" ? await homePanel(guild) : back === "messages" ? await messagesPanel(guild) : await lookPanel(guild);
+    back === "home" ? await homePanel(guild) : back === "messages"
+      ? await messagesPanel(guild)
+      : back === "buttons"
+        ? await buttonsPanel(guild)
+        : await lookPanel(guild);
   if (interaction.isFromMessage()) return interaction.update({ components });
   return interaction.reply({ components, flags: V2 | EPHEMERAL });
 }
@@ -374,9 +391,30 @@ const limitWord = (cfg, channel) =>
   channel.userLimit ? say(cfg, "limitShort", { n: channel.userLimit }) : say(cfg, "limitNone");
 
 async function handleCallPanelButton(interaction) {
+  const cfg = await getCallHubConfig(interaction.guild.id);
+  return runPanelAction(interaction, interaction.customId.slice("cpn_".length), cfg);
+}
+
+// Menu de seleção do painel (modo "select menu"): cada opção dispara a mesma ação do botão equivalente
+async function handlePanelMenu(interaction) {
   const { guild } = interaction;
-  const action = interaction.customId.slice("cpn_".length);
   const cfg = await getCallHubConfig(guild.id);
+  const action = interaction.values[0];
+  if (!BUTTON_KEYS.includes(action)) return;
+
+  await runPanelAction(interaction, action, cfg);
+
+  // Devolve o menu ao estado inicial (sem a opção escolhida marcada), para dar para escolher a mesma de novo
+  const message = interaction.message;
+  if (message && !message.flags?.has(MessageFlags.Ephemeral)) {
+    message
+      .edit({ components: buildCallPanel(cfg, guild), flags: V2, allowedMentions: { parse: [] } })
+      .catch(() => {});
+  }
+}
+
+async function runPanelAction(interaction, action, cfg) {
+  const { guild } = interaction;
 
   // "Privar mantendo todos" vem do seletor efêmero: a mensagem é atualizada em vez de criar outra
   if (action === "lockkeep") {
@@ -648,6 +686,8 @@ async function runPick(action, ids, { guild, channel, room, actor, cfg }) {
 }
 
 async function handleCallPanelSelect(interaction) {
+  if (interaction.customId.startsWith("cpn_menu:")) return handlePanelMenu(interaction);
+
   const { guild } = interaction;
   const [, action] = interaction.customId.split(":");
   if (!PICKER_ACTIONS[action] && action !== "lock") return;

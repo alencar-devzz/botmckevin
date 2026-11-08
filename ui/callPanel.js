@@ -9,6 +9,7 @@ const {
   ButtonStyle,
   UserSelectMenuBuilder,
   ModalBuilder,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
   LabelBuilder,
@@ -34,8 +35,41 @@ const STYLE_MAP = {
 const btn = (id, label, style = ButtonStyle.Secondary) =>
   new ButtonBuilder().setCustomId(id).setLabel(clip(label, 80) || "-").setStyle(style);
 
-// Botão com o nome "-" ou "nenhum" fica escondido do painel
-const isHidden = (t, key) => /^(-|nenhum)$/i.test(String(t[`b_${key}`] ?? "").trim());
+// Remove a formatação do Discord para usar o título como texto simples (placeholder do select)
+const plain = (value) =>
+  String(value ?? "")
+    .replace(/^\s*(#{1,3}|-#|>)\s+/gm, "")
+    .replace(/[*_~`|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+function actionButton(cfg, key, disabled) {
+  const button = btn(`cpn_${key}`, cfg.texts[`b_${key}`], STYLE_MAP[cfg.styles?.[key]] ?? ButtonStyle.Secondary).setDisabled(disabled);
+  return button;
+}
+
+// Modo "select menu": um menu por seção, com nome, descrição e emoji de cada ação
+function actionSelect(cfg, section, keys, disabled) {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`cpn_menu:${section.id}`)
+    .setPlaceholder(clip(plain(cfg.texts[section.titleKey]) || "Selecione", 150))
+    .setMinValues(1)
+    .setMaxValues(1)
+    .setDisabled(disabled)
+    .addOptions(
+      keys.map((key) => {
+        const option = { label: clip(cfg.texts[`b_${key}`], 100) || "-", value: key };
+        const detail = clip(plain(cfg.texts[`d_${key}`]), 100);
+        if (detail) option.description = detail;
+        return option;
+      })
+    );
+  return menu;
+}
+
+// Botão escondido em n!menu → Painel da call → Botões (ou com o nome "-" / "nenhum")
+const isHidden = (cfg, key) =>
+  cfg.hidden?.includes(key) || /^(-|nenhum)$/i.test(String(cfg.texts[`b_${key}`] ?? "").trim());
 
 const gap = (cfg) =>
   new SeparatorBuilder()
@@ -75,7 +109,7 @@ function buildCallPanel(cfg, guild, { disabled = false } = {}) {
 
   // Cada bloco: título, legenda compacta (opcional) e uma única fileira de botões
   for (const section of SECTIONS) {
-    const keys = section.keys.filter((key) => !isHidden(t, key));
+    const keys = section.keys.filter((key) => !isHidden(cfg, key));
     if (!keys.length) continue;
 
     container.addSeparatorComponents(gap(cfg));
@@ -90,10 +124,12 @@ function buildCallPanel(cfg, guild, { disabled = false } = {}) {
     container.addTextDisplayComponents(text([heading, about, legend].filter(Boolean).join("\n") || " "));
 
     container.addSeparatorComponents(tight());
+    // Botões (padrão) ou um select menu por seção, conforme n!menu → Painel da call → Formato
     container.addActionRowComponents(
       new ActionRowBuilder().addComponents(
-        ...keys.map((key) => btn(`cpn_${key}`, t[`b_${key}`], STYLE_MAP[cfg.styles?.[key]] ?? ButtonStyle.Secondary).setDisabled(disabled)
-        )
+        ...(cfg.mode === "select"
+          ? [actionSelect(cfg, section, keys, disabled)]
+          : keys.map((key) => actionButton(cfg, key, disabled)))
       )
     );
   }

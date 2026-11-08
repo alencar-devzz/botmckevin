@@ -171,7 +171,7 @@ function buildCallHubLook(guild, cfg, prefix) {
   const body = new ContainerBuilder()
     .addTextDisplayComponents(
       text("**Textos**"),
-      text("-# Título, descrição, rodapé, cor lateral, miniatura, nome e descrição de cada botão, título e descrição de cada seção. Aceita formatação livre (`# título`, `> citação`, `-# pequeno`, `**negrito**`). Para esconder um botão, escreva `-` no nome dele.")
+      text("-# Título, descrição, rodapé, cor lateral, miniatura, título e descrição de cada seção. Aceita formatação livre (`# título`, `> citação`, `-# pequeno`, `**negrito**`).")
     )
     .addActionRowComponents(
       row(
@@ -182,16 +182,10 @@ function buildCallHubLook(guild, cfg, prefix) {
       )
     )
     .addTextDisplayComponents(
-      text("**Cores dos botões**"),
-      text("-# Azul, cinza, verde ou vermelho para cada botão, por seção.")
+      text("**Botões**"),
+      text("-# Nome, descrição, cor e visibilidade de cada botão, uma janela por botão. Também troca os botões por select menu.")
     )
-    .addActionRowComponents(
-      row(
-        btn("chcfg_colors:access", "Cores: Acesso"),
-        btn("chcfg_colors:members", "Cores: Membros"),
-        btn("chcfg_colors:tools", "Cores: Ferramentas")
-      )
-    )
+    .addActionRowComponents(row(btn("chcfg_page:buttons", "Editar botões")))
     .addTextDisplayComponents(
       text("**Mensagens e respostas**"),
       text("-# Todo texto que o painel envia: avisos, seletores, resultados de cada botão, janela do limite e motivos de erro.")
@@ -214,6 +208,98 @@ function buildCallHubLook(guild, cfg, prefix) {
   body.addActionRowComponents(row(btn("chcfg_home", "Voltar")));
 
   return [header, body];
+}
+
+// ---------- Botões ----------
+
+const styleName = (cfg, key) => STYLE_LABELS[cfg.styles[key]] ?? "cinza";
+
+function buildCallHubButtons(guild, cfg) {
+  const header = new ContainerBuilder().addTextDisplayComponents(
+    text("### Botões do painel"),
+    text("-# Escolha um botão na lista para editar nome, descrição, cor e se aparece. Aqui também dá para trocar os botões por select menu."),
+    text(`-# Formato atual: **${cfg.mode === "select" ? "select menu" : "botões"}**`)
+  );
+
+  const lines = SECTIONS.map((section) => {
+    const items = section.keys
+      .map((key) => {
+        const hidden = cfg.hidden.includes(key) || /^(-|nenhum)$/i.test(cfg.texts[`b_${key}`].trim());
+        return `\`${clip(cfg.texts[`b_${key}`], 40)}\` ${hidden ? "escondido" : styleName(cfg, key)}`;
+      })
+      .join(" · ");
+    const title = clip(cfg.texts[section.titleKey], 100).replace(/[*_`#>|~]|-#/g, "").trim() || section.id;
+    return `**${title}**\n-# ${items}`;
+  });
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId("chcfg_btn")
+    .setPlaceholder("Escolha um botão para editar")
+    .setMinValues(1)
+    .setMaxValues(1)
+    .addOptions(
+      SECTIONS.flatMap((section) =>
+        section.keys.map((key) => ({
+          label: clip(cfg.texts[`b_${key}`], 100) || key,
+          description: clip(`${clip(cfg.texts[section.titleKey], 100).replace(/[*_\`#>|~]|-#/g, "").trim()} · ${styleName(cfg, key)}`, 100),
+          value: key,
+        }))
+      )
+    );
+
+  const body = new ContainerBuilder()
+    .addTextDisplayComponents(text("**Situação atual**"), text(lines.join("\n")))
+    .addActionRowComponents(row(menu))
+    .addActionRowComponents(
+      row(
+        btn("chcfg_mode", `Formato: ${cfg.mode === "select" ? "select menu" : "botões"}`, ButtonStyle.Primary),
+        btn("chcfg_buttons_reset", "Restaurar botões", ButtonStyle.Danger)
+      )
+    );
+  body.addSeparatorComponents(new SeparatorBuilder());
+  body.addActionRowComponents(row(btn("chcfg_page:look", "Voltar")));
+
+  return [header, body];
+}
+
+// Janela de um botão: nome, descrição, cor e visibilidade
+function buildButtonModal(key, cfg) {
+  const colorOptions = Object.entries(STYLE_LABELS).map(([value, label]) => ({
+    label: label[0].toUpperCase() + label.slice(1),
+    value,
+    default: value === cfg.styles[key],
+  }));
+  const hidden = cfg.hidden.includes(key);
+  return modal(
+    `chcfg_modal:btn_${key}`,
+    "Editar botão",
+    textLabel({
+      id: "name",
+      label: "Nome do botão",
+      description: "Texto que aparece no botão. Vazio = padrão.",
+      max: 80,
+      required: false,
+      value: cfg.texts[`b_${key}`],
+    }),
+    textLabel({
+      id: "desc",
+      label: "Descrição",
+      description: "Aparece na legenda e dentro do select menu. Vazio = padrão.",
+      max: 150,
+      required: false,
+      value: cfg.texts[`d_${key}`],
+    }),
+    selectLabel({ id: "style", label: "Cor do botão", options: colorOptions, required: true }),
+    selectLabel({
+      id: "visible",
+      label: "Aparece no painel?",
+      options: [
+        { label: "Mostrar", value: "show", default: !hidden },
+        { label: "Esconder", value: "hide", default: hidden },
+      ],
+      required: true,
+    })
+  );
 }
 
 // ---------- Mensagens e respostas ----------
@@ -357,10 +443,9 @@ function buildMainModal(cfg) {
   );
 }
 
-// Cada seção: título + uma linha por botão no formato "Nome | descrição"
+// Cada seção: título e descrição (os botões são editados na aba "Botões")
 function buildSectionModal(sectionId, cfg) {
   const section = SECTIONS.find((s) => s.id === sectionId);
-  const lines = section.keys.map((key) => `${cfg.texts[`b_${key}`]} | ${cfg.texts[`d_${key}`]}`).join("\n");
   return modal(
     `chcfg_modal:${sectionId}`,
     "Editar seção do painel",
@@ -378,37 +463,7 @@ function buildSectionModal(sectionId, cfg) {
       style: PARAGRAPH,
       max: 300,
       value: cfg.texts[section.descKey],
-    }),
-    textLabel({
-      id: "lines",
-      label: "Botões (uma linha por botão, na ordem)",
-      description: `Formato: Nome | descrição. São ${section.keys.length} linhas. Nome "-" esconde o botão.`,
-      style: PARAGRAPH,
-      max: 1500,
-      required: true,
-      value: lines,
     })
-  );
-}
-
-// Uma seleção de cor por botão da seção (máx. 4 botões por seção = 4 campos)
-function buildColorsModal(sectionId, cfg) {
-  const section = SECTIONS.find((s) => s.id === sectionId);
-  const options = Object.entries(STYLE_LABELS).map(([value, label]) => ({
-    label: label[0].toUpperCase() + label.slice(1),
-    value,
-  }));
-  return modal(
-    `chcfg_modal:colors_${sectionId}`,
-    "Cores dos botões",
-    ...section.keys.map((key) =>
-      selectLabel({
-        id: `style_${key}`,
-        label: clip(cfg.texts[`b_${key}`], 45) || key,
-        options: options.map((o) => ({ ...o, default: o.value === cfg.styles[key] })),
-        required: true,
-      })
-    )
   );
 }
 
@@ -419,7 +474,8 @@ module.exports = {
   buildValuesModal,
   buildMainModal,
   buildSectionModal,
-  buildColorsModal,
+  buildCallHubButtons,
+  buildButtonModal,
   buildCallHubMessages,
   buildMessageModal,
 };

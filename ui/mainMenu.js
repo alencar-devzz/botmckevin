@@ -9,8 +9,6 @@ const {
 } = require("discord.js");
 const { TIMEOUT_MS } = require("../utils/menuSession");
 
-const DEFAULT_ICON = "https://cdn.discordapp.com/embed/avatars/0.png";
-
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3500));
 const code = (value) => `\`${String(value ?? "—").replaceAll("`", "'")}\``;
 const unix = (ms) => Math.floor(ms / 1000);
@@ -37,7 +35,11 @@ const SISTEMAS = [
 
 // guild/client/prefix são opcionais: sem eles o menu aparece sem a parte de informações
 function buildMainMenu({ guild, client, prefix } = {}) {
-  const icon = guild?.iconURL({ extension: "png", size: 256 }) ?? DEFAULT_ICON;
+  // Miniatura: ícone do servidor -> avatar do bot -> nenhuma (nunca a logo padrão do Discord)
+  const icon =
+    guild?.iconURL({ extension: "png", size: 256 }) ??
+    client?.user?.displayAvatarURL({ extension: "png", size: 256 }) ??
+    null;
 
   const headerLines = [
     "## Menu de configurações",
@@ -48,11 +50,15 @@ function buildMainMenu({ guild, client, prefix } = {}) {
   ];
 
   const header = new ContainerBuilder();
-  header.addSectionComponents(
-    new SectionBuilder()
-      .addTextDisplayComponents(...headerLines.map(text))
-      .setThumbnailAccessory(new ThumbnailBuilder().setURL(icon))
-  );
+  if (icon) {
+    header.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(...headerLines.map(text))
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(icon))
+    );
+  } else {
+    header.addTextDisplayComponents(...headerLines.map(text));
+  }
 
   const containers = [header];
 
