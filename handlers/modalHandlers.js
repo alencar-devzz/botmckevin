@@ -7,8 +7,18 @@ const { handlePostModal, handlePostsConfigModal } = require("./postsHandlers");
 const { handleClConfigModal } = require("./clHandlers");
 const { handleRoleManageModal, handleRoleManageConfigModal } = require("./roleManageHandlers");
 
+const { handleCallHubConfigModal, handleCallPanelModal } = require("./callHubHandlers");
+
 async function handleModal(interaction) {
   const { customId } = interaction;
+
+  if (customId.startsWith("chcfg_modal:")) {
+    return handleCallHubConfigModal(interaction);
+  }
+
+  if (customId.startsWith("cpn_modal:")) {
+    return handleCallPanelModal(interaction);
+  }
 
   if (customId.startsWith("grl_modal:")) {
     return handleRoleManageModal(interaction);

@@ -15,8 +15,22 @@ const { handleTicketConfigButton } = require("./ticketConfigHandlers");
 const { handleClConfigButton } = require("./clHandlers");
 const { handleRoleManageButton, handleRoleManageConfigButton } = require("./roleManageHandlers");
 
+const {
+  handleCallHubConfigButton,
+  handleCallPanelButton,
+} = require("./callHubHandlers");
+
 async function handleButton(interaction) {
   const { customId } = interaction;
+
+  // Calls temporárias: configuração no n!menu e botões do painel da call
+  if (customId.startsWith("chcfg_")) {
+    return handleCallHubConfigButton(interaction);
+  }
+
+  if (customId.startsWith("cpn_")) {
+    return handleCallPanelButton(interaction);
+  }
 
   // Painel do comando groles e a configuração dele no n!menu
   if (customId.startsWith("grl:")) {

@@ -1,12 +1,20 @@
 const { ActivityType } = require("discord.js");
 const { DEFAULT_PREFIX } = require("../utils/getPrefix");
 const { getBotConfig, applyPresence } = require("../utils/botPresence");
+const { sweepCalls } = require("../utils/callHub");
 
 module.exports = {
   name: "clientReady",
   once: true,
   async execute(client) {
     console.log(`[BOT] Online como ${client.user.tag}`);
+
+    // Calls temporárias: apaga as que ficaram vazias enquanto o bot estava off e recarrega as ativas
+    try {
+      await sweepCalls(client);
+    } catch (err) {
+      console.error("[CALLS] Erro ao verificar as calls ao iniciar:", err.message);
+    }
 
     // Status salvo pelo menu (Aparência > Status). Sem nada salvo, usa o padrão abaixo.
     try {
