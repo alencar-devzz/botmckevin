@@ -62,27 +62,6 @@ function buildMainMenu({ guild, client, prefix } = {}) {
 
   const containers = [header];
 
-  if (guild) {
-    const created = unix(guild.createdTimestamp);
-    const boosts = guild.premiumSubscriptionCount ?? 0;
-
-    containers.push(
-      new ContainerBuilder().addTextDisplayComponents(
-        text("### Informações do servidor"),
-        text(
-          [
-            `**Dono:** <@${guild.ownerId}>`,
-            `**Membros:** ${code(guild.memberCount)} · **Canais:** ${code(
-              guild.channels.cache.size
-            )} · **Cargos:** ${code(guild.roles.cache.size)}`,
-            `**Boosts:** ${code(boosts)} (nível ${code(guild.premiumTier ?? 0)})`,
-            `**Criado em:** <t:${created}:D> (<t:${created}:R>)`,
-          ].join("\n")
-        )
-      )
-    );
-  }
-
   if (client?.user) {
     const lines = [
       `**Bot:** ${code(client.user.username)} · **Prefixo:** ${code(prefix ?? "n!")}`,
