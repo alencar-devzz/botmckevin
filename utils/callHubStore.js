@@ -7,6 +7,7 @@ const {
   DEFAULT_STYLES,
   STYLE_LABELS,
 } = require("./callHubDefaults");
+const { MESSAGE_KEYS, DEFAULT_MESSAGES } = require("./callHubMessages");
 
 const TTL = 60_000;
 const cache = new Map(); // guildId -> { cfg, at }
@@ -30,6 +31,12 @@ function toConfig(doc) {
     styles[key] = STYLE_LABELS[saved] ? saved : DEFAULT_STYLES[key];
   }
 
+  const msgs = {};
+  for (const key of MESSAGE_KEYS) {
+    const saved = doc?.msgs?.[key];
+    msgs[key] = typeof saved === "string" && saved.length ? saved : DEFAULT_MESSAGES[key];
+  }
+
   return {
     enabled: doc?.enabled ?? true,
     triggerChannelId: doc?.triggerChannelId || null,
@@ -48,6 +55,7 @@ function toConfig(doc) {
     color: Number.isInteger(doc?.color) ? doc.color : null,
     thumbnail: doc?.thumbnail || null,
     styles,
+    msgs,
     legend: doc?.panelLegend ?? true,
     upperTitles: doc?.panelUpperTitles ?? true,
     quoteDesc: doc?.panelQuoteDesc ?? true,

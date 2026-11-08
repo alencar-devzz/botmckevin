@@ -116,10 +116,10 @@ function buildNotice(content) {
 }
 
 // Seletor de pessoas. defaults = ids já marcados (até 25)
-function buildPicker({ action, title, hint, min = 1, max = 1, defaults = [], extraButton = null }) {
+function buildPicker({ action, title, hint, placeholder = "Selecione", min = 1, max = 1, defaults = [], extraButton = null }) {
   const select = new UserSelectMenuBuilder()
     .setCustomId(`cpn_pick:${action}`)
-    .setPlaceholder("Selecione")
+    .setPlaceholder(clip(placeholder, 100))
     .setMinValues(min)
     .setMaxValues(max);
   if (defaults.length) select.setDefaultUsers(...defaults.slice(0, 25));
@@ -135,22 +135,23 @@ function buildPicker({ action, title, hint, min = 1, max = 1, defaults = [], ext
   return [container];
 }
 
-function buildLimitModal(current) {
+// texts: { title, label, desc, placeholder } vindos de n!menu → Mensagens e respostas
+function buildLimitModal(current, texts = {}) {
   const input = new TextInputBuilder()
     .setCustomId("limit")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(2)
-    .setPlaceholder("Ex.: 5");
+    .setPlaceholder(clip(texts.placeholder ?? "Ex.: 5", 100));
   if (current) input.setValue(String(current));
 
   return new ModalBuilder()
     .setCustomId("cpn_modal:limit")
-    .setTitle("Limite da call")
+    .setTitle(clip(texts.title ?? "Limite da call", 45))
     .addLabelComponents(
       new LabelBuilder()
-        .setLabel("Máximo de pessoas")
-        .setDescription("De 1 a 99. Use 0 para não ter limite.")
+        .setLabel(clip(texts.label ?? "Máximo de pessoas", 45))
+        .setDescription(clip(texts.desc ?? "De 1 a 99. Use 0 para não ter limite.", 100))
         .setTextInputComponent(input)
     );
 }

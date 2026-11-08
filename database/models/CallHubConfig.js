@@ -1,5 +1,6 @@
 const { Schema, model } = require("mongoose");
 const { TEXT_KEYS, BUTTON_KEYS } = require("../../utils/callHubDefaults");
+const { MESSAGE_KEYS } = require("../../utils/callHubMessages");
 
 // Configuração do sistema "Calls temporárias" por servidor.
 // IMPORTANTE: o mongoose descarta campos que não estão declarados aqui (strict mode),
@@ -7,6 +8,8 @@ const { TEXT_KEYS, BUTTON_KEYS } = require("../../utils/callHubDefaults");
 const textFields = Object.fromEntries(TEXT_KEYS.map((key) => [key, { type: String, default: null }]));
 
 const styleFields = Object.fromEntries(BUTTON_KEYS.map((key) => [key, { type: String, default: null }]));
+
+const msgFields = Object.fromEntries(MESSAGE_KEYS.map((key) => [key, { type: String, default: null }]));
 
 const callHubConfigSchema = new Schema({
   guildId: { type: String, required: true, unique: true },
@@ -31,6 +34,7 @@ const callHubConfigSchema = new Schema({
   color: { type: Number, default: null }, // null = sem cor
   thumbnail: { type: String, default: null }, // null = ícone do servidor | "none" | link
 
+  msgs: msgFields, // mensagens e respostas do painel (null = texto padrão)
   styles: styleFields, // cor de cada botão do painel (null = cor padrão)
   panelLegend: { type: Boolean, default: null }, // mostra a legenda com a descrição dos botões (null = sim)
   panelUpperTitles: { type: Boolean, default: null }, // títulos das seções em caixa alta (null = sim)

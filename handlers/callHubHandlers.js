@@ -34,8 +34,11 @@ const {
   buildMainModal,
   buildSectionModal,
   buildColorsModal,
+  buildCallHubMessages,
+  buildMessageModal,
 } = require("../ui/callHubConfig");
 const { buildCallPanel, buildNotice, buildPicker, buildLimitModal } = require("../ui/callPanel");
+const { say, MESSAGES, MESSAGE_KEYS, DEFAULT_MESSAGES } = require("../utils/callHubMessages");
 
 const V2 = MessageFlags.IsComponentsV2;
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -70,6 +73,7 @@ const deny = (interaction, content) => {
 const homePanel = async (guild) =>
   buildCallHubHome(guild, await getCallHubConfig(guild.id), await getPrefix(guild.id));
 const accessPanel = async (guild) => buildCallHubAccess(guild, await getCallHubConfig(guild.id));
+const messagesPanel = async (guild) => buildCallHubMessages(guild, await getCallHubConfig(guild.id));
 const lookPanel = async (guild) =>
   buildCallHubLook(guild, await getCallHubConfig(guild.id), await getPrefix(guild.id));
 
@@ -121,7 +125,12 @@ async function handleCallHubConfigButton(interaction) {
       return interaction.update({ components: await homePanel(guild) });
 
     case "chcfg_page":
+      if (arg === "messages") return interaction.update({ components: await messagesPanel(guild) });
       return interaction.update({ components: arg === "access" ? await accessPanel(guild) : await lookPanel(guild) });
+
+    case "chcfg_reset_msgs":
+      await resetCallHubConfig(guild.id, MESSAGE_KEYS.map((k) => `msgs.${k}`));
+      return interaction.update({ components: await messagesPanel(guild) });
 
     case "chcfg_edit": {
       if (arg === "values") return interaction.showModal(buildValuesModal(cfg));
@@ -137,6 +146,7 @@ async function handleCallHubConfigButton(interaction) {
       await resetCallHubConfig(guild.id, [
         ...TEXT_KEYS.map((k) => `texts.${k}`),
         ...BUTTON_KEYS.map((k) => `styles.${k}`),
+        ...MESSAGE_KEYS.map((k) => `msgs.${k}`),
         "color",
         "thumbnail",
         "panelLegend",
@@ -158,6 +168,13 @@ async function handleCallHubConfigButton(interaction) {
 async function handleCallHubConfigSelect(interaction) {
   if (!(await guard(interaction))) return;
   const { guild, customId, values } = interaction;
+
+  // Escolheu uma mensagem para editar
+  if (customId.startsWith("chcfg_msg:")) {
+    const key = values[0];
+    if (!MESSAGES[key]) return;
+    return interaction.showModal(buildMessageModal(key, await getCallHubConfig(guild.id)));
+  }
 
   // Canais (gatilho e categoria): vazio = limpa
   if (customId === "chcfg_trigger" || customId === "chcfg_category") {
@@ -255,6 +272,12 @@ async function handleCallHubConfigModal(interaction) {
       patch[`texts.${key}`] = textPatch(key, read(key));
     }
     if (read("footer").toLowerCase() === "nenhum") patch["texts.footer"] = "nenhum";
+  } else if (kind.startsWith("msg_")) {
+    const key = kind.slice("msg_".length);
+    if (!MESSAGES[key]) return;
+    back = "messages";
+    const value = read("text");
+    patch[`msgs.${key}`] = value && value !== DEFAULT_MESSAGES[key] ? value : null;
   } else if (kind.startsWith("colors_")) {
     const section = SECTIONS.find((s) => s.id === kind.slice("colors_".length));
     if (!section) return;
@@ -295,7 +318,8 @@ async function handleCallHubConfigModal(interaction) {
   }
 
   await updateCallHubConfig(guild.id, patch);
-  const components = back === "home" ? await homePanel(guild) : await lookPanel(guild);
+  const components =
+    back === "home" ? await homePanel(guild) : back === "messages" ? await messagesPanel(guild) : await lookPanel(guild);
   if (interaction.isFromMessage()) return interaction.update({ components });
   return interaction.reply({ components, flags: V2 | EPHEMERAL });
 }
@@ -307,6 +331,7 @@ async function handleCallHubConfigModal(interaction) {
 // REGRA: só o DONO da call controla o painel. Nem a equipe nem Administradores têm acesso
 // (o dono pode passar o controle pelo botão "Transferir"). Vale para qualquer painel, esteja ele
 // no chat da call ou em qualquer outro canal (n!painel).
+// Todos os textos abaixo vêm de utils/callHubMessages.js e são editáveis em n!menu → Mensagens e respostas.
 
 // Retorna { room, channel } ou responde com um aviso e retorna null
 async function requireRoom(interaction, cfg, { update = false } = {}) {
@@ -319,52 +344,37 @@ async function requireRoom(interaction, cfg, { update = false } = {}) {
   // Painel enviado no chat de uma call: só o dono DESSA call pode usar
   const here = getRoom(interaction.channelId);
   if (here && here.guildId === guild.id && here.ownerId !== member.id) {
-    await send(`Só o dono desta call pode usar o painel: <@${here.ownerId}>.`);
+    await send(say(cfg, "notOwnerHere", { dono: `<@${here.ownerId}>` }));
     return null;
   }
 
   // Em qualquer outro lugar: o painel gerencia a call que a pessoa possui
   const room = here ?? getRoomByOwner(guild.id, member.id);
   if (!room) {
-    const where =
+    const hint =
       cfg.triggerChannelId && guild.channels.cache.has(cfg.triggerChannelId)
-        ? ` Entre em <#${cfg.triggerChannelId}> para criar a sua.`
+        ? ` ${say(cfg, "noCallHint", { canal: `<#${cfg.triggerChannelId}>` })}`
         : "";
-    await send(`Você não tem uma call ativa. Só o dono de uma call pode usar o painel.${where}`);
+    await send(`${say(cfg, "noCall")}${hint}`);
     return null;
   }
 
   const channel = guild.channels.cache.get(room.channelId);
   if (!channel) {
     await forgetRoom(room.channelId);
-    await send("Essa call não existe mais.");
+    await send(say(cfg, "callGone"));
     return null;
   }
   return { room, channel };
 }
 
-const PICKERS = {
-  add: { title: "Adicionar", hint: "Selecione quem pode entrar na sua call.", max: 5 },
-  remove: { title: "Remover", hint: "Selecione de quem você quer tirar a permissão de entrada.", max: 5 },
-  kick: { title: "Desconectar", hint: "Selecione quem você quer expulsar da call agora.", max: 5 },
-  move: {
-    title: "Mover",
-    hint: "Selecione quem você quer puxar para a sua call. A pessoa precisa estar em algum canal de voz.",
-    max: 5,
-  },
-  transfer: {
-    title: "Transferir",
-    hint: "Selecione quem vai assumir o controle da call. A pessoa precisa estar nela.",
-    max: 1,
-  },
-  blacklist: {
-    title: "Blacklist",
-    hint: "Selecione quem você quer bloquear de todas as suas calls. Quem já está bloqueado é liberado.",
-    max: 5,
-  },
-};
+const PICKER_ACTIONS = { add: 5, remove: 5, kick: 5, move: 5, transfer: 1, blacklist: 5 }; // action -> máx. de pessoas
 
 const mentions = (ids) => ids.map((id) => `<@${id}>`).join(" ");
+
+const accessWord = (cfg, channel) => say(cfg, isLocked(channel) ? "wordPrivate" : "wordPublic");
+const limitWord = (cfg, channel) =>
+  channel.userLimit ? say(cfg, "limitShort", { n: channel.userLimit }) : say(cfg, "limitNone");
 
 async function handleCallPanelButton(interaction) {
   const { guild } = interaction;
@@ -380,11 +390,7 @@ async function handleCallPanelButton(interaction) {
       .filter((id) => id !== found.room.ownerId);
     await applyLock(found.channel, found.room, keep);
     return interaction.update({
-      components: buildNotice(
-        keep.length
-          ? `Call privada. Continuam podendo entrar: ${mentions(keep)}`
-          : "Call privada. Só você consegue entrar."
-      ),
+      components: buildNotice(keep.length ? say(cfg, "lockDone", { pessoas: mentions(keep) }) : say(cfg, "lockAlone")),
     });
   }
 
@@ -400,12 +406,13 @@ async function handleCallPanelButton(interaction) {
       return interaction.reply({
         components: buildPicker({
           action: "lock",
-          title: "Privar",
-          hint: "Escolha quem pode continuar entrando. Quem já está na call não é expulso.",
+          title: say(cfg, "lockTitle"),
+          hint: say(cfg, "lockHint"),
+          placeholder: say(cfg, "pickPlaceholder"),
           min: 0,
           max: 25,
           defaults: [...new Set([...allowedMemberIds(channel, room.ownerId), ...current])],
-          extraButton: { id: "cpn_lockkeep", label: "Manter só quem está na call" },
+          extraButton: { id: "cpn_lockkeep", label: say(cfg, "lockKeepButton") },
         }),
         flags: V2 | EPHEMERAL,
       });
@@ -413,23 +420,28 @@ async function handleCallPanelButton(interaction) {
 
     case "unlock":
       await setLocked(channel, false);
-      return reply(interaction, "Call pública de novo. Qualquer pessoa pode entrar (menos quem está na blacklist).");
+      return reply(interaction, say(cfg, "unlockDone"));
 
     case "limit":
-      return interaction.showModal(buildLimitModal(channel.userLimit));
+      return interaction.showModal(
+        buildLimitModal(channel.userLimit, {
+          title: say(cfg, "limitModalTitle"),
+          label: say(cfg, "limitModalLabel"),
+          desc: say(cfg, "limitModalDesc"),
+          placeholder: say(cfg, "limitModalPlaceholder"),
+        })
+      );
 
-    case "owner": {
-      const humans = humansIn(channel).size;
+    case "owner":
       return reply(
         interaction,
-        [
-          `**Dono da call:** <@${room.ownerId}>`,
-          `**Acesso:** ${isLocked(channel) ? "privada" : "pública"} · **Limite:** ${
-            channel.userLimit ? `${channel.userLimit} pessoas` : "sem limite"
-          } · **Na call agora:** ${humans}`,
-        ].join("\n")
+        say(cfg, "ownerInfo", {
+          dono: `<@${room.ownerId}>`,
+          acesso: accessWord(cfg, channel),
+          limite: channel.userLimit ? say(cfg, "limitValue", { n: channel.userLimit }) : say(cfg, "limitNone"),
+          pessoas: humansIn(channel).size,
+        })
       );
-    }
 
     case "add":
     case "remove":
@@ -438,7 +450,14 @@ async function handleCallPanelButton(interaction) {
     case "transfer":
     case "blacklist":
       return interaction.reply({
-        components: buildPicker({ action, ...PICKERS[action], min: 1 }),
+        components: buildPicker({
+          action,
+          title: say(cfg, `${action}Title`),
+          hint: say(cfg, `${action}Hint`),
+          placeholder: say(cfg, "pickPlaceholder"),
+          min: 1,
+          max: PICKER_ACTIONS[action],
+        }),
         flags: V2 | EPHEMERAL,
       });
 
@@ -453,15 +472,17 @@ async function handleCallPanelButton(interaction) {
       });
       return reply(
         interaction,
-        `Configuração salva: ${isLocked(channel) ? "privada" : "pública"}, ${
-          channel.userLimit ? `limite de ${channel.userLimit}` : "sem limite"
-        }${allowed.length ? `, ${allowed.length} pessoa(s) com acesso liberado` : ""}.`
+        say(cfg, "saveDone", {
+          acesso: accessWord(cfg, channel),
+          limite: limitWord(cfg, channel),
+          extra: allowed.length ? say(cfg, "saveExtra", { n: allowed.length }) : "",
+        })
       );
     }
 
     case "load": {
       const profile = await getProfile(guild.id, room.ownerId);
-      if (!profile?.hasSaved) return reply(interaction, "Você ainda não salvou nenhuma configuração. Use o botão de salvar primeiro.");
+      if (!profile?.hasSaved) return reply(interaction, say(cfg, "loadNone"));
 
       await interaction.deferReply({ flags: EPHEMERAL });
       await channel.setUserLimit(profile.limit ?? 0).catch(() => {});
@@ -477,9 +498,10 @@ async function handleCallPanelButton(interaction) {
       return interaction.editReply({
         flags: V2,
         components: buildNotice(
-          `Configuração aplicada: ${profile.locked ? "privada" : "pública"}, ${
-            profile.limit ? `limite de ${profile.limit}` : "sem limite"
-          }.`
+          say(cfg, "loadDone", {
+            acesso: say(cfg, profile.locked ? "wordPrivate" : "wordPublic"),
+            limite: profile.limit ? say(cfg, "limitShort", { n: profile.limit }) : say(cfg, "limitNone"),
+          })
         ),
       });
     }
@@ -490,11 +512,12 @@ async function handleCallPanelButton(interaction) {
 }
 
 // Resultado de cada seletor de pessoas
-async function runPick(action, ids, { guild, channel, room, actor }) {
+async function runPick(action, ids, { guild, channel, room, actor, cfg }) {
   const owner = room.ownerId;
   const done = [];
   const skipped = [];
   const targets = [...new Set(ids)];
+  const why = (id, key) => `<@${id}> ${say(cfg, key)}`;
 
   const profile = await getProfile(guild.id, owner);
   const blacklist = profile?.blacklist ?? [];
@@ -504,36 +527,34 @@ async function runPick(action, ids, { guild, channel, room, actor }) {
   switch (action) {
     case "lock": {
       await applyLock(channel, room, targets.filter((id) => !blacklist.includes(id)));
-      return targets.length
-        ? `Call privada. Continuam podendo entrar: ${mentions(targets)}`
-        : "Call privada. Só você consegue entrar.";
+      return targets.length ? say(cfg, "lockDone", { pessoas: mentions(targets) }) : say(cfg, "lockAlone");
     }
 
     case "add":
       for (const id of targets) {
         const member = await fetchMember(id);
-        if (!member || member.user.bot) skipped.push(`<@${id}> (não é um membro válido)`);
-        else if (id === owner) skipped.push(`<@${id}> (é o dono)`);
-        else if (blacklist.includes(id)) skipped.push(`<@${id}> (está na blacklist)`);
+        if (!member || member.user.bot) skipped.push(why(id, "reasonInvalid"));
+        else if (id === owner) skipped.push(why(id, "reasonOwner"));
+        else if (blacklist.includes(id)) skipped.push(why(id, "reasonBlacklist"));
         else if (await allowUser(channel, id)) done.push(`<@${id}>`);
         else skipped.push(`<@${id}>`);
       }
       return [
-        done.length ? `Liberei a entrada de: ${done.join(" ")}` : null,
-        skipped.length ? `Não consegui liberar: ${skipped.join(", ")}` : null,
+        done.length ? say(cfg, "addDone", { pessoas: done.join(" ") }) : null,
+        skipped.length ? say(cfg, "addFail", { pessoas: skipped.join(", ") }) : null,
       ]
         .filter(Boolean)
         .join("\n");
 
     case "remove":
       for (const id of targets) {
-        if (id === owner) skipped.push(`<@${id}> (é o dono)`);
+        if (id === owner) skipped.push(why(id, "reasonOwner"));
         else if (await clearUser(channel, id)) done.push(`<@${id}>`);
-        else skipped.push(`<@${id}> (não tinha permissão liberada)`);
+        else skipped.push(why(id, "reasonNoPermission"));
       }
       return [
-        done.length ? `Tirei a permissão de entrada de: ${done.join(" ")}` : null,
-        skipped.length ? `Sem alteração: ${skipped.join(", ")}` : null,
+        done.length ? say(cfg, "removeDone", { pessoas: done.join(" ") }) : null,
+        skipped.length ? say(cfg, "removeFail", { pessoas: skipped.join(", ") }) : null,
       ]
         .filter(Boolean)
         .join("\n");
@@ -541,14 +562,14 @@ async function runPick(action, ids, { guild, channel, room, actor }) {
     case "kick":
       for (const id of targets) {
         const member = await fetchMember(id);
-        if (id === owner) skipped.push(`<@${id}> (é o dono)`);
-        else if (!member || member.voice.channelId !== channel.id) skipped.push(`<@${id}> (não está na call)`);
-        else if (await member.voice.disconnect("Desconectado pelo dono da call").then(() => true).catch(() => false)) done.push(`<@${id}>`);
+        if (id === owner) skipped.push(why(id, "reasonOwner"));
+        else if (!member || member.voice.channelId !== channel.id) skipped.push(why(id, "reasonNotInCall"));
+        else if (await member.voice.disconnect(say(cfg, "kickAudit")).then(() => true).catch(() => false)) done.push(`<@${id}>`);
         else skipped.push(`<@${id}>`);
       }
       return [
-        done.length ? `Desconectei: ${done.join(" ")}` : null,
-        skipped.length ? `Não consegui desconectar: ${skipped.join(", ")}` : null,
+        done.length ? say(cfg, "kickDone", { pessoas: done.join(" ") }) : null,
+        skipped.length ? say(cfg, "kickFail", { pessoas: skipped.join(", ") }) : null,
       ]
         .filter(Boolean)
         .join("\n");
@@ -557,10 +578,10 @@ async function runPick(action, ids, { guild, channel, room, actor }) {
       const locked = isLocked(channel);
       for (const id of targets) {
         const member = await fetchMember(id);
-        if (!member || member.user.bot) skipped.push(`<@${id}> (não é um membro válido)`);
-        else if (blacklist.includes(id)) skipped.push(`<@${id}> (está na blacklist)`);
-        else if (!member.voice.channelId) skipped.push(`<@${id}> (não está em nenhum canal de voz)`);
-        else if (member.voice.channelId === channel.id) skipped.push(`<@${id}> (já está na call)`);
+        if (!member || member.user.bot) skipped.push(why(id, "reasonInvalid"));
+        else if (blacklist.includes(id)) skipped.push(why(id, "reasonBlacklist"));
+        else if (!member.voice.channelId) skipped.push(why(id, "reasonNoVoice"));
+        else if (member.voice.channelId === channel.id) skipped.push(why(id, "reasonAlreadyIn"));
         else {
           // Call privada: libera a entrada para a pessoa não ficar presa do lado de fora depois
           if (locked) await allowUser(channel, id).catch(() => {});
@@ -569,8 +590,8 @@ async function runPick(action, ids, { guild, channel, room, actor }) {
         }
       }
       return [
-        done.length ? `Movi para a sua call: ${done.join(" ")}` : null,
-        skipped.length ? `Não consegui mover: ${skipped.join(", ")}` : null,
+        done.length ? say(cfg, "moveDone", { pessoas: done.join(" ") }) : null,
+        skipped.length ? say(cfg, "moveFail", { pessoas: skipped.join(", ") }) : null,
       ]
         .filter(Boolean)
         .join("\n");
@@ -579,12 +600,12 @@ async function runPick(action, ids, { guild, channel, room, actor }) {
     case "transfer": {
       const id = targets[0];
       const member = await fetchMember(id);
-      if (!member || member.user.bot) return "Escolha uma pessoa (bots não podem ser donos).";
-      if (id === owner) return "Essa pessoa já é a dona da call.";
-      if (member.voice.channelId !== channel.id) return "A pessoa precisa estar dentro da call para assumir o controle.";
-      if (getRoomByOwner(guild.id, id)) return "Essa pessoa já é dona de outra call.";
+      if (!member || member.user.bot) return say(cfg, "transferInvalid");
+      if (id === owner) return say(cfg, "transferSelf");
+      if (member.voice.channelId !== channel.id) return say(cfg, "transferNotIn");
+      if (getRoomByOwner(guild.id, id)) return say(cfg, "transferHasCall");
       await transferOwnership(channel, id);
-      return `Agora <@${id}> está no controle da call.`;
+      return say(cfg, "transferDone", { pessoa: `<@${id}>` });
     }
 
     case "blacklist": {
@@ -593,7 +614,7 @@ async function runPick(action, ids, { guild, channel, room, actor }) {
       const removed = [];
       for (const id of targets) {
         if (id === owner || id === actor.id) {
-          skipped.push(`<@${id}> (não dá para bloquear você mesmo)`);
+          skipped.push(why(id, "reasonSelfBlock"));
         } else if (list.includes(id)) {
           list = list.filter((x) => x !== id);
           await unblockUser(channel, id);
@@ -601,24 +622,24 @@ async function runPick(action, ids, { guild, channel, room, actor }) {
         } else {
           const member = await fetchMember(id);
           if (!member || member.user.bot) {
-            skipped.push(`<@${id}> (não é um membro válido)`);
+            skipped.push(why(id, "reasonInvalid"));
             continue;
           }
           if (list.length >= 50) {
-            skipped.push(`<@${id}> (limite de 50 na blacklist)`);
+            skipped.push(why(id, "reasonListFull"));
             continue;
           }
           list.push(id);
           await denyUser(channel, id);
-          if (member.voice.channelId === channel.id) await member.voice.disconnect("Blacklist da call").catch(() => {});
+          if (member.voice.channelId === channel.id) await member.voice.disconnect(say(cfg, "blAudit")).catch(() => {});
           added.push(`<@${id}>`);
         }
       }
       await updateProfile(guild.id, owner, { blacklist: list });
       return [
-        added.length ? `Bloqueei: ${added.join(" ")}` : null,
-        removed.length ? `Liberei da blacklist: ${removed.join(" ")}` : null,
-        skipped.length ? `Sem alteração: ${skipped.join(", ")}` : null,
+        added.length ? say(cfg, "blAdded", { pessoas: added.join(" ") }) : null,
+        removed.length ? say(cfg, "blRemoved", { pessoas: removed.join(" ") }) : null,
+        skipped.length ? say(cfg, "blSkipped", { pessoas: skipped.join(", ") }) : null,
       ]
         .filter(Boolean)
         .join("\n");
@@ -632,7 +653,7 @@ async function runPick(action, ids, { guild, channel, room, actor }) {
 async function handleCallPanelSelect(interaction) {
   const { guild } = interaction;
   const [, action] = interaction.customId.split(":");
-  if (!PICKERS[action] && action !== "lock") return;
+  if (!PICKER_ACTIONS[action] && action !== "lock") return;
 
   const cfg = await getCallHubConfig(guild.id);
   const found = await requireRoom(interaction, cfg, { update: true });
@@ -644,12 +665,13 @@ async function handleCallPanelSelect(interaction) {
     channel: found.channel,
     room: found.room,
     actor: interaction.member,
+    cfg,
   }).catch((err) => {
     console.error(`[CALLS] Erro na ação "${action}":`, err);
-    return "Não consegui concluir. Confira se eu tenho as permissões Gerenciar Canais, Gerenciar Cargos e Mover Membros.";
+    return say(cfg, "errorGeneric");
   });
 
-  return interaction.editReply({ components: buildNotice(result || "Nada foi alterado.") });
+  return interaction.editReply({ components: buildNotice(result || say(cfg, "nothingChanged")) });
 }
 
 async function handleCallPanelModal(interaction) {
@@ -662,11 +684,11 @@ async function handleCallPanelModal(interaction) {
   if (!found) return;
 
   const raw = interaction.fields.getTextInputValue("limit").trim();
-  if (!/^\d{1,2}$/.test(raw)) return reply(interaction, "Use apenas números, de 0 a 99.");
+  if (!/^\d{1,2}$/.test(raw)) return reply(interaction, say(cfg, "limitInvalid"));
 
   const limit = Number(raw);
   await found.channel.setUserLimit(limit).catch(() => {});
-  return reply(interaction, limit ? `Limite definido: **${limit}** pessoas.` : "Limite removido. A call não tem máximo de pessoas.");
+  return reply(interaction, limit ? say(cfg, "limitSet", { n: limit }) : say(cfg, "limitRemoved"));
 }
 
 module.exports = {

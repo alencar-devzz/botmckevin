@@ -6,6 +6,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   ChannelSelectMenuBuilder,
+  StringSelectMenuBuilder,
   RoleSelectMenuBuilder,
   ChannelType,
   TextInputStyle,
@@ -14,6 +15,7 @@ const {
 const { addBackButton } = require("./backButton");
 const { textLabel, selectLabel, modal } = require("./modalHelpers");
 const { SECTIONS, DEFAULT_TEXTS, STYLE_LABELS } = require("../utils/callHubDefaults");
+const { GROUPS, MESSAGES, DEFAULT_MESSAGES } = require("../utils/callHubMessages");
 
 // Painéis do menu: Comunidade e interação → Calls temporárias
 
@@ -191,6 +193,11 @@ function buildCallHubLook(guild, cfg, prefix) {
       )
     )
     .addTextDisplayComponents(
+      text("**Mensagens e respostas**"),
+      text("-# Todo texto que o painel envia: avisos, seletores, resultados de cada botão, janela do limite e motivos de erro.")
+    )
+    .addActionRowComponents(row(btn("chcfg_page:messages", "Editar mensagens e respostas")))
+    .addTextDisplayComponents(
       text("**Estilo do painel**"),
       text("-# Liga e desliga partes do visual.")
     )
@@ -209,6 +216,69 @@ function buildCallHubLook(guild, cfg, prefix) {
   body.addActionRowComponents(row(btn("chcfg_home", "Voltar")));
 
   return [header, body];
+}
+
+// ---------- Mensagens e respostas ----------
+
+const oneLine = (value) => String(value).replace(/\s+/g, " ").trim();
+
+function buildCallHubMessages(guild, cfg) {
+  const edited = (key) => cfg.msgs[key] !== DEFAULT_MESSAGES[key];
+  const total = Object.keys(MESSAGES).length;
+  const changed = Object.keys(MESSAGES).filter(edited).length;
+
+  const header = new ContainerBuilder().addTextDisplayComponents(
+    text("### Mensagens e respostas"),
+    text("-# Escolha uma mensagem na lista do grupo para editar. Palavras entre chaves, como `{pessoas}`, são trocadas na hora de enviar. Texto vazio volta ao padrão."),
+    text(`-# Editadas: **${changed}** de ${total}`)
+  );
+
+  const body = new ContainerBuilder();
+  for (const group of GROUPS) {
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(`chcfg_msg:${group.id}`)
+      .setPlaceholder(clip(group.placeholder, 100))
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(
+        group.items.map((item) => ({
+          label: clip(`${edited(item.key) ? "* " : ""}${item.label}`, 100),
+          description: clip(oneLine(cfg.msgs[item.key]), 100) || "-",
+          value: item.key,
+        }))
+      );
+    body.addTextDisplayComponents(text(`**${group.title}**`)).addActionRowComponents(row(menu));
+  }
+  body.addSeparatorComponents(new SeparatorBuilder());
+  body.addActionRowComponents(
+    row(btn("chcfg_page:look", "Voltar"), btn("chcfg_reset_msgs", "Restaurar mensagens", ButtonStyle.Danger))
+  );
+  return [header, body];
+}
+
+function buildMessageModal(key, cfg) {
+  const item = MESSAGES[key];
+  const vars = item.vars.length ? item.vars.map((v) => `{${v}}`).join(" ") : "nenhuma";
+  const m = modal(
+    `chcfg_modal:msg_${key}`,
+    "Editar mensagem",
+    textLabel({
+      id: "text",
+      label: clip(item.label, 45),
+      description: "Vazio = volta ao padrão.",
+      style: PARAGRAPH,
+      max: 1000,
+      required: false,
+      value: cfg.msgs[key],
+    })
+  );
+  // Texto de apoio dentro da janela: variáveis aceitas e texto padrão
+  if (typeof m.addTextDisplayComponents === "function") {
+    m.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(clip(`**Variáveis:** ${vars}\n**Padrão:** ${DEFAULT_MESSAGES[key]}`, 900))
+    );
+  }
+  return m;
 }
 
 // ---------- Modais ----------
@@ -344,4 +414,6 @@ module.exports = {
   buildMainModal,
   buildSectionModal,
   buildColorsModal,
+  buildCallHubMessages,
+  buildMessageModal,
 };

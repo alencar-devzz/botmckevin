@@ -2,6 +2,7 @@ const { MessageFlags, PermissionFlagsBits } = require("discord.js");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 const { getCallHubConfig } = require("../utils/callHubStore");
 const { buildCallPanel, buildNotice } = require("../ui/callPanel");
+const { say } = require("../utils/callHubMessages");
 
 const V2 = MessageFlags.IsComponentsV2;
 
@@ -27,7 +28,7 @@ module.exports = {
       member.roles.cache.hasAny(...ALL_STAFF_ROLE_IDS) ||
       (cfg.staffRoles.length > 0 && member.roles.cache.hasAny(...cfg.staffRoles));
 
-    if (!isModerator) return warn(message, `<@${member.id}>, só a moderação pode enviar o painel de calls.`);
+    if (!isModerator) return warn(message, say(cfg, "cmdNotMod", { usuario: `<@${member.id}>` }));
 
     await message.channel.send({
       components: buildCallPanel(cfg, guild),
