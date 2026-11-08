@@ -262,34 +262,33 @@ async function handleCallHubConfigModal(interaction) {
 //  PAINEL DA CALL (botões usados pelo dono da call)
 // =====================================================================
 
-const isStaff = (cfg, member) =>
-  member.permissions.has(PermissionFlagsBits.Administrator) ||
-  (cfg.staffRoles.length > 0 && member.roles.cache.hasAny(...cfg.staffRoles));
-
-// Descobre qual call a pessoa está controlando: a dela, ou (equipe) a call em que está
-function findRoom(guild, member, cfg) {
-  const own = getRoomByOwner(guild.id, member.id);
-  if (own) return own;
-  const current = member.voice?.channelId ? getRoom(member.voice.channelId) : null;
-  if (current && isStaff(cfg, member)) return current;
-  return null;
-}
+// REGRA: só o DONO da call controla o painel. Nem a equipe nem Administradores têm acesso
+// (o dono pode passar o controle pelo botão "Transferir"). Vale para qualquer painel, esteja ele
+// no chat da call ou em qualquer outro canal (n!painel).
 
 // Retorna { room, channel } ou responde com um aviso e retorna null
 async function requireRoom(interaction, cfg, { update = false } = {}) {
   const { guild, member } = interaction;
-  const room = findRoom(guild, member, cfg);
   const send = (content) =>
     update
       ? interaction.update({ components: buildNotice(content) })
       : reply(interaction, content);
 
+  // Painel enviado no chat de uma call: só o dono DESSA call pode usar
+  const here = getRoom(interaction.channelId);
+  if (here && here.guildId === guild.id && here.ownerId !== member.id) {
+    await send(`Só o dono desta call pode usar o painel: <@${here.ownerId}>.`);
+    return null;
+  }
+
+  // Em qualquer outro lugar: o painel gerencia a call que a pessoa possui
+  const room = here ?? getRoomByOwner(guild.id, member.id);
   if (!room) {
     const where =
       cfg.triggerChannelId && guild.channels.cache.has(cfg.triggerChannelId)
         ? ` Entre em <#${cfg.triggerChannelId}> para criar a sua.`
         : "";
-    await send(`Você não é dono de nenhuma call no momento.${where}`);
+    await send(`Você não tem uma call ativa. Só o dono de uma call pode usar o painel.${where}`);
     return null;
   }
 
