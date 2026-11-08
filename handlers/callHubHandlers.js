@@ -1,7 +1,7 @@
 const { MessageFlags, PermissionFlagsBits } = require("discord.js");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 const { getPrefix } = require("../utils/getPrefix");
-const { DEFAULT_TEXTS, SECTIONS, TEXT_KEYS } = require("../utils/callHubDefaults");
+const { DEFAULT_TEXTS, SECTIONS, TEXT_KEYS, BUTTON_KEYS, DEFAULT_STYLES, STYLE_LABELS } = require("../utils/callHubDefaults");
 const {
   getCallHubConfig,
   updateCallHubConfig,
@@ -33,6 +33,7 @@ const {
   buildValuesModal,
   buildMainModal,
   buildSectionModal,
+  buildColorsModal,
 } = require("../ui/callHubConfig");
 const { buildCallPanel, buildNotice, buildPicker, buildLimitModal } = require("../ui/callPanel");
 
@@ -85,6 +86,14 @@ const TOGGLES = {
   chcfg_transfer: "autoTransfer",
 };
 
+// Liga/desliga partes do visual do painel (página "Painel da call")
+const UI_TOGGLES = {
+  legend: ["panelLegend", "legend"],
+  upper: ["panelUpperTitles", "upperTitles"],
+  quote: ["panelQuoteDesc", "quoteDesc"],
+  dividers: ["panelDividers", "dividers"],
+};
+
 async function handleCallHubConfigButton(interaction) {
   if (!(await guard(interaction))) return;
   const { guild } = interaction;
@@ -97,6 +106,17 @@ async function handleCallHubConfigButton(interaction) {
   }
 
   switch (action) {
+    case "chcfg_ui": {
+      const toggle = UI_TOGGLES[arg];
+      if (!toggle) return;
+      await updateCallHubConfig(guild.id, { [toggle[0]]: !cfg[toggle[1]] });
+      return interaction.update({ components: await lookPanel(guild) });
+    }
+
+    case "chcfg_colors":
+      if (!SECTIONS.some((s) => s.id === arg)) return;
+      return interaction.showModal(buildColorsModal(arg, cfg));
+
     case "chcfg_home":
       return interaction.update({ components: await homePanel(guild) });
 
@@ -111,10 +131,19 @@ async function handleCallHubConfigButton(interaction) {
     }
 
     case "chcfg_preview":
-      return interaction.reply({ components: buildCallPanel(cfg, guild), flags: V2 | EPHEMERAL });
+      return interaction.reply({ components: buildCallPanel(cfg, guild, { disabled: true }), flags: V2 | EPHEMERAL });
 
     case "chcfg_reset_ui":
-      await resetCallHubConfig(guild.id, [...TEXT_KEYS.map((k) => `texts.${k}`), "color", "thumbnail"]);
+      await resetCallHubConfig(guild.id, [
+        ...TEXT_KEYS.map((k) => `texts.${k}`),
+        ...BUTTON_KEYS.map((k) => `styles.${k}`),
+        "color",
+        "thumbnail",
+        "panelLegend",
+        "panelUpperTitles",
+        "panelQuoteDesc",
+        "panelDividers",
+      ]);
       return interaction.update({ components: await lookPanel(guild) });
 
     case "chcfg_reset":
@@ -226,6 +255,19 @@ async function handleCallHubConfigModal(interaction) {
       patch[`texts.${key}`] = textPatch(key, read(key));
     }
     if (read("footer").toLowerCase() === "nenhum") patch["texts.footer"] = "nenhum";
+  } else if (kind.startsWith("colors_")) {
+    const section = SECTIONS.find((s) => s.id === kind.slice("colors_".length));
+    if (!section) return;
+    for (const key of section.keys) {
+      let chosen = null;
+      try {
+        chosen = interaction.fields.getStringSelectValues(`style_${key}`)?.[0] ?? null;
+      } catch {
+        chosen = null;
+      }
+      if (!STYLE_LABELS[chosen]) continue;
+      patch[`styles.${key}`] = chosen === DEFAULT_STYLES[key] ? null : chosen; // igual ao padrão = padrão
+    }
   } else {
     const section = SECTIONS.find((s) => s.id === kind);
     if (!section) return;

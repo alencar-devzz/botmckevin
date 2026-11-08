@@ -1,5 +1,12 @@
 const CallHubConfig = require("../database/models/CallHubConfig");
-const { DEFAULT_NAME_TEMPLATE, DEFAULT_TEXTS, TEXT_KEYS } = require("./callHubDefaults");
+const {
+  DEFAULT_NAME_TEMPLATE,
+  DEFAULT_TEXTS,
+  TEXT_KEYS,
+  BUTTON_KEYS,
+  DEFAULT_STYLES,
+  STYLE_LABELS,
+} = require("./callHubDefaults");
 
 const TTL = 60_000;
 const cache = new Map(); // guildId -> { cfg, at }
@@ -15,6 +22,12 @@ function toConfig(doc) {
   const texts = {};
   for (const key of TEXT_KEYS) {
     texts[key] = typeof saved[key] === "string" && saved[key].length ? saved[key] : DEFAULT_TEXTS[key];
+  }
+
+  const styles = {};
+  for (const key of BUTTON_KEYS) {
+    const saved = doc?.styles?.[key];
+    styles[key] = STYLE_LABELS[saved] ? saved : DEFAULT_STYLES[key];
   }
 
   return {
@@ -34,6 +47,11 @@ function toConfig(doc) {
     texts,
     color: Number.isInteger(doc?.color) ? doc.color : null,
     thumbnail: doc?.thumbnail || null,
+    styles,
+    legend: doc?.panelLegend ?? true,
+    upperTitles: doc?.panelUpperTitles ?? true,
+    quoteDesc: doc?.panelQuoteDesc ?? true,
+    dividers: doc?.panelDividers ?? true,
   };
 }
 

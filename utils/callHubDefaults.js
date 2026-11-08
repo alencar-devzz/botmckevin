@@ -29,6 +29,29 @@ const DEFAULT_BUTTONS = {
 
 const BUTTON_KEYS = Object.keys(DEFAULT_BUTTONS);
 
+// Cor de cada botão (configurável no n!menu). Nomes aceitos na edição: azul, cinza, verde, vermelho
+const DEFAULT_STYLES = {
+  lock: "blue",
+  unlock: "blue",
+  limit: "blue",
+  owner: "gray",
+  add: "gray",
+  remove: "gray",
+  kick: "red",
+  move: "gray",
+  transfer: "gray",
+  blacklist: "red",
+  save: "green",
+  load: "green",
+};
+const STYLE_LABELS = { blue: "azul", gray: "cinza", green: "verde", red: "vermelho" };
+const STYLE_ALIASES = {
+  azul: "blue", blue: "blue", primario: "blue", "primário": "blue",
+  cinza: "gray", gray: "gray", grey: "gray", cinzento: "gray",
+  verde: "green", green: "green",
+  vermelho: "red", red: "red",
+};
+
 const DEFAULT_TEXTS = {
   title: "Gerenciamento de Call",
   desc: "Utilize os botões abaixo para gerenciar sua call.",
@@ -44,4 +67,14 @@ for (const key of BUTTON_KEYS) {
 
 const TEXT_KEYS = Object.keys(DEFAULT_TEXTS);
 
-module.exports = { DEFAULT_NAME_TEMPLATE, SECTIONS, DEFAULT_BUTTONS, BUTTON_KEYS, DEFAULT_TEXTS, TEXT_KEYS };
+module.exports = {
+  DEFAULT_NAME_TEMPLATE,
+  SECTIONS,
+  DEFAULT_BUTTONS,
+  BUTTON_KEYS,
+  DEFAULT_STYLES,
+  STYLE_LABELS,
+  STYLE_ALIASES,
+  DEFAULT_TEXTS,
+  TEXT_KEYS,
+};

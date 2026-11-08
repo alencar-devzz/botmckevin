@@ -12,8 +12,8 @@ const {
   PermissionFlagsBits,
 } = require("discord.js");
 const { addBackButton } = require("./backButton");
-const { textLabel, modal } = require("./modalHelpers");
-const { SECTIONS, DEFAULT_TEXTS } = require("../utils/callHubDefaults");
+const { textLabel, selectLabel, modal } = require("./modalHelpers");
+const { SECTIONS, DEFAULT_TEXTS, STYLE_LABELS } = require("../utils/callHubDefaults");
 
 // Painéis do menu: Comunidade e interação → Calls temporárias
 
@@ -75,7 +75,7 @@ function buildCallHubHome(guild, cfg, prefix) {
         `**Dono saiu:** ${cfg.autoTransfer ? "passa o controle para quem ficou" : "a call continua com o mesmo dono"}`,
         `**Painel no chat da call:** ${yesNo(cfg.sendPanel)} · **Comando do painel:** \`${prefix}painel\``,
         `**Quem pode criar:** ${cfg.allowedRoles.length ? mentionRoles(guild, cfg.allowedRoles) : "todos"} · **Bloqueados:** ${mentionRoles(guild, cfg.blockedRoles)}`,
-        `**Equipe (painel em qualquer call):** ${mentionRoles(guild, cfg.staffRoles)}`,
+        `**Moderação (envia o painel fixo):** ${mentionRoles(guild, cfg.staffRoles)}`,
         missing.length ? `**Permissões que faltam ao bot:** ${missing.join(", ")}` : "**Permissões do bot:** tudo certo",
       ].join("\n")
     )
@@ -134,7 +134,7 @@ function roleSelect(id, placeholder, list, guild) {
 function buildCallHubAccess(guild, cfg) {
   const header = new ContainerBuilder().addTextDisplayComponents(
     text("### Cargos e acesso"),
-    text("-# Quem pode criar call e quem pode usar o painel em calls de outras pessoas.")
+    text("-# Quem pode criar call e quem faz parte da moderação das calls.")
   );
 
   const body = new ContainerBuilder()
@@ -145,10 +145,10 @@ function buildCallHubAccess(guild, cfg) {
     .addActionRowComponents(roleSelect("chcfg_allowed", "Cargos que podem criar call", cfg.allowedRoles, guild))
     .addActionRowComponents(roleSelect("chcfg_blocked", "Cargos que NÃO podem criar call", cfg.blockedRoles, guild))
     .addTextDisplayComponents(
-      text("**Equipe**"),
-      text("-# Esses cargos (e quem tem Administrador) usam o painel dentro de qualquer call, não só na própria.")
+      text("**Moderação**"),
+      text("-# Esses cargos (e quem tem Administrador) podem enviar o painel fixo com o comando do painel. Os botões do painel são só do dono da call.")
     )
-    .addActionRowComponents(roleSelect("chcfg_staff", "Cargos da equipe", cfg.staffRoles, guild));
+    .addActionRowComponents(roleSelect("chcfg_staff", "Cargos da moderação", cfg.staffRoles, guild));
   body.addSeparatorComponents(new SeparatorBuilder());
   body.addActionRowComponents(row(btn("chcfg_home", "Voltar")));
 
@@ -160,16 +160,16 @@ function buildCallHubAccess(guild, cfg) {
 function buildCallHubLook(guild, cfg, prefix) {
   const header = new ContainerBuilder().addTextDisplayComponents(
     text("### Painel da call"),
-    text(`-# Aparência do painel de gerenciamento. Para enviar em qualquer canal use \`${prefix}painel\`.`),
+    text(`-# Tudo do painel de gerenciamento é ajustável aqui. Para deixar um painel fixo em um canal use \`${prefix}painel\` (só a moderação).`),
     text(
-      `-# Cor: ${cfg.color === null ? "sem cor" : `\`#${cfg.color.toString(16).padStart(6, "0")}\``} · Miniatura: ${thumbLabel(cfg.thumbnail)} · Enviado no chat da call: ${yesNo(cfg.sendPanel)}`
+      `-# Cor lateral: ${cfg.color === null ? "sem cor" : `\`#${cfg.color.toString(16).padStart(6, "0")}\``} · Miniatura: ${thumbLabel(cfg.thumbnail)} · Enviado no chat da call: ${yesNo(cfg.sendPanel)}`
     )
   );
 
   const body = new ContainerBuilder()
     .addTextDisplayComponents(
-      text("**Editar textos**"),
-      text("-# Título, descrição, rodapé, nome e descrição de cada botão, títulos das seções, cor e miniatura.")
+      text("**Textos**"),
+      text("-# Título, descrição, rodapé, cor lateral, miniatura, nome e descrição de cada botão e título das seções. Para esconder um botão, escreva `-` no nome dele.")
     )
     .addActionRowComponents(
       row(
@@ -177,6 +177,29 @@ function buildCallHubLook(guild, cfg, prefix) {
         btn("chcfg_edit:access", "Acesso e Privacidade"),
         btn("chcfg_edit:members", "Gerenciar Membros"),
         btn("chcfg_edit:tools", "Ferramentas")
+      )
+    )
+    .addTextDisplayComponents(
+      text("**Cores dos botões**"),
+      text("-# Azul, cinza, verde ou vermelho para cada botão, por seção.")
+    )
+    .addActionRowComponents(
+      row(
+        btn("chcfg_colors:access", "Cores: Acesso"),
+        btn("chcfg_colors:members", "Cores: Membros"),
+        btn("chcfg_colors:tools", "Cores: Ferramentas")
+      )
+    )
+    .addTextDisplayComponents(
+      text("**Estilo do painel**"),
+      text("-# Liga e desliga partes do visual.")
+    )
+    .addActionRowComponents(
+      row(
+        btn("chcfg_ui:legend", `Legenda dos botões: ${yesNo(cfg.legend)}`),
+        btn("chcfg_ui:upper", `Títulos em caixa alta: ${yesNo(cfg.upperTitles)}`),
+        btn("chcfg_ui:quote", `Descrição em citação: ${yesNo(cfg.quoteDesc)}`),
+        btn("chcfg_ui:dividers", `Divisórias: ${yesNo(cfg.dividers)}`)
       )
     )
     .addActionRowComponents(
@@ -283,12 +306,33 @@ function buildSectionModal(sectionId, cfg) {
     textLabel({
       id: "lines",
       label: "Botões (uma linha por botão, na ordem)",
-      description: `Formato: Nome | descrição. São ${section.keys.length} linhas.`,
+      description: `Formato: Nome | descrição. São ${section.keys.length} linhas. Nome "-" esconde o botão.`,
       style: PARAGRAPH,
       max: 1500,
       required: true,
       value: lines,
     })
+  );
+}
+
+// Uma seleção de cor por botão da seção (máx. 4 botões por seção = 4 campos)
+function buildColorsModal(sectionId, cfg) {
+  const section = SECTIONS.find((s) => s.id === sectionId);
+  const options = Object.entries(STYLE_LABELS).map(([value, label]) => ({
+    label: label[0].toUpperCase() + label.slice(1),
+    value,
+  }));
+  return modal(
+    `chcfg_modal:colors_${sectionId}`,
+    "Cores dos botões",
+    ...section.keys.map((key) =>
+      selectLabel({
+        id: `style_${key}`,
+        label: clip(cfg.texts[`b_${key}`], 45) || key,
+        options: options.map((o) => ({ ...o, default: o.value === cfg.styles[key] })),
+        required: true,
+      })
+    )
   );
 }
 
@@ -299,4 +343,5 @@ module.exports = {
   buildValuesModal,
   buildMainModal,
   buildSectionModal,
+  buildColorsModal,
 };

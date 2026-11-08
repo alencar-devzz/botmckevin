@@ -22,22 +22,25 @@ const { SECTIONS } = require("../utils/callHubDefaults");
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3000));
 const clip = (value, max) => String(value ?? "").slice(0, max);
 
-// Cor de cada botão pela função: azul = acesso, vermelho = ação pesada, verde = configuração salva
-const BUTTON_STYLES = {
-  lock: ButtonStyle.Primary,
-  unlock: ButtonStyle.Primary,
-  limit: ButtonStyle.Primary,
-  kick: ButtonStyle.Danger,
-  blacklist: ButtonStyle.Danger,
-  save: ButtonStyle.Success,
-  load: ButtonStyle.Success,
+// Cores configuráveis em n!menu → Calls temporárias → Painel da call
+const STYLE_MAP = {
+  blue: ButtonStyle.Primary,
+  gray: ButtonStyle.Secondary,
+  green: ButtonStyle.Success,
+  red: ButtonStyle.Danger,
 };
 
 const btn = (id, label, style = ButtonStyle.Secondary) =>
   new ButtonBuilder().setCustomId(id).setLabel(clip(label, 80) || "-").setStyle(style);
 
-const softSeparator = () => new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small);
-const hardSeparator = () => new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large);
+// Botão com o nome "-" ou "nenhum" fica escondido do painel
+const isHidden = (t, key) => /^(-|nenhum)$/i.test(String(t[`b_${key}`] ?? "").trim());
+
+const gap = (cfg) =>
+  new SeparatorBuilder()
+    .setDivider(cfg.dividers)
+    .setSpacing(cfg.dividers ? SeparatorSpacingSize.Large : SeparatorSpacingSize.Small);
+const tight = () => new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small);
 
 function resolveThumb(cfg, guild) {
   const mode = cfg.thumbnail;
@@ -48,14 +51,16 @@ function resolveThumb(cfg, guild) {
 
 // ---------- Painel principal (mensagem pública) ----------
 
-function buildCallPanel(cfg, guild) {
+// disabled = true na pré-visualização do n!menu (botões visíveis, mas sem clique)
+function buildCallPanel(cfg, guild, { disabled = false } = {}) {
   const t = cfg.texts;
   const container = new ContainerBuilder();
   if (Number.isInteger(cfg.color)) container.setAccentColor(cfg.color);
 
-  // Cabeçalho: título grande, descrição em citação e a miniatura à direita
+  // Cabeçalho: título grande, descrição (em citação ou texto normal) e a miniatura à direita
+  const descText = clip(t.desc, 300);
   const title = text(`# ${clip(t.title, 100)}`);
-  const desc = text(`> ${clip(t.desc, 300).replace(/\n/g, "\n> ")}`);
+  const desc = text(cfg.quoteDesc ? `> ${descText.replace(/\n/g, "\n> ")}` : descText);
   const thumb = resolveThumb(cfg, guild);
   if (thumb) {
     container.addSectionComponents(
@@ -67,26 +72,37 @@ function buildCallPanel(cfg, guild) {
     container.addTextDisplayComponents(title, desc);
   }
 
-  // Cada bloco: título numerado em caixa alta, legenda compacta e uma única fileira de botões
-  SECTIONS.forEach((section, index) => {
-    container.addSeparatorComponents(hardSeparator());
+  // Cada bloco: título, legenda compacta (opcional) e uma única fileira de botões
+  for (const section of SECTIONS) {
+    const keys = section.keys.filter((key) => !isHidden(t, key));
+    if (!keys.length) continue;
 
-    const heading = `**${String(index + 1).padStart(2, "0")}  ${clip(t[section.titleKey], 100).toUpperCase()}**`;
-    const legend = section.keys
-      .map((key) => `-# \`${clip(t[`b_${key}`], 40)}\`  ${clip(t[`d_${key}`], 150)}`)
-      .join("\n");
-    container.addTextDisplayComponents(text(`${heading}\n${legend}`));
+    container.addSeparatorComponents(gap(cfg));
 
-    container.addSeparatorComponents(softSeparator());
+    const rawTitle = clip(t[section.titleKey], 100);
+    const heading = `**${cfg.upperTitles ? rawTitle.toUpperCase() : rawTitle}**`;
+    const legend = cfg.legend
+      ? "\n" +
+        keys
+          .map((key) => {
+            const detail = clip(t[`d_${key}`], 150);
+            return `-# \`${clip(t[`b_${key}`], 40)}\`${detail ? `  ${detail}` : ""}`;
+          })
+          .join("\n")
+      : "";
+    container.addTextDisplayComponents(text(`${heading}${legend}`));
+
+    container.addSeparatorComponents(tight());
     container.addActionRowComponents(
       new ActionRowBuilder().addComponents(
-        ...section.keys.map((key) => btn(`cpn_${key}`, t[`b_${key}`], BUTTON_STYLES[key]))
+        ...keys.map((key) => btn(`cpn_${key}`, t[`b_${key}`], STYLE_MAP[cfg.styles?.[key]] ?? ButtonStyle.Secondary).setDisabled(disabled)
+        )
       )
     );
-  });
+  }
 
   if (t.footer && t.footer.toLowerCase() !== "nenhum") {
-    container.addSeparatorComponents(hardSeparator());
+    container.addSeparatorComponents(gap(cfg));
     container.addTextDisplayComponents(text(clip(t.footer, 300)));
   }
 
