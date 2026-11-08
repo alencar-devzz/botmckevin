@@ -1,6 +1,6 @@
-const { MessageFlags } = require("discord.js");
+const { MessageFlags, PermissionFlagsBits } = require("discord.js");
+const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 const { getCallHubConfig } = require("../utils/callHubStore");
-const { getRoomByOwner } = require("../utils/callHub");
 const { buildCallPanel, buildNotice } = require("../ui/callPanel");
 
 const V2 = MessageFlags.IsComponentsV2;
@@ -12,23 +12,22 @@ async function warn(message, content) {
   setTimeout(() => sent?.delete().catch(() => {}), 8000);
 }
 
-// Envia o painel de gerenciamento de call no canal. A aparência é configurada em
-// n!menu → Comunidade e interação → Calls temporárias → Painel da call.
-// REGRA: só quem é DONO de uma call ativa pode usar (equipe e Administradores também não têm exceção).
+// Envia o painel de gerenciamento de call como painel fixo no canal.
+// QUEM ENVIA: só a moderação (Administrador, cargos da equipe ou cargos de staff configurados nas calls).
+// QUEM USA OS BOTÕES: só o dono de uma call (ver requireRoom em handlers/callHubHandlers.js).
+// A aparência é configurada em n!menu → Comunidade e interação → Calls temporárias → Painel da call.
 module.exports = {
   name: "painel",
   async execute(message) {
     const { guild, member } = message;
     const cfg = await getCallHubConfig(guild.id);
 
-    const room = getRoomByOwner(guild.id, member.id);
-    if (!room || !guild.channels.cache.has(room.channelId)) {
-      const where =
-        cfg.triggerChannelId && guild.channels.cache.has(cfg.triggerChannelId)
-          ? ` Entre em <#${cfg.triggerChannelId}> para criar a sua.`
-          : "";
-      return warn(message, `<@${member.id}>, você não tem uma call ativa. Crie uma para poder usar o painel.${where}`);
-    }
+    const isModerator =
+      member.permissions.has(PermissionFlagsBits.Administrator) ||
+      member.roles.cache.hasAny(...ALL_STAFF_ROLE_IDS) ||
+      (cfg.staffRoles.length > 0 && member.roles.cache.hasAny(...cfg.staffRoles));
+
+    if (!isModerator) return warn(message, `<@${member.id}>, só a moderação pode enviar o painel de calls.`);
 
     await message.channel.send({
       components: buildCallPanel(cfg, guild),
