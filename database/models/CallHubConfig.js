@@ -37,8 +37,6 @@ const callHubConfigSchema = new Schema({
   msgs: msgFields, // mensagens e respostas do painel (null = texto padrão)
   styles: styleFields, // cor de cada botão do painel (null = cor padrão)
   panelLegend: { type: Boolean, default: null }, // mostra a legenda com a descrição dos botões (null = sim)
-  panelUpperTitles: { type: Boolean, default: null }, // títulos das seções em caixa alta (null = sim)
-  panelQuoteDesc: { type: Boolean, default: null }, // descrição em citação (null = sim)
   panelDividers: { type: Boolean, default: null }, // linhas divisórias entre as seções (null = sim)
 });
 

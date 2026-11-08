@@ -6,6 +6,14 @@
 
 const GROUPS = [
   {
+    id: "visual",
+    title: "Visual do painel",
+    placeholder: "Formato da legenda do painel",
+    items: [
+      { key: "legendLine", label: "Legenda: formato de cada linha", vars: ["nome", "descricao"], def: "-# `{nome}`  {descricao}" },
+    ],
+  },
+  {
     id: "notices",
     title: "Avisos e bloqueios",
     placeholder: "Avisos, bloqueios e erros",

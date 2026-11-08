@@ -93,8 +93,6 @@ const TOGGLES = {
 // Liga/desliga partes do visual do painel (página "Painel da call")
 const UI_TOGGLES = {
   legend: ["panelLegend", "legend"],
-  upper: ["panelUpperTitles", "upperTitles"],
-  quote: ["panelQuoteDesc", "quoteDesc"],
   dividers: ["panelDividers", "dividers"],
 };
 
@@ -150,8 +148,6 @@ async function handleCallHubConfigButton(interaction) {
         "color",
         "thumbnail",
         "panelLegend",
-        "panelUpperTitles",
-        "panelQuoteDesc",
         "panelDividers",
       ]);
       return interaction.update({ components: await lookPanel(guild) });
@@ -296,6 +292,7 @@ async function handleCallHubConfigModal(interaction) {
     if (!section) return;
 
     patch[`texts.${section.titleKey}`] = textPatch(section.titleKey, read("title"));
+    patch[`texts.${section.descKey}`] = textPatch(section.descKey, read("desc"));
 
     const lines = read("lines")
       .split("\n")

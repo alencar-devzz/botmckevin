@@ -6,9 +6,9 @@ const DEFAULT_NAME_TEMPLATE = "{nametag}";
 
 // Seções do painel de gerenciamento da call (mesma ordem da tela)
 const SECTIONS = [
-  { id: "access", titleKey: "accessTitle", keys: ["lock", "unlock", "limit", "owner"] },
-  { id: "members", titleKey: "membersTitle", keys: ["add", "remove", "kick", "move"] },
-  { id: "tools", titleKey: "toolsTitle", keys: ["transfer", "blacklist", "save", "load"] },
+  { id: "access", titleKey: "accessTitle", descKey: "accessDesc", keys: ["lock", "unlock", "limit", "owner"] },
+  { id: "members", titleKey: "membersTitle", descKey: "membersDesc", keys: ["add", "remove", "kick", "move"] },
+  { id: "tools", titleKey: "toolsTitle", descKey: "toolsDesc", keys: ["transfer", "blacklist", "save", "load"] },
 ];
 
 // [nome do botão, descrição]
@@ -53,12 +53,18 @@ const STYLE_ALIASES = {
 };
 
 const DEFAULT_TEXTS = {
-  title: "Gerenciamento de Call",
-  desc: "Utilize os botões abaixo para gerenciar sua call.",
+  // Os textos abaixo aceitam formatação livre do Discord: # título, ## subtítulo, -# texto pequeno,
+  // > citação, **negrito**, *itálico*, `código`. O painel mostra exatamente o que estiver escrito.
+  title: "# Gerenciamento de Call",
+  desc: "> Utilize os botões abaixo para gerenciar sua call.",
   footer: "-# Só o dono da call consegue usar os botões.", // "nenhum" = sem rodapé
-  accessTitle: "Acesso e Privacidade",
-  membersTitle: "Gerenciar Membros",
-  toolsTitle: "Ferramentas",
+  accessTitle: "**ACESSO E PRIVACIDADE**",
+  membersTitle: "**GERENCIAR MEMBROS**",
+  toolsTitle: "**FERRAMENTAS**",
+  // Descrição opcional de cada seção (aparece logo abaixo do título). Vazio = sem descrição.
+  accessDesc: "",
+  membersDesc: "",
+  toolsDesc: "",
 };
 for (const key of BUTTON_KEYS) {
   DEFAULT_TEXTS[`b_${key}`] = DEFAULT_BUTTONS[key][0]; // nome do botão

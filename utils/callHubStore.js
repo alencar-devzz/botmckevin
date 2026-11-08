@@ -57,8 +57,6 @@ function toConfig(doc) {
     styles,
     msgs,
     legend: doc?.panelLegend ?? true,
-    upperTitles: doc?.panelUpperTitles ?? true,
-    quoteDesc: doc?.panelQuoteDesc ?? true,
     dividers: doc?.panelDividers ?? true,
   };
 }

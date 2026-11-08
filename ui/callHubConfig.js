@@ -171,7 +171,7 @@ function buildCallHubLook(guild, cfg, prefix) {
   const body = new ContainerBuilder()
     .addTextDisplayComponents(
       text("**Textos**"),
-      text("-# Título, descrição, rodapé, cor lateral, miniatura, nome e descrição de cada botão e título das seções. Para esconder um botão, escreva `-` no nome dele.")
+      text("-# Título, descrição, rodapé, cor lateral, miniatura, nome e descrição de cada botão, título e descrição de cada seção. Aceita formatação livre (`# título`, `> citação`, `-# pequeno`, `**negrito**`). Para esconder um botão, escreva `-` no nome dele.")
     )
     .addActionRowComponents(
       row(
@@ -204,8 +204,6 @@ function buildCallHubLook(guild, cfg, prefix) {
     .addActionRowComponents(
       row(
         btn("chcfg_ui:legend", `Legenda dos botões: ${yesNo(cfg.legend)}`),
-        btn("chcfg_ui:upper", `Títulos em caixa alta: ${yesNo(cfg.upperTitles)}`),
-        btn("chcfg_ui:quote", `Descrição em citação: ${yesNo(cfg.quoteDesc)}`),
         btn("chcfg_ui:dividers", `Divisórias: ${yesNo(cfg.dividers)}`)
       )
     )
@@ -331,11 +329,11 @@ function buildMainModal(cfg) {
   return modal(
     "chcfg_modal:main",
     "Título e aparência",
-    textLabel({ id: "title", label: "Título", description: "Deixe vazio para voltar ao padrão.", max: 100, value: cfg.texts.title }),
+    textLabel({ id: "title", label: "Título", description: "Formatação livre. Ex.: # Título grande. Vazio = padrão.", max: 200, value: cfg.texts.title }),
     textLabel({
       id: "desc",
       label: "Descrição",
-      description: "Deixe vazio para voltar ao padrão.",
+      description: "Formatação livre. Ex.: > citação ou -# pequeno. Vazio = padrão.",
       style: PARAGRAPH,
       max: 300,
       value: cfg.texts.desc,
@@ -369,9 +367,17 @@ function buildSectionModal(sectionId, cfg) {
     textLabel({
       id: "title",
       label: "Título da seção",
-      description: "Deixe vazio para voltar ao padrão.",
-      max: 100,
+      description: "Formatação livre. Ex.: ## Título ou **NEGRITO**. Vazio = padrão.",
+      max: 200,
       value: cfg.texts[section.titleKey],
+    }),
+    textLabel({
+      id: "desc",
+      label: "Descrição da seção (opcional)",
+      description: "Aparece abaixo do título. Aceita formatação. Vazio = sem descrição.",
+      style: PARAGRAPH,
+      max: 300,
+      value: cfg.texts[section.descKey],
     }),
     textLabel({
       id: "lines",
