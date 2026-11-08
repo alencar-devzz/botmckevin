@@ -23,12 +23,7 @@ function buildComunidadePanel() {
     .addOptions(
       { label: "Portaria", description: "Boas-vindas, saídas, DM de entrada e filtro de contas.", value: "portaria" },
       { label: "Auto-roles", description: "Configure os cargos automáticos.", value: "autoroles" },
-      { label: "Posts e Instagram", description: "Fotos e vídeos com curtidas e comentários.", value: "posts" },
-      {
-        label: "Calls temporárias",
-        description: "Call própria para quem entra no gatilho e painel de gerenciamento.",
-        value: "calls",
-      }
+      { label: "Posts e Instagram", description: "Fotos e vídeos com curtidas e comentários.", value: "posts" }
     );
 
   const selectRow = new ActionRowBuilder().addComponents(select);

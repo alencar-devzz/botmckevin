@@ -5,7 +5,6 @@ const { getPrefix } = require("../utils/getPrefix");
 
 module.exports = {
   name: "menu",
-  aliases: ["painel"], // n!painel abre o mesmo painel principal de configurações
   async execute(message) {
     const sent = await message.channel.send({
       components: buildMainMenu(),

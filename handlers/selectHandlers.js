@@ -12,11 +12,6 @@ const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
 const { openPostsPanel, handlePostsConfigSelect } = require("./postsHandlers");
 const { openClPanel, handleClConfigSelect } = require("./clHandlers");
 const {
-  openCallHubPanel,
-  handleCallHubConfigSelect,
-  handleCallPanelSelect,
-} = require("./callHubHandlers");
-const {
   openRoleManagePanel,
   handleRoleManageSelect,
   handleRoleManageConfigSelect,
@@ -24,15 +19,6 @@ const {
 
 async function handleSelect(interaction) {
   const { customId, values } = interaction;
-
-  // Calls temporárias: configuração no n!menu e seletores do painel da call
-  if (customId.startsWith("chcfg_")) {
-    return handleCallHubConfigSelect(interaction);
-  }
-
-  if (customId.startsWith("cpn_")) {
-    return handleCallPanelSelect(interaction);
-  }
 
   // Painel do comando groles e a configuração dele no n!menu
   if (customId.startsWith("grl:")) {
@@ -126,9 +112,6 @@ async function handleSelect(interaction) {
       }
       if (value === "posts") {
         return openPostsPanel(interaction);
-      }
-      if (value === "calls") {
-        return openCallHubPanel(interaction);
       }
       return;
     }
