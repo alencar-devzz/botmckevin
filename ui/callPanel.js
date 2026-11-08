@@ -12,6 +12,7 @@ const {
   TextInputBuilder,
   TextInputStyle,
   LabelBuilder,
+  SeparatorSpacingSize,
 } = require("discord.js");
 const { SECTIONS } = require("../utils/callHubDefaults");
 
@@ -21,8 +22,22 @@ const { SECTIONS } = require("../utils/callHubDefaults");
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3000));
 const clip = (value, max) => String(value ?? "").slice(0, max);
 
-const btn = (id, label) =>
-  new ButtonBuilder().setCustomId(id).setLabel(clip(label, 80) || "-").setStyle(ButtonStyle.Secondary);
+// Cor de cada botão pela função: azul = acesso, vermelho = ação pesada, verde = configuração salva
+const BUTTON_STYLES = {
+  lock: ButtonStyle.Primary,
+  unlock: ButtonStyle.Primary,
+  limit: ButtonStyle.Primary,
+  kick: ButtonStyle.Danger,
+  blacklist: ButtonStyle.Danger,
+  save: ButtonStyle.Success,
+  load: ButtonStyle.Success,
+};
+
+const btn = (id, label, style = ButtonStyle.Secondary) =>
+  new ButtonBuilder().setCustomId(id).setLabel(clip(label, 80) || "-").setStyle(style);
+
+const softSeparator = () => new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small);
+const hardSeparator = () => new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large);
 
 function resolveThumb(cfg, guild) {
   const mode = cfg.thumbnail;
@@ -38,8 +53,9 @@ function buildCallPanel(cfg, guild) {
   const container = new ContainerBuilder();
   if (Number.isInteger(cfg.color)) container.setAccentColor(cfg.color);
 
-  const title = text(`## ${clip(t.title, 100)}`);
-  const desc = text(clip(t.desc, 300));
+  // Cabeçalho: título grande, descrição em citação e a miniatura à direita
+  const title = text(`# ${clip(t.title, 100)}`);
+  const desc = text(`> ${clip(t.desc, 300).replace(/\n/g, "\n> ")}`);
   const thumb = resolveThumb(cfg, guild);
   if (thumb) {
     container.addSectionComponents(
@@ -50,19 +66,27 @@ function buildCallPanel(cfg, guild) {
   } else {
     container.addTextDisplayComponents(title, desc);
   }
-  container.addSeparatorComponents(new SeparatorBuilder());
 
+  // Cada bloco: título numerado em caixa alta, legenda compacta e uma única fileira de botões
   SECTIONS.forEach((section, index) => {
-    const lines = section.keys.map((key) => `› **${clip(t[`b_${key}`], 80)}** — ${clip(t[`d_${key}`], 150)}`);
-    container.addTextDisplayComponents(text(`### ${clip(t[section.titleKey], 100)}`), text(lines.join("\n")));
+    container.addSeparatorComponents(hardSeparator());
+
+    const heading = `**${String(index + 1).padStart(2, "0")}  ${clip(t[section.titleKey], 100).toUpperCase()}**`;
+    const legend = section.keys
+      .map((key) => `-# \`${clip(t[`b_${key}`], 40)}\`  ${clip(t[`d_${key}`], 150)}`)
+      .join("\n");
+    container.addTextDisplayComponents(text(`${heading}\n${legend}`));
+
+    container.addSeparatorComponents(softSeparator());
     container.addActionRowComponents(
-      new ActionRowBuilder().addComponents(...section.keys.map((key) => btn(`cpn_${key}`, t[`b_${key}`])))
+      new ActionRowBuilder().addComponents(
+        ...section.keys.map((key) => btn(`cpn_${key}`, t[`b_${key}`], BUTTON_STYLES[key]))
+      )
     );
-    if (index < SECTIONS.length - 1) container.addSeparatorComponents(new SeparatorBuilder());
   });
 
   if (t.footer && t.footer.toLowerCase() !== "nenhum") {
-    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addSeparatorComponents(hardSeparator());
     container.addTextDisplayComponents(text(clip(t.footer, 300)));
   }
 
@@ -85,8 +109,8 @@ function buildPicker({ action, title, hint, min = 1, max = 1, defaults = [], ext
   if (defaults.length) select.setDefaultUsers(...defaults.slice(0, 25));
 
   const container = new ContainerBuilder().addTextDisplayComponents(
-    text(`### ${clip(title, 100)}`),
-    text(hint)
+    text(`## ${clip(title, 100)}`),
+    text(`-# ${clip(hint, 300)}`)
   );
   container.addActionRowComponents(new ActionRowBuilder().addComponents(select));
   if (extraButton) {
