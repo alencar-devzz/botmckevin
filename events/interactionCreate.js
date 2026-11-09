@@ -8,6 +8,13 @@ module.exports = {
   name: "interactionCreate",
   async execute(interaction) {
     try {
+      // Autocomplete dos slash commands (ex.: lista de banidos no /unban).
+      if (interaction.isAutocomplete()) {
+        const command = interaction.client.commands.get(interaction.commandName);
+        if (!command?.autocomplete) return;
+        return await command.autocomplete(interaction);
+      }
+
       // Slash commands (ex.: /ban, /kick, /mute). Cada comando exporta "executeSlash".
       if (interaction.isChatInputCommand()) {
         const command = interaction.client.commands.get(interaction.commandName);
