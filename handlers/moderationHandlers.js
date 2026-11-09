@@ -43,14 +43,14 @@ async function handleModerationButton(interaction) {
 
   if (interaction.customId === "mod_cancel") {
     await interaction.update({
-      components: buildResultPanel("Ação cancelada."),
+      components: buildResultPanel("Ação cancelada.", pending.avatarUrl),
       flags: MessageFlags.IsComponentsV2,
     });
     scheduleSelfDelete(interaction, 5000);
     return;
   }
 
-  const { action, targetId, targetTag, reason, guild, member, duration } = pending;
+  const { action, targetId, targetTag, reason, guild, member, duration, avatarUrl } = pending;
 
   try {
     switch (action) {
@@ -74,7 +74,8 @@ async function handleModerationButton(interaction) {
     console.error(`[MODERACAO] Erro ao executar ${action}:`, err);
     await interaction.update({
       components: buildResultPanel(
-        "Não foi possível concluir essa ação. Verifique minhas permissões e a hierarquia de cargos."
+        "Não foi possível concluir essa ação. Verifique minhas permissões e a hierarquia de cargos.",
+        avatarUrl
       ),
       flags: MessageFlags.IsComponentsV2,
     });
@@ -83,7 +84,10 @@ async function handleModerationButton(interaction) {
   }
 
   await interaction.update({
-    components: buildResultPanel(successText(action, targetTag, targetId, duration)),
+    components: buildResultPanel(
+      successText(action, targetTag, targetId, duration),
+      avatarUrl
+    ),
     flags: MessageFlags.IsComponentsV2,
   });
   scheduleSelfDelete(interaction, 5000);

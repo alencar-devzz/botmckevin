@@ -3,6 +3,9 @@ const { DEFAULT_PREFIX } = require("../utils/getPrefix");
 const { getBotConfig, applyPresence } = require("../utils/botPresence");
 const { sweepCalls } = require("../utils/callHub");
 
+// Servidor onde os slash commands são registrados (pode trocar pela variável GUILD_ID).
+const GUILD_ID = process.env.GUILD_ID || "1542321888175456357";
+
 module.exports = {
   name: "clientReady",
   once: true,
@@ -16,14 +19,20 @@ module.exports = {
       console.error("[CALLS] Erro ao verificar as calls ao iniciar:", err.message);
     }
 
-    // Registra os slash commands (os comandos que exportam "data").
+    // Registra os slash commands direto no servidor (aparecem na hora).
     // Os aliases apontam para o mesmo comando, então o Set remove as repetições.
     try {
       const slashCommands = [...new Set(client.commands.values())]
         .filter((command) => command.data)
         .map((command) => command.data.toJSON());
-      await client.application.commands.set(slashCommands);
-      console.log(`[SLASH] ${slashCommands.length} comandos registrados.`);
+
+      const guild =
+        client.guilds.cache.get(GUILD_ID) ?? (await client.guilds.fetch(GUILD_ID));
+      await guild.commands.set(slashCommands);
+      console.log(`[SLASH] ${slashCommands.length} comandos registrados em ${guild.name}.`);
+
+      // Limpa os comandos globais antigos para não aparecerem duplicados.
+      await client.application.commands.set([]);
     } catch (err) {
       console.error("[SLASH] Erro ao registrar os comandos:", err.message);
     }

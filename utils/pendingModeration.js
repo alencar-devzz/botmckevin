@@ -1,17 +1,23 @@
 // Guarda, por ID da mensagem de confirmação, os dados da ação de moderação
-// aguardando "Confirmar"/"Cancelar". Se ninguém interagir em 1 minuto,
-// a mensagem é apagada e a ação é descartada (nada é executado).
+// aguardando "Confirmar"/"Cancelar".
+// Com expireMs, se ninguém interagir a mensagem é apagada e a ação é descartada.
+// Sem expireMs (null/0), a confirmação não expira: fica valendo até alguém clicar
+// (ou até o bot reiniciar).
 const pendingModeration = new Map();
 
 function setPendingModeration(messageId, data, expireMs) {
-  const timeout = setTimeout(async () => {
-    pendingModeration.delete(messageId);
-    try {
-      await data.message.delete();
-    } catch {
-      // a mensagem já pode ter sido apagada
-    }
-  }, expireMs);
+  let timeout = null;
+
+  if (expireMs) {
+    timeout = setTimeout(async () => {
+      pendingModeration.delete(messageId);
+      try {
+        await data.message.delete();
+      } catch {
+        // a mensagem já pode ter sido apagada
+      }
+    }, expireMs);
+  }
 
   pendingModeration.set(messageId, { ...data, timeout });
 }

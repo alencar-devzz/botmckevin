@@ -57,11 +57,14 @@ function validateTarget(interaction, { user, member, requireMember = false, botC
   return null;
 }
 
-// Mostra o painel de confirmação (efêmero) e deixa a ação pendente.
+// Mostra o painel de confirmação (efêmero, sem expiração) e deixa a ação pendente.
 // Os botões Confirmar/Cancelar continuam sendo tratados por handlers/moderationHandlers.js.
 async function sendConfirm(interaction, { action, title, question, user, member, reason, duration }) {
+  // Foto do usuário no canto do painel; sem aviso de expiração.
+  const avatarUrl = user.displayAvatarURL({ extension: "png", size: 256 });
+
   await interaction.reply({
-    components: buildConfirmPanel({ title, question, reason }),
+    components: buildConfirmPanel({ title, question, reason, avatarUrl, expires: false }),
     flags: EPHEMERAL_V2,
   });
 
@@ -77,12 +80,13 @@ async function sendConfirm(interaction, { action, title, question, user, member,
       guild: interaction.guild,
       member,
       duration,
+      avatarUrl,
       // Mensagem efêmera não pode ser apagada pelo canal: ao expirar,
       // o painel é removido pela própria resposta da interação.
       message: { delete: () => interaction.deleteReply() },
       authorId: interaction.user.id,
     },
-    60000
+    null // sem expiração
   );
 }
 
