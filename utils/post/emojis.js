@@ -3,10 +3,10 @@
 // preencha "instagram" com { name: "nome_do_emoji", id: "ID_DO_EMOJI" }.
 // (O emoji de cada botão também pode ser trocado pelo painel: Posts e Instagram → Botões do post.)
 const EMOJIS = {
-  like: { name: "emoji_5", id: "1567303864011464825" },
-  comment: { name: "emoji_7", id: "1567309587890053230" },
-  delete: { name: "emoji_6", id: "1567306086229483691" },
-  view: { name: "emoji_4", id: "1567301404916191304" },
+  like: { name: "emoji_5", id: "1569360138387718225" },
+  comment: { name: "emoji_7", id: "1569360233690570853" },
+  delete: { name: "emoji_6", id: "1569361711322894406" },
+  view: { name: "emoji_4", id: "1569361569958334555" },
   instagram: null,
 };
 
