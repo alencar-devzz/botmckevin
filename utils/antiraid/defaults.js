@@ -89,20 +89,7 @@ const DEFAULTS = {
     exemptRoles: [],
     alertChannelId: null,
   },
-  visual: {
-    enabled: false,
-    protect: ["name", "icon", "banner"], // chaves de VS_FIELDS que não podem mudar sem autorização
-    response: "revert", // chaves de VS_RESPONSES
-    authorizedUsers: [],
-    authorizedRoles: [],
-    alertChannelId: null, // vazio = usa o canal do núcleo
-    snapshot: null, // referência salva: { name, description, icon, banner, splash, discoverySplash, savedAt }
-  },
-  native: {
-    alertChannelId: null, // canal de alertas das regras de AutoMod criadas pelo painel
-    mentionLimit: 5, // limite da regra de spam de menções
-    exemptRoles: [], // cargos isentos das regras de AutoMod criadas pelo painel
-  },
+  visual: { enabled: false },
 };
 
 // Ações que o núcleo consegue monitorar
@@ -135,9 +122,8 @@ const MODULES = [
   { key: "dangerPerms", label: "Permissões perigosas", desc: "Vigia permissões administrativas novas.", built: true, active: (c) => c.dangerPerms.enabled },
   { key: "protectedRoles", label: "Cargos protegidos", desc: "Impede entrega de cargos sem autorização.", built: true, active: (c) => c.protectedRoles.enabled },
   { key: "movCall", label: "Mov call", desc: "Limite de mover ou desconectar em massa.", built: true, active: (c) => c.movCall.enabled },
-  { key: "visual", label: "Visual do servidor", desc: "Protege nome, ícone e banner.", built: true, active: (c) => c.visual.enabled },
-  // info: não liga nem desliga, só aplica ajustes no Discord; por isso não entra na contagem de módulos ligados
-  { key: "native", label: "Ajustes do Discord", desc: "Verificação, filtros e opções nativas.", built: true, info: true, status: "configurações do próprio Discord", active: () => false },
+  { key: "visual", label: "Visual do servidor", desc: "Protege nome, ícone e banner.", built: false, active: (c) => c.visual.enabled },
+  { key: "native", label: "Ajustes do Discord", desc: "Verificação, filtros e opções nativas.", built: false, active: () => false },
 ];
 
 // ---- Entrada em massa ----
@@ -222,67 +208,7 @@ const MV_ACTIONS = { move: "Mover membros de call", disconnect: "Desconectar mem
 const MV_LIMITS = [3, 5, 8, 10, 15];
 const MV_WINDOWS = [5, 10, 20, 30];
 
-// ---- Visual do servidor ----
-const VS_FIELDS = {
-  name: "Nome do servidor",
-  icon: "Ícone",
-  banner: "Banner",
-  splash: "Plano de fundo do convite",
-  discoverySplash: "Plano de fundo da descoberta",
-  description: "Descrição",
-};
-const VS_RESPONSES = {
-  warn: { label: "Somente avisar · não reverter", desc: "Não desfaz nada e não pune.", revert: false, punish: "none" },
-  revert: { label: "Reverter somente · não punir", desc: "Volta ao que estava salvo, sem punir.", revert: true, punish: "none" },
-  revertStrip: { label: "Reverter e remover cargos", desc: "Também tira os cargos de quem alterou.", revert: true, punish: "strip" },
-  revertKick: { label: "Reverter, remover cargos e expulsar", desc: "Também expulsa quem alterou.", revert: true, punish: "kick" },
-  revertBan: { label: "Reverter e banir", desc: "Também bane quem alterou.", revert: true, punish: "ban" },
-};
-
-// ---- Ajustes do Discord ----
-const NV_VERIFICATION = {
-  0: { label: "Nenhum", desc: "Sem restrições para falar." },
-  1: { label: "Baixo", desc: "Exige e-mail verificado na conta." },
-  2: { label: "Médio", desc: "Também exige conta criada há mais de 5 minutos." },
-  3: { label: "Alto", desc: "Também exige mais de 10 minutos no servidor." },
-  4: { label: "Muito alto", desc: "Exige telefone verificado na conta." },
-};
-const NV_FILTER = {
-  0: { label: "Desativado", desc: "Não analisa imagens e links de ninguém." },
-  1: { label: "Membros sem cargo", desc: "Analisa só quem não tem nenhum cargo." },
-  2: { label: "Todos os membros", desc: "Analisa o conteúdo de todo mundo." },
-};
-const NV_NOTIFY = {
-  0: { label: "Todas as mensagens", desc: "Novos membros são avisados de tudo." },
-  1: { label: "Apenas menções", desc: "Novos membros só são avisados quando mencionados." },
-};
-// Mensagens do canal de sistema. O Discord guarda o contrário (flags de "suprimir"),
-// então aqui o valor selecionado significa que a mensagem está LIGADA.
-const NV_SYSTEM = {
-  joins: { label: "Boas-vindas a novos membros", flag: "SuppressJoinNotifications" },
-  boosts: { label: "Avisos de impulso (boost)", flag: "SuppressPremiumSubscriptions" },
-  tips: { label: "Dicas de configuração do servidor", flag: "SuppressGuildReminderNotifications" },
-  stickers: { label: "Botão de figurinha de boas-vindas", flag: "SuppressJoinNotificationReplies" },
-};
-const NV_MENTION_LIMITS = [3, 5, 8, 10, 20, 50];
-const NV_RULE_PREFIX = "Anti-Raid · ";
-const NV_AUTOMOD = {
-  mention: { name: `${NV_RULE_PREFIX}spam de menções`, label: "Spam de menções" },
-  spam: { name: `${NV_RULE_PREFIX}spam suspeito`, label: "Spam suspeito" },
-  invites: { name: `${NV_RULE_PREFIX}convites`, label: "Convites" },
-  profanity: { name: `${NV_RULE_PREFIX}palavras ofensivas`, label: "Palavras ofensivas" },
-};
-
 module.exports = {
-  VS_FIELDS,
-  VS_RESPONSES,
-  NV_VERIFICATION,
-  NV_FILTER,
-  NV_NOTIFY,
-  NV_SYSTEM,
-  NV_MENTION_LIMITS,
-  NV_RULE_PREFIX,
-  NV_AUTOMOD,
   DP_PERMS,
   DP_RESPONSES,
   MV_ACTIONS,

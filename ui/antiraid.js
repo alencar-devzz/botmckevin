@@ -43,9 +43,8 @@ function buildNotice(content) {
 // ---------- Painel compacto (mensagem do comando) ----------
 function buildAntiRaidHome(guild, cfg) {
   const { core } = cfg;
-  const counted = MODULES.filter((m) => m.key !== "core" && !m.info); // "info" só aplica ajustes, não liga nem desliga
-  const activeModules = counted.filter((m) => m.active(cfg)).length;
-  const totalModules = counted.length;
+  const activeModules = MODULES.filter((m) => m.key !== "core" && m.active(cfg)).length;
+  const totalModules = MODULES.length - 1;
 
   const container = new ContainerBuilder()
     .setAccentColor(coreAccent(core))
@@ -86,7 +85,7 @@ function buildAntiRaidHub(guild, cfg) {
     .addSeparatorComponents(divider());
 
   for (const mod of MODULES) {
-    const status = !mod.built ? "chega nas próximas partes" : mod.status ?? (mod.active(cfg) ? "ativo" : "desligado");
+    const status = mod.built ? (mod.active(cfg) ? "ativo" : "desligado") : "chega nas próximas partes";
     container.addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(text(`**${mod.label}**\n-# ${status} · ${mod.desc}`))

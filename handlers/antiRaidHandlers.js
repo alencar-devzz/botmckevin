@@ -7,7 +7,6 @@ const { buildAntiRaidHome, buildAntiRaidHub, buildCorePanel, buildNotice } = req
 const { buildMassJoinPanel, buildSpamPanel, buildSpamResponsePanel } = require("../ui/antiraidModules");
 const { buildAntiBotPanel, buildAntiAltPanel } = require("../ui/antiraidAccess");
 const { buildDangerPermsPanel, buildProtectedRolesPanel, buildMovCallPanel } = require("../ui/antiraidSensitive");
-const server = require("./antiRaidServerHandlers");
 
 const V2 = MessageFlags.IsComponentsV2;
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -23,8 +22,6 @@ const PANELS = {
   dangerPerms: buildDangerPermsPanel,
   protectedRoles: buildProtectedRolesPanel,
   movCall: buildMovCallPanel,
-  // Parte 5: visual, native, nativeChannels e autoMod
-  ...server.PANELS,
 };
 
 // Valor numérico de um select, só se estiver na lista permitida
@@ -48,8 +45,7 @@ async function deny(interaction, content) {
 // Reabre o painel de um módulo já com a configuração atualizada
 async function showPanel(interaction, key) {
   const cfg = await getAntiRaidConfig(interaction.guild.id);
-  const components = await PANELS[key](interaction.guild, cfg); // o painel do AutoMod busca as regras
-  return interaction.update({ components });
+  return interaction.update({ components: PANELS[key](interaction.guild, cfg) });
 }
 
 // ======================= Botões =======================
@@ -94,8 +90,6 @@ async function handleAntiRaidButton(interaction) {
   if (customId.startsWith("ar:dp:") || customId.startsWith("ar:pr:") || customId.startsWith("ar:mv:")) {
     return handleSensitiveToggle(interaction);
   }
-  if (customId.startsWith("ar:vs:")) return server.handleVisualButton(interaction);
-  if (customId.startsWith("ar:nv:")) return server.handleNativeButton(interaction);
 }
 
 async function handleCoreButton(interaction) {
@@ -126,8 +120,6 @@ async function handleAntiRaidSelect(interaction) {
   if (interaction.customId.startsWith("ar:dp:")) return handleDangerPermsSelect(interaction);
   if (interaction.customId.startsWith("ar:pr:")) return handleProtectedRolesSelect(interaction);
   if (interaction.customId.startsWith("ar:mv:")) return handleMovCallSelect(interaction);
-  if (interaction.customId.startsWith("ar:vs:")) return server.handleVisualSelect(interaction);
-  if (interaction.customId.startsWith("ar:nv:")) return server.handleNativeSelect(interaction);
 }
 
 async function handleCoreSelect(interaction) {
