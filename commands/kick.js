@@ -1,10 +1,65 @@
-const { MessageFlags, PermissionFlagsBits } = require("discord.js");
+const {
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+  InteractionContextType,
+} = require("discord.js");
 const { resolveTarget } = require("../utils/resolveTarget");
 const { buildConfirmPanel } = require("../ui/moderation");
 const { setPendingModeration } = require("../utils/pendingModeration");
+const {
+  replyEphemeral,
+  requirePermission,
+  validateTarget,
+  sendConfirm,
+} = require("../utils/slashModeration");
 
 module.exports = {
   name: "kick",
+
+  // /kick usuario:@pessoa motivo:texto
+  data: new SlashCommandBuilder()
+    .setName("kick")
+    .setDescription("Expulsa um membro do servidor.")
+    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
+    .setContexts(InteractionContextType.Guild)
+    .addUserOption((o) =>
+      o.setName("usuario").setDescription("Quem será expulso.").setRequired(true)
+    )
+    .addStringOption((o) =>
+      o.setName("motivo").setDescription("Motivo da expulsão.").setMaxLength(512)
+    ),
+
+  async executeSlash(interaction) {
+    const permitido = await requirePermission(
+      interaction,
+      PermissionFlagsBits.KickMembers,
+      "Você não tem permissão para expulsar membros."
+    );
+    if (!permitido) return;
+
+    const user = interaction.options.getUser("usuario", true);
+    const member = interaction.options.getMember("usuario");
+    const reason = interaction.options.getString("motivo")?.trim() || null;
+
+    const erro = validateTarget(interaction, {
+      user,
+      member,
+      requireMember: true,
+      botCheck: "kickable",
+    });
+    if (erro) return replyEphemeral(interaction, erro);
+
+    return sendConfirm(interaction, {
+      action: "kick",
+      title: `Expulsão · ${user.tag ?? user.username}`,
+      question: `Deseja realmente expulsar <@${user.id}> do servidor?`,
+      user,
+      member,
+      reason,
+    });
+  },
+
   async execute(message, args) {
     if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) {
       const aviso = await message.channel.send("Você não tem permissão para expulsar membros.");

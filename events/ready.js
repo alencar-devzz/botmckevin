@@ -16,6 +16,18 @@ module.exports = {
       console.error("[CALLS] Erro ao verificar as calls ao iniciar:", err.message);
     }
 
+    // Registra os slash commands (os comandos que exportam "data").
+    // Os aliases apontam para o mesmo comando, então o Set remove as repetições.
+    try {
+      const slashCommands = [...new Set(client.commands.values())]
+        .filter((command) => command.data)
+        .map((command) => command.data.toJSON());
+      await client.application.commands.set(slashCommands);
+      console.log(`[SLASH] ${slashCommands.length} comandos registrados.`);
+    } catch (err) {
+      console.error("[SLASH] Erro ao registrar os comandos:", err.message);
+    }
+
     // Status salvo pelo menu (Aparência > Status). Sem nada salvo, usa o padrão abaixo.
     try {
       const cfg = await getBotConfig();

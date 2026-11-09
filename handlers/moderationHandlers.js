@@ -5,7 +5,13 @@ const { formatDuration } = require("../utils/formatDuration");
 
 function scheduleSelfDelete(interaction, ms) {
   setTimeout(() => {
-    interaction.message?.delete().catch(() => {});
+    // Mensagem efêmera (vinda de slash command) não pode ser apagada pelo canal;
+    // nesse caso apaga a própria resposta da interação.
+    if (interaction.message?.flags?.has(MessageFlags.Ephemeral)) {
+      interaction.deleteReply().catch(() => {});
+    } else {
+      interaction.message?.delete().catch(() => {});
+    }
   }, ms);
 }
 

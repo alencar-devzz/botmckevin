@@ -8,6 +8,13 @@ module.exports = {
   name: "interactionCreate",
   async execute(interaction) {
     try {
+      // Slash commands (ex.: /ban, /kick, /mute). Cada comando exporta "executeSlash".
+      if (interaction.isChatInputCommand()) {
+        const command = interaction.client.commands.get(interaction.commandName);
+        if (!command?.executeSlash) return;
+        return await command.executeSlash(interaction);
+      }
+
       // Renova o prazo de expiração do menu principal
       if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
         touchMenu(interaction);
