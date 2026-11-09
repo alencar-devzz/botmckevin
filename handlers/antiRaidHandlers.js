@@ -118,6 +118,12 @@ async function handleAntiRaidSelect(interaction) {
   if (!canManage(interaction.member)) {
     return deny(interaction, "Só o dono ou quem tem Administrador pode configurar o Anti-Raid.");
   }
+  // Menu do hub: escolhe a proteção do grupo e abre o painel dela
+  if (interaction.customId.startsWith("ar:pick:")) {
+    const key = interaction.values?.[0];
+    if (!key || !PANELS[key]) return deny(interaction, "Esse módulo ainda não está disponível.");
+    return showPanel(interaction, key);
+  }
   if (interaction.customId.startsWith("ar:core:")) return handleCoreSelect(interaction);
   if (interaction.customId.startsWith("ar:mj:")) return handleMassJoinSelect(interaction);
   if (interaction.customId.startsWith("ar:sp:")) return handleSpamSelect(interaction);
