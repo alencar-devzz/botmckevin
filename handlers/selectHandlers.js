@@ -6,6 +6,7 @@ const { openPortaria, handlePortariaSelect } = require("./portariaHandlers");
 const { buildAutoRolesPanel } = require("../ui/autoroles");
 const { handleTicketSelect } = require("./ticketHandlers");
 const { handleBotcallSelect } = require("./botcallHandlers");
+const { handleAntiRaidSelect } = require("./antiRaidHandlers");
 const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHandlers");
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
@@ -24,6 +25,11 @@ const {
 
 async function handleSelect(interaction) {
   const { customId, values } = interaction;
+
+  // Painel do Anti-Raid (comando painelps)
+  if (customId.startsWith("ar:")) {
+    return handleAntiRaidSelect(interaction);
+  }
 
   // Calls temporárias: configuração no n!menu e seletores do painel da call
   if (customId.startsWith("chcfg_")) {

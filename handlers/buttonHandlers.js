@@ -15,6 +15,7 @@ const { handleBotcallButton } = require("./botcallHandlers");
 const { handleTicketConfigButton } = require("./ticketConfigHandlers");
 const { handleClConfigButton } = require("./clHandlers");
 const { handleRoleManageButton, handleRoleManageConfigButton } = require("./roleManageHandlers");
+const { handleAntiRaidButton } = require("./antiRaidHandlers");
 
 const {
   handleCallHubConfigButton,
@@ -23,6 +24,11 @@ const {
 
 async function handleButton(interaction) {
   const { customId } = interaction;
+
+  // Painel do Anti-Raid (comando painelps)
+  if (customId.startsWith("ar:")) {
+    return handleAntiRaidButton(interaction);
+  }
 
   // Calls temporárias: configuração no n!menu e botões do painel da call
   if (customId.startsWith("chcfg_")) {
