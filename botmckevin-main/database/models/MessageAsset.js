@@ -12,6 +12,7 @@ const messageAssetSchema = new Schema(
     ext: { type: String, required: true },
     size: { type: Number, required: true },
     data: { type: Buffer, required: true },
+    published: { type: Boolean, default: false }, // cópia usada por resposta de botão já publicada (não conta na cota do rascunho)
   },
   { timestamps: true }
 );

@@ -13,7 +13,7 @@ const {
   AttachmentBuilder,
 } = require("discord.js");
 const MessageAsset = require("../../database/models/MessageAsset");
-const { LIMITS, LAYOUTS, colorValue, isStored, storedId } = require("./store");
+const { LIMITS, LAYOUTS, colorValue, isStored, storedId, hasResponse, responseHasContent, responseSources } = require("./store");
 
 // Monta a mensagem final (Components V2) a partir do rascunho.
 // Marcadores no texto: [separador] = linha fina · [separador_largo] = espaço grande.
@@ -135,8 +135,16 @@ function buildBlock(block, bi, media, ctx) {
         if (emoji) button.setEmoji(emoji);
 
         if (btn.url) return button.setStyle(ButtonStyle.Link).setURL(btn.url);
-        // sem link = botão decorativo (o clique não faz nada)
-        return button.setStyle(STYLES[btn.style] ?? ButtonStyle.Secondary).setCustomId(`msg:deco:${bi}:${index}`);
+
+        // sem link: botão com resposta ou decorativo.
+        //  msg:r:<id>     resposta de mensagem publicada (guardada no banco)
+        //  msg:pv:<b>:<i> resposta na prévia (lê o rascunho de quem clicou)
+        //  msg:deco:...   decorativo (o clique não faz nada)
+        const published = ctx.responseIds?.get(`${bi}:${index}`);
+        let customId = `msg:deco:${bi}:${index}`;
+        if (published) customId = `msg:r:${published}`;
+        else if (hasResponse(btn)) customId = `msg:pv:${bi}:${index}`;
+        return button.setStyle(STYLES[btn.style] ?? ButtonStyle.Secondary).setCustomId(customId);
       })
     );
   };
@@ -178,8 +186,9 @@ function buildBlock(block, bi, media, ctx) {
 // ---------- mensagem inteira ----------
 
 // withData=false não carrega os bytes dos arquivos (serve para o resumo e a checagem de limites).
-async function renderDraft(draft, { withData = false } = {}) {
-  const ctx = { count: 0, warnings: [] };
+// responseIds: Map "bloco:botão" -> id da resposta publicada (só na hora de publicar)
+async function renderDraft(draft, { withData = false, responseIds = null } = {}) {
+  const ctx = { count: 0, warnings: [], responseIds };
   const problems = [];
 
   const sources = [draft.audio?.source];
@@ -202,10 +211,26 @@ async function renderDraft(draft, { withData = false } = {}) {
 
   const components = [];
   let visualBlocks = 0;
+  const respAssets = await loadAssets(
+    draft.blocks.flatMap((b) => (b.buttons ?? []).filter(hasResponse).flatMap((x) => responseSources(x.response))),
+    false
+  );
   draft.blocks.forEach((block, bi) => {
     if (!blockHasContent(block)) return;
     visualBlocks += 1;
     components.push(...buildBlock(block, bi, media, ctx));
+
+    // respostas de botão precisam ter conteúdo e arquivos válidos
+    (block.buttons ?? []).forEach((x, i) => {
+      if (!hasResponse(x) || !(x.label || x.emoji)) return;
+      const where = `Bloco ${bi + 1}, botão ${i + 1}`;
+      if (!responseHasContent(x.response)) {
+        problems.push(`${where}: a resposta está vazia. Adicione texto, imagem ou botão, ou escolha "Sem resposta".`);
+      }
+      if (responseSources(x.response).some((s) => isStored(s) && !respAssets.has(storedId(s)))) {
+        problems.push(`${where}: uma imagem da resposta não foi encontrada. Envie de novo.`);
+      }
+    });
   });
 
   // áudio
@@ -233,4 +258,4 @@ async function renderDraft(draft, { withData = false } = {}) {
   };
 }
 
-module.exports = { chunkText, textLength, totalTextLength, blockHasContent, parseEmoji, renderDraft };
+module.exports = { chunkText, textLength, totalTextLength, blockHasContent, parseEmoji, loadAssets, renderDraft };

@@ -4,6 +4,7 @@ const {
   SeparatorBuilder,
   SeparatorSpacingSize,
   SectionBuilder,
+  ThumbnailBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -17,235 +18,218 @@ const { CORE_ACTIONS, CORE_LIMITS, CORE_WINDOWS, PUNISHMENTS, MODULES } = requir
 
 // Painéis do Anti-Raid (comando painelps). Tudo em Components V2, sem modais.
 // IDs dos componentes: "ar:<área>:<ação>"
-
-const COLOR = { on: 0x3ba55d, test: 0xfaa61a, off: 0xed4245, neutral: 0x5865f2 };
+// Visual: containers sem cor de destaque, vários containers por mensagem e os botões
+// numa linha embaixo (nada de botão encostado no lado direito).
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3000));
 const clip = (value, max) => String(value ?? "").slice(0, max);
 const divider = () => new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small);
 const btn = (id, label, style = ButtonStyle.Secondary) =>
   new ButtonBuilder().setCustomId(id).setLabel(clip(label, 80)).setStyle(style);
-const row = (component) => new ActionRowBuilder().addComponents(component);
+const row = (...components) => new ActionRowBuilder().addComponents(...components);
 
-const tag = (on) => (on ? "`ATIVO`" : "`DESLIGADO`");
+const tag = (on) => (on ? "`Ligado`" : "`Desligado`");
 const modeLabel = (mode) => (mode === "live" ? "punição real" : "modo teste");
 
-function coreAccent(core) {
-  if (!core.enabled) return COLOR.off;
-  return core.mode === "live" ? COLOR.on : COLOR.test;
+// Container sem cor de destaque
+const box = () => new ContainerBuilder();
+
+// Cabeçalho padrão dos painéis: só o título (o segundo argumento que alguns painéis ainda passam é ignorado)
+function header(title) {
+  return box().addTextDisplayComponents(text(`## ${title}`)).addSeparatorComponents(divider());
 }
+
+// Botão de liga/desliga e de opção sim/não (ficam sempre numa linha de botões embaixo)
+const toggleBtn = (id, on, offLabel = "Ligar", onLabel = "Desligar") =>
+  on ? btn(id, onLabel, ButtonStyle.Danger) : btn(id, offLabel, ButtonStyle.Success);
+const flagBtn = (id, label, on) => btn(id, `${label}: ${on ? "sim" : "não"}`, on ? ButtonStyle.Success : ButtonStyle.Secondary);
+
+// Linha de botão voltar, solta embaixo dos containers
+const backRow = (id = "ar:hub", label = "Voltar") => row(btn(id, label));
 
 // ---------- Aviso simples ----------
 function buildNotice(content) {
-  return [new ContainerBuilder().setAccentColor(COLOR.neutral).addTextDisplayComponents(text(content))];
+  return [box().addTextDisplayComponents(text(content))];
 }
 
-// ---------- Painel compacto (mensagem do comando) ----------
+// ---------- Painel principal (mensagem do comando painelps) ----------
 function buildAntiRaidHome(guild, cfg) {
   const { core } = cfg;
   const counted = MODULES.filter((m) => m.key !== "core" && !m.info); // "info" só aplica ajustes, não liga nem desliga
   const activeModules = counted.filter((m) => m.active(cfg)).length;
-  const totalModules = counted.length;
 
-  const container = new ContainerBuilder()
-    .setAccentColor(coreAccent(core))
-    .addTextDisplayComponents(
-      text("## Anti-Raid"),
-      text(`-# Proteção de **${clip(guild.name, 60)}** · central de configuração`)
-    )
-    .addSeparatorComponents(divider())
-    .addTextDisplayComponents(
-      text(
-        [
-          `**Estado do núcleo**  ${tag(core.enabled)}`,
-          `**Resposta**  ${modeLabel(core.mode)}`,
-          `**Limite**  ${core.limit} ações em ${core.windowSec}s`,
-          `**Alertas**  ${core.alertChannelId ? `<#${core.alertChannelId}>` : "sem canal definido"}`,
-          `**Módulos extras ligados**  ${activeModules} de ${totalModules}`,
-        ].join("\n")
-      )
-    )
-    .addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        btn("ar:open", "Abrir configurações", ButtonStyle.Primary),
-        btn("ar:home:refresh", "Atualizar")
-      )
+  // Imagem de canto: ícone do servidor, ou o avatar do bot se o servidor não tiver ícone
+  const icon =
+    guild.iconURL({ extension: "png", size: 256 }) ?? guild.client.user.displayAvatarURL({ extension: "png", size: 256 });
+
+  const head = box()
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          text("## Anti-Raid"),
+          text(`Proteção de **${clip(guild.name, 60)}**\n-# Central de configuração do servidor.`)
+        )
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(icon))
     );
 
-  return [container];
+  const nucleo = box().addTextDisplayComponents(
+    text(
+      [
+        "### Núcleo",
+        `**Estado**  ${tag(core.enabled)}`,
+        `**Resposta**  ${modeLabel(core.mode)}`,
+        `**Limite**  ${core.limit} ações em ${core.windowSec}s`,
+        `**Alertas**  ${core.alertChannelId ? `<#${core.alertChannelId}>` : "sem canal definido"}`,
+      ].join("\n")
+    )
+  );
+
+  const modulos = box().addTextDisplayComponents(
+    text(
+      [
+        `### Módulos  (${activeModules} de ${counted.length} ligados)`,
+        ...counted.map((m) => `**${m.label}**  ${tag(m.active(cfg))}`),
+      ].join("\n")
+    )
+  );
+
+  return [head, nucleo, modulos, row(btn("ar:open", "Abrir configurações", ButtonStyle.Primary), btn("ar:home:refresh", "Atualizar"))];
 }
 
-// ---------- Menu geral (lista de módulos) ----------
-function buildAntiRaidHub(guild, cfg) {
-  const container = new ContainerBuilder()
-    .setAccentColor(COLOR.neutral)
-    .addTextDisplayComponents(
-      // um só texto: com 11 módulos o painel chega perto do limite de 40 componentes do Discord
-      text("### Central de módulos\n-# Escolha o que você quer configurar. Cada módulo tem o seu próprio painel.")
-    )
-    .addSeparatorComponents(divider());
+// ---------- Menu geral (módulos agrupados) ----------
+const GROUPS = [
+  { title: "Base e ajustes", keys: ["core", "native"] },
+  { title: "Entrada e mensagens", keys: ["massJoin", "spam", "antiLink"] },
+  { title: "Acesso e permissões", keys: ["antiBot", "antiAlt", "dangerPerms", "visual"] },
+  { title: "Proteções sensíveis", keys: ["protectedRoles", "movCall"] },
+];
 
-  for (const mod of MODULES) {
-    const status = !mod.built ? "chega nas próximas partes" : mod.status ?? (mod.active(cfg) ? "ativo" : "desligado");
-    container.addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(text(`**${mod.label}**\n-# ${status} · ${mod.desc}`))
-        .setButtonAccessory(
-          mod.built
-            ? btn(`ar:mod:${mod.key}`, "Configurar", ButtonStyle.Primary)
-            : btn(`ar:mod:${mod.key}`, "Em breve").setDisabled(true)
+function buildAntiRaidHub(guild, cfg) {
+  const head = box().addTextDisplayComponents(
+    text("## Anti-Raid\n-# Escolha uma proteção em cada grupo para configurar.")
+  );
+  const containers = [head];
+
+  GROUPS.forEach((group, index) => {
+    const mods = group.keys.map((k) => MODULES.find((m) => m.key === k)).filter((m) => m?.built);
+    if (!mods.length) return;
+
+    const lines = mods.map((m) => `**${m.label}**  ${m.info ? `\`${m.status ?? "ajustes"}\`` : tag(m.active(cfg))}`);
+    containers.push(
+      box()
+        .addTextDisplayComponents(text([`### ${group.title}`, ...lines].join("\n")))
+        .addActionRowComponents(
+          row(
+            new StringSelectMenuBuilder()
+              .setCustomId(`ar:pick:${index}`)
+              .setPlaceholder("Escolha uma proteção para configurar")
+              .addOptions(mods.map((m) => ({ label: clip(m.label, 100), description: clip(m.desc, 100), value: m.key })))
+          )
         )
     );
-  }
+  });
 
-  container.addSeparatorComponents(divider());
-  container.addActionRowComponents(row(btn("ar:close", "Fechar")));
-  return [container];
+  containers.push(row(btn("ar:close", "Fechar")));
+  return containers;
 }
 
 // ---------- Núcleo ----------
 function buildCorePanel(guild, cfg) {
   const { core } = cfg;
 
-  const container = new ContainerBuilder()
-    .setAccentColor(coreAccent(core))
+  const estado = box()
     .addTextDisplayComponents(
-      text("### Núcleo anti-raid"),
-      text("-# Lê o registro de auditoria e age quando uma mesma pessoa ou bot faz muitas ações seguidas.")
-    )
-    .addSeparatorComponents(divider());
-
-  // Liga/desliga
-  container.addSectionComponents(
-    new SectionBuilder()
-      .addTextDisplayComponents(text(`**Proteção**  ${tag(core.enabled)}\n-# Liga ou desliga todo o núcleo.`))
-      .setButtonAccessory(
-        core.enabled
-          ? btn("ar:core:toggle", "Desligar", ButtonStyle.Danger)
-          : btn("ar:core:toggle", "Ligar", ButtonStyle.Success)
-      )
-  );
-
-  // Modo
-  container.addSectionComponents(
-    new SectionBuilder()
-      .addTextDisplayComponents(
-        text(
-          `**Modo de resposta**  \`${core.mode === "live" ? "PUNIÇÃO REAL" : "TESTE"}\`\n-# ${
+      text(
+        [
+          "### Estado",
+          "-# Lê o registro de auditoria e age quando uma mesma pessoa ou bot faz muitas ações seguidas.",
+          `**Proteção**  ${tag(core.enabled)}`,
+          `**Modo de resposta**  \`${core.mode === "live" ? "Punição real" : "Teste"}\``,
+          `-# ${
             core.mode === "live"
               ? "Quem passar do limite é punido de verdade."
               : "Só registra e avisa no canal de alertas, sem punir ninguém."
-          }`
-        )
+          }`,
+        ].join("\n")
       )
-      .setButtonAccessory(
-        core.mode === "live"
-          ? btn("ar:core:mode", "Voltar ao teste")
-          : btn("ar:core:mode", "Punir de verdade", ButtonStyle.Danger)
+    )
+    .addActionRowComponents(
+      row(
+        toggleBtn("ar:core:toggle", core.enabled),
+        core.mode === "live" ? btn("ar:core:mode", "Voltar ao teste") : btn("ar:core:mode", "Punir de verdade", ButtonStyle.Danger)
       )
-  );
+    );
 
-  container.addSeparatorComponents(divider());
-
-  // Ações monitoradas
-  container.addTextDisplayComponents(text("**Ações monitoradas**\n-# O que conta para o limite. Cada ação é contada separadamente."));
-  container.addActionRowComponents(
-    row(
-      new StringSelectMenuBuilder()
-        .setCustomId("ar:core:actions")
-        .setPlaceholder("Escolha as ações")
-        .setMinValues(0)
-        .setMaxValues(Object.keys(CORE_ACTIONS).length)
-        .addOptions(
-          Object.entries(CORE_ACTIONS).map(([value, label]) => ({
-            label,
-            value,
-            default: core.actions.includes(value),
-          }))
-        )
+  const gatilho = box()
+    .addTextDisplayComponents(
+      text(
+        `### Gatilho\n-# Dispara com **${core.limit}** ações dentro de **${core.windowSec}s**. Cada ação é contada separadamente.`
+      )
     )
-  );
+    .addActionRowComponents(
+      row(
+        new StringSelectMenuBuilder()
+          .setCustomId("ar:core:actions")
+          .setPlaceholder("Ações monitoradas")
+          .setMinValues(0)
+          .setMaxValues(Object.keys(CORE_ACTIONS).length)
+          .addOptions(
+            Object.entries(CORE_ACTIONS).map(([value, label]) => ({ label, value, default: core.actions.includes(value) }))
+          )
+      ),
+      row(
+        new StringSelectMenuBuilder()
+          .setCustomId("ar:core:limit")
+          .setPlaceholder("Quantidade de ações")
+          .addOptions(CORE_LIMITS.map((n) => ({ label: `${n} ações`, value: String(n), default: n === core.limit })))
+      ),
+      row(
+        new StringSelectMenuBuilder()
+          .setCustomId("ar:core:window")
+          .setPlaceholder("Janela de tempo")
+          .addOptions(CORE_WINDOWS.map((n) => ({ label: `em ${n} segundos`, value: String(n), default: n === core.windowSec })))
+      )
+    );
 
-  // Limite e janela
-  container.addTextDisplayComponents(
-    text(`**Gatilho**\n-# Dispara com **${core.limit}** ações dentro de **${core.windowSec}s**.`)
-  );
-  container.addActionRowComponents(
-    row(
-      new StringSelectMenuBuilder()
-        .setCustomId("ar:core:limit")
-        .setPlaceholder("Quantidade de ações")
-        .addOptions(
-          CORE_LIMITS.map((n) => ({ label: `${n} ações`, value: String(n), default: n === core.limit }))
-        )
-    )
-  );
-  container.addActionRowComponents(
-    row(
-      new StringSelectMenuBuilder()
-        .setCustomId("ar:core:window")
-        .setPlaceholder("Janela de tempo")
-        .addOptions(
-          CORE_WINDOWS.map((n) => ({ label: `em ${n} segundos`, value: String(n), default: n === core.windowSec }))
-        )
-    )
-  );
-
-  // Punição
-  container.addTextDisplayComponents(text("**Punição de quem passar do limite**"));
-  container.addActionRowComponents(
-    row(
-      new StringSelectMenuBuilder()
-        .setCustomId("ar:core:punish")
-        .setPlaceholder("Escolha a punição")
-        .addOptions(
-          Object.entries(PUNISHMENTS).map(([value, info]) => ({
-            label: info.label,
-            description: info.desc,
-            value,
-            default: core.punishment === value,
-          }))
-        )
-    )
-  );
-
-  container.addSeparatorComponents(divider());
-
-  // Canal de alertas
-  container.addTextDisplayComponents(text("**Canal de alertas**\n-# Esvazie a seleção para remover o canal."));
   const alert = new ChannelSelectMenuBuilder()
     .setCustomId("ar:core:alert")
-    .setPlaceholder("Escolha o canal")
+    .setPlaceholder("Canal de alertas")
     .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
     .setMinValues(0)
     .setMaxValues(1);
-  if (core.alertChannelId && guild.channels.cache.has(core.alertChannelId)) {
-    alert.setDefaultChannels(core.alertChannelId);
-  }
-  container.addActionRowComponents(row(alert));
+  if (core.alertChannelId && guild.channels.cache.has(core.alertChannelId)) alert.setDefaultChannels(core.alertChannelId);
 
-  // Isentos
-  container.addTextDisplayComponents(text("**Isentos**\n-# Pessoas e cargos que nunca disparam o núcleo. O dono e o próprio bot já são isentos."));
-  const users = new UserSelectMenuBuilder()
-    .setCustomId("ar:core:xusers")
-    .setPlaceholder("Pessoas isentas")
-    .setMinValues(0)
-    .setMaxValues(25);
+  const resposta = box()
+    .addTextDisplayComponents(text("### Resposta e alertas\n-# Punição de quem passar do limite. Esvazie o canal para remover os alertas."))
+    .addActionRowComponents(
+      row(
+        new StringSelectMenuBuilder()
+          .setCustomId("ar:core:punish")
+          .setPlaceholder("Punição")
+          .addOptions(
+            Object.entries(PUNISHMENTS).map(([value, info]) => ({
+              label: info.label,
+              description: info.desc,
+              value,
+              default: core.punishment === value,
+            }))
+          )
+      ),
+      row(alert)
+    );
+
+  const users = new UserSelectMenuBuilder().setCustomId("ar:core:xusers").setPlaceholder("Pessoas isentas").setMinValues(0).setMaxValues(25);
   if (core.exemptUsers.length) users.setDefaultUsers(...core.exemptUsers.slice(0, 25));
-  container.addActionRowComponents(row(users));
 
   const exemptRoles = core.exemptRoles.filter((id) => guild.roles.cache.has(id)).slice(0, 25);
-  const roles = new RoleSelectMenuBuilder()
-    .setCustomId("ar:core:xroles")
-    .setPlaceholder("Cargos isentos")
-    .setMinValues(0)
-    .setMaxValues(25);
+  const roles = new RoleSelectMenuBuilder().setCustomId("ar:core:xroles").setPlaceholder("Cargos isentos").setMinValues(0).setMaxValues(25);
   if (exemptRoles.length) roles.setDefaultRoles(...exemptRoles);
-  container.addActionRowComponents(row(roles));
 
-  container.addSeparatorComponents(divider());
-  container.addActionRowComponents(row(btn("ar:hub", "Voltar")));
-  return [container];
+  const isentos = box()
+    .addTextDisplayComponents(text("### Isentos\n-# Pessoas e cargos que nunca disparam o núcleo. O dono e o próprio bot já são isentos."))
+    .addActionRowComponents(row(users), row(roles));
+
+  return [header("Núcleo anti-raid", "Núcleo"), estado, gatilho, resposta, isentos, backRow()];
 }
 
 module.exports = {
@@ -253,5 +237,5 @@ module.exports = {
   buildAntiRaidHub,
   buildCorePanel,
   buildNotice,
-  ui: { COLOR, text, clip, divider, btn, row, tag },
+  ui: { text, clip, divider, btn, row, tag, box, header, backRow, toggleBtn, flagBtn },
 };
