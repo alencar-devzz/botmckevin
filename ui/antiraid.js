@@ -21,8 +21,6 @@ const { CORE_ACTIONS, CORE_LIMITS, CORE_WINDOWS, PUNISHMENTS, MODULES } = requir
 // Visual: containers sem cor de destaque, vários containers por mensagem e os botões
 // numa linha embaixo (nada de botão encostado no lado direito).
 
-const CRUMB = "Painel › Moderação › Anti-Raid";
-
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3000));
 const clip = (value, max) => String(value ?? "").slice(0, max);
 const divider = () => new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small);
@@ -36,11 +34,9 @@ const modeLabel = (mode) => (mode === "live" ? "punição real" : "modo teste");
 // Container sem cor de destaque
 const box = () => new ContainerBuilder();
 
-// Cabeçalho padrão dos painéis: título + caminho de navegação
-function header(title, trail) {
-  return box()
-    .addTextDisplayComponents(text(`## ${title}\n-# ${CRUMB}${trail ? ` › ${trail}` : ""}`))
-    .addSeparatorComponents(divider());
+// Cabeçalho padrão dos painéis: só o título (o segundo argumento que alguns painéis ainda passam é ignorado)
+function header(title) {
+  return box().addTextDisplayComponents(text(`## ${title}`)).addSeparatorComponents(divider());
 }
 
 // Botão de liga/desliga e de opção sim/não (ficam sempre numa linha de botões embaixo)
@@ -70,7 +66,7 @@ function buildAntiRaidHome(guild, cfg) {
     .addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(
-          text(`## Anti-Raid\n-# ${CRUMB}`),
+          text("## Anti-Raid"),
           text(`Proteção de **${clip(guild.name, 60)}**\n-# Central de configuração do servidor.`)
         )
         .setThumbnailAccessory(new ThumbnailBuilder().setURL(icon))
@@ -110,7 +106,7 @@ const GROUPS = [
 
 function buildAntiRaidHub(guild, cfg) {
   const head = box().addTextDisplayComponents(
-    text(`## Anti-Raid\n-# ${CRUMB}\n-# Escolha uma proteção em cada grupo para configurar.`)
+    text("## Anti-Raid\n-# Escolha uma proteção em cada grupo para configurar.")
   );
   const containers = [head];
 

@@ -2,10 +2,11 @@ const { MessageFlags, PermissionFlagsBits, ChannelType, AttachmentBuilder } = re
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 const store = require("../utils/msgBuilder/store");
 const { renderDraft, textLength, totalTextLength, parseEmoji } = require("../utils/msgBuilder/render");
+const respond = require("../utils/msgBuilder/response");
 const { buildView, buildNotice, VIEWS, NEEDS_REPORT } = require("../ui/mensagemPanels");
 const modals = require("../ui/mensagemModals");
 
-const { LIMITS, LAYOUTS, COLORS, BUTTON_STYLES, PLACES } = store;
+const { LIMITS, LAYOUTS, COLORS, BUTTON_STYLES, PLACES, RESPONSE_MODES } = store;
 const V2 = MessageFlags.IsComponentsV2;
 const EPHEMERAL = MessageFlags.Ephemeral;
 
@@ -65,7 +66,7 @@ async function preview(interaction, draft) {
 }
 
 async function publish(interaction, draft) {
-  const { guild, member } = interaction;
+  const { guild, member, user } = interaction;
   const channel = draft.channelId ? guild.channels.cache.get(draft.channelId) : null;
   if (!channel || ![ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(channel.type)) {
     return notice(interaction, "Escolha um canal de texto válido para publicar.");
@@ -90,10 +91,21 @@ async function publish(interaction, draft) {
   // Só quem pode mencionar todo mundo faz o bot marcar cargos e @everyone
   const parse = mine.has(PermissionFlagsBits.MentionEveryone) ? ["users", "roles", "everyone"] : ["users"];
 
+  // Guarda uma cópia das respostas dos botões: a mensagem publicada não depende mais do rascunho
+  let responseIds = new Map();
+  try {
+    responseIds = await respond.createPublishedResponses({ guildId: guild.id, channelId: channel.id, userId: user.id, draft });
+  } catch (err) {
+    console.error("[MENSAGEM] Erro ao guardar respostas dos botões:", err);
+    return notice(interaction, "Não consegui guardar as respostas dos botões. Tente publicar de novo.");
+  }
+  const final = responseIds.size ? await renderDraft(draft, { withData: true, responseIds }) : report;
+
   let first = null;
   try {
-    if (report.components.length) {
-      first = await channel.send({ components: report.components, files: report.files, flags: V2, allowedMentions: { parse } });
+    if (final.components.length) {
+      first = await channel.send({ components: final.components, files: final.files, flags: V2, allowedMentions: { parse } });
+      await respond.attachResponses(responseIds, first.id);
     }
     if (report.audio?.buffer) {
       await channel.send({
@@ -103,6 +115,7 @@ async function publish(interaction, draft) {
     }
   } catch (err) {
     console.error("[MENSAGEM] Erro ao publicar:", err);
+    if (!first) await respond.discardResponses([...responseIds.values()]).catch(() => {});
     return notice(interaction, `Não consegui publicar. O Discord recusou o envio${first ? " do áudio" : ""}.\n-# ${String(err.message).slice(0, 200)}`);
   }
 
@@ -122,7 +135,23 @@ async function handleMessageButton(interaction) {
   // Botão decorativo das mensagens publicadas: qualquer pessoa pode clicar e nada acontece
   if (customId.startsWith("msg:deco:")) return interaction.deferUpdate().catch(() => {});
 
+  // Botão com resposta de uma mensagem publicada: qualquer pessoa pode clicar
+  if (customId.startsWith("msg:r:")) {
+    const resp = await respond.findPublishedResponse(customId.slice("msg:r:".length));
+    if (!resp || resp.mode === "none") return notice(interaction, "Essa resposta não está mais disponível.");
+    return respond.sendResponse(interaction, resp, { ephemeral: resp.hidden });
+  }
+
   if (!(await guard(interaction))) return;
+
+  // Botão com resposta na prévia: mostra a resposta do rascunho de quem clicou (sempre só para quem clicou)
+  if (customId.startsWith("msg:pv:")) {
+    const [, , bi, bt] = customId.split(":");
+    const mine = await load(interaction);
+    const clicked = mine.blocks[Number(bi)]?.buttons[Number(bt)];
+    if (!clicked || !store.hasResponse(clicked)) return notice(interaction, "Esse botão não tem resposta no seu rascunho.");
+    return respond.sendResponse(interaction, clicked.response, { ephemeral: true });
+  }
 
   // Botão da mensagem pública do comando: abre o editor só para quem clicou
   if (customId === "msg:open") {
@@ -158,7 +187,7 @@ async function handleMessageButton(interaction) {
         draft.cursor = draft.blocks.length - 1;
         break;
       case "del":
-        await store.dropSources([block.image, block.thumb]);
+        await store.dropSources(store.blockSources(block));
         if (draft.blocks.length > 1) {
           draft.blocks.splice(draft.cursor, 1);
           draft.cursor = Math.min(draft.cursor, draft.blocks.length - 1);
@@ -230,9 +259,68 @@ async function handleMessageButton(interaction) {
     const index = Number(parts[3]);
     if (!block.buttons[index]) return show(interaction, draft, "btns");
     if (parts[2] === "edit") return interaction.showModal(modals.buildButtonModal(index, block.buttons[index]));
+    if (parts[2] === "resp") {
+      draft.btnCursor = index;
+      return show(interaction, await persist(interaction, draft), "resp");
+    }
     if (parts[2] === "del") {
+      await store.dropSources(store.buttonSources(block.buttons[index]));
       block.buttons.splice(index, 1);
       return show(interaction, await persist(interaction, draft), "btns");
+    }
+    return;
+  }
+
+  // ----- resposta do botão em edição -----
+  if (parts[1] === "rsp" || parts[1] === "rbtn") {
+    const target = block.buttons[draft.btnCursor];
+    if (!target || target.url) return show(interaction, draft, "btns");
+    const resp = target.response;
+    const action = parts[2];
+
+    if (parts[1] === "rsp") {
+      switch (action) {
+        case "prev":
+          return respond.sendResponse(interaction, resp, { ephemeral: true });
+        case "hidden":
+          resp.hidden = !resp.hidden;
+          return show(interaction, await persist(interaction, draft), "resp");
+        case "txt":
+          return interaction.showModal(modals.buildResponseTextModal(resp));
+        case "xtxt":
+          resp.text = "";
+          resp.title = "";
+          resp.footer = "";
+          return show(interaction, await persist(interaction, draft), "resp");
+        case "img":
+          return interaction.showModal(modals.buildImageModal("rimg"));
+        case "thumb":
+          return interaction.showModal(modals.buildImageModal("rthumb"));
+        case "ximg":
+        case "xthumb": {
+          const field = action === "ximg" ? "image" : "thumb";
+          await store.dropSources([resp[field]]);
+          resp[field] = null;
+          return show(interaction, await persist(interaction, draft), "resp");
+        }
+        case "hex":
+          return interaction.showModal(modals.buildHexModal(resp.color, "rhex"));
+        default:
+          return;
+      }
+    }
+
+    // botões de link da resposta
+    if (action === "add") {
+      if (resp.buttons.length >= LIMITS.respButtons) return notice(interaction, `O limite é de ${LIMITS.respButtons} botões por resposta.`);
+      return interaction.showModal(modals.buildResponseButtonModal("new"));
+    }
+    const at = Number(parts[3]);
+    if (!resp.buttons[at]) return show(interaction, draft, "rbtns");
+    if (action === "edit") return interaction.showModal(modals.buildResponseButtonModal(at, resp.buttons[at]));
+    if (action === "del") {
+      resp.buttons.splice(at, 1);
+      return show(interaction, await persist(interaction, draft), "rbtns");
     }
     return;
   }
@@ -289,6 +377,22 @@ async function handleMessageSelect(interaction) {
       else if (values[0] in COLORS) block.color = values[0];
       else return;
       return show(interaction, await persist(interaction, draft), "look");
+
+    case "msg:rsp:mode": {
+      const target = block.buttons[draft.btnCursor];
+      if (!target || target.url || !(values[0] in RESPONSE_MODES)) return;
+      target.response.mode = values[0];
+      return show(interaction, await persist(interaction, draft), "resp");
+    }
+
+    case "msg:rsp:color": {
+      const target = block.buttons[draft.btnCursor];
+      if (!target || target.url) return;
+      if (values[0] === "none") target.response.color = null;
+      else if (values[0] in COLORS) target.response.color = values[0];
+      else return;
+      return show(interaction, await persist(interaction, draft), "resp");
+    }
 
     case "msg:send:channel":
       draft.channelId = values[0] ?? null;
@@ -349,6 +453,87 @@ async function handleMessageModal(interaction) {
     return show(interaction, await persist(interaction, draft), "look");
   }
 
+  // ----- modais da resposta de um botão -----
+  if (["rtext", "rimg", "rthumb", "rhex"].includes(key) || key.startsWith("rbtn:")) {
+    const target = block.buttons[draft.btnCursor];
+    if (!target || target.url) return show(interaction, draft, "btns");
+    const resp = target.response;
+
+    if (key === "rtext") {
+      const limit = LIMITS.respText[resp.mode] ?? LIMITS.respText.text;
+      const value = field("text");
+      if (value.length > limit) return notice(interaction, `O texto da resposta passa do limite de ${limit} caracteres.`);
+      resp.text = value;
+      if (resp.mode === "embed") {
+        // título e rodapé só vêm no modal do tipo embed (o tipo pode ter mudado com o modal aberto)
+        const optional = (id) => {
+          try {
+            return field(id);
+          } catch {
+            return null;
+          }
+        };
+        const title = optional("title");
+        const footer = optional("footer");
+        if (title !== null) resp.title = title;
+        if (footer !== null) resp.footer = footer;
+      }
+      return show(interaction, await persist(interaction, draft), "resp");
+    }
+
+    if (key === "rimg" || key === "rthumb") {
+      const file = interaction.fields.getUploadedFiles("file", false)?.first();
+      const link = field("link");
+
+      let source;
+      if (file) {
+        const saved = await store.saveImage({ guildId: guild.id, userId: user.id, file });
+        if (saved.error) return notice(interaction, saved.error);
+        source = saved.source;
+      } else if (link) {
+        if (!LINK.test(link)) return notice(interaction, "Link inválido. Use um link que começa com http:// ou https://");
+        source = link;
+      } else {
+        return notice(interaction, "Envie uma imagem ou informe o link de uma imagem.");
+      }
+
+      const slot = key === "rimg" ? "image" : "thumb";
+      const old = resp[slot];
+      resp[slot] = source;
+      const saved = await persist(interaction, draft);
+      if (old && old !== source) await store.dropSources([old]);
+      return show(interaction, saved, "resp");
+    }
+
+    if (key === "rhex") {
+      const hex = store.parseHex(field("hex"));
+      if (!hex) return notice(interaction, "Cor inválida. Use o formato #RRGGBB ou #RGB.");
+      resp.color = hex;
+      return show(interaction, await persist(interaction, draft), "resp");
+    }
+
+    // rbtn:<n|new> — botão de link dentro da resposta
+    const which = key.slice("rbtn:".length);
+    const label = field("label");
+    const url = field("url");
+    const emojiRaw = field("emoji");
+    if (!LINK.test(url)) return notice(interaction, "Link inválido. Use um link que começa com http:// ou https://");
+    const emoji = parseEmoji(emojiRaw);
+    if (emoji.error) return notice(interaction, "Emoji inválido. Use um emoji ou o formato <:nome:id> de um emoji do servidor.");
+    if (!label && !emoji.value) return notice(interaction, "Informe o texto do botão ou um emoji.");
+
+    const entry = { label, url, emoji: emojiRaw };
+    if (which === "new") {
+      if (resp.buttons.length >= LIMITS.respButtons) return notice(interaction, `O limite é de ${LIMITS.respButtons} botões por resposta.`);
+      resp.buttons.push(entry);
+    } else if (resp.buttons[Number(which)]) {
+      resp.buttons[Number(which)] = entry;
+    } else {
+      return show(interaction, draft, "rbtns");
+    }
+    return show(interaction, await persist(interaction, draft), "rbtns");
+  }
+
   if (key.startsWith("btn:")) {
     const which = key.slice(4); // "new" ou o número do botão
     const label = field("label");
@@ -368,6 +553,8 @@ async function handleMessageModal(interaction) {
       emoji: emojiRaw,
       style: style in BUTTON_STYLES ? style : "secondary",
       place: place in PLACES ? place : "inside",
+      // editar o botão não apaga a resposta que ele já tinha
+      response: which === "new" ? store.newResponse() : block.buttons[Number(which)]?.response ?? store.newResponse(),
     };
 
     if (which === "new") {

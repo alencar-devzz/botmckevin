@@ -4,10 +4,9 @@ const {
   ChannelType,
   ButtonStyle,
   SectionBuilder,
-  ThumbnailBuilder,
 } = require("discord.js");
 const { ui } = require("./antiraid");
-const { LIMITS, LAYOUTS, COLORS, BUTTON_STYLES, PLACES, colorLabel, isStored } = require("../utils/msgBuilder/store");
+const { LIMITS, LAYOUTS, COLORS, BUTTON_STYLES, PLACES, RESPONSE_MODES, colorLabel, isStored, hasResponse } = require("../utils/msgBuilder/store");
 const { textLength, totalTextLength, blockHasContent } = require("../utils/msgBuilder/render");
 
 // Painéis do Criador de mensagens (comando n!mensagem). Tudo em Components V2.
@@ -16,14 +15,11 @@ const { textLength, totalTextLength, blockHasContent } = require("../utils/msgBu
 
 const { text, clip, divider, btn, row, tag, box } = ui;
 
-const CRUMB = "Painel › Comunicação › Mensagens";
 const num = (n) => Number(n).toLocaleString("pt-BR");
 
-// Cabeçalho: título + caminho + (opcional) frase curta e linhas de componentes
-function header(title, trail, { intro, rows = [] } = {}) {
-  const container = box().addTextDisplayComponents(
-    text(`## ${title}\n-# ${CRUMB}${trail ? ` › ${trail}` : ""}${intro ? `\n${intro}` : ""}`)
-  );
+// Cabeçalho: título + (opcional) frase curta e linhas de componentes
+function header(title, { intro, rows = [] } = {}) {
+  const container = box().addTextDisplayComponents(text(`## ${title}${intro ? `\n${intro}` : ""}`));
   container.addSeparatorComponents(divider());
   if (rows.length) container.addActionRowComponents(...rows);
   return container;
@@ -50,32 +46,32 @@ const sourceTag = (source) => (!source ? "`vazia`" : isStored(source) ? "`arquiv
 // ---------- mensagem pública do comando ----------
 
 function buildMessageHome(guild) {
-  const icon =
-    guild.iconURL({ extension: "png", size: 256 }) ?? guild.client.user.displayAvatarURL({ extension: "png", size: 256 });
-
-  const head = box().addSectionComponents(
-    new SectionBuilder()
-      .addTextDisplayComponents(
-        text(`## Criador de mensagens\n-# ${CRUMB}`),
-        text(`Monte, revise e publique mensagens de **${clip(guild.name, 60)}**.\n-# O rascunho é pessoal: cada pessoa da equipe edita o seu.`)
-      )
-      .setThumbnailAccessory(new ThumbnailBuilder().setURL(icon))
-  );
-
-  const recursos = box().addTextDisplayComponents(
-    text(
-      [
-        "### O que dá para montar",
-        `**Blocos**  até ${LIMITS.blocks} caixas por mensagem`,
-        "**Texto**  markdown, separadores e emojis do servidor",
-        "**Mídia**  imagem principal e miniatura, por envio ou link",
-        `**Botões**  até ${LIMITS.buttons} por bloco, com link ou decorativos`,
-        "**Áudio**  arquivo de áudio ou vídeo anexado junto",
-      ].join("\n")
+  // O botão fica dentro da caixa, ao lado direito dos textos (por isso a imagem do servidor não aparece aqui)
+  const head = box()
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          text("## Criador de mensagens"),
+          text(`Monte, revise e publique mensagens de **${clip(guild.name, 60)}**.\n-# O rascunho é pessoal: cada pessoa da equipe edita o seu.`)
+        )
+        .setButtonAccessory(btn("msg:open", "Abrir editor", ButtonStyle.Primary))
     )
-  );
+    .addSeparatorComponents(divider())
+    .addTextDisplayComponents(
+      text(
+        [
+          "### O que dá para montar",
+          `**Blocos**  até ${LIMITS.blocks} caixas por mensagem`,
+          "**Texto**  markdown, separadores e emojis do servidor",
+          "**Mídia**  imagem principal e miniatura, por envio ou link",
+          `**Botões**  até ${LIMITS.buttons} por bloco, com link ou com resposta ao clique`,
+          "**Respostas**  texto puro, embed ou Componentes V2, com imagem, cor e botões",
+          "**Áudio**  arquivo de áudio ou vídeo anexado junto",
+        ].join("\n")
+      )
+    );
 
-  return [head, recursos, row(btn("msg:open", "Abrir editor", ButtonStyle.Primary))];
+  return [head];
 }
 
 // ---------- resumo do rascunho ----------
@@ -96,7 +92,7 @@ function buildOverview({ guild, draft, report }) {
       { label: "Envio", description: "Escolher o canal e publicar", value: "send" },
     ]);
 
-  const head = header("Criador de mensagens", "Resumo", { intro: "Escolha uma área para editar o seu rascunho.", rows: [row(nav)] });
+  const head = header("Criador de mensagens", { intro: "Escolha uma área para editar o seu rascunho.", rows: [row(nav)] });
 
   const rascunho = box().addTextDisplayComponents(
     text(
@@ -161,7 +157,7 @@ function partNav(draft, view) {
   );
 }
 
-const partTitle = (draft, name) => header(`${name} do bloco ${draft.cursor + 1}`, `Blocos › ${name}`, { rows: [partSelect(null)] });
+const partTitle = (draft, name) => header(`${name} do bloco ${draft.cursor + 1}`, { rows: [partSelect(null)] });
 
 function buildBlocks({ draft }) {
   const b = currentBlock(draft);
@@ -212,7 +208,7 @@ function buildBlocks({ draft }) {
     )
     .addActionRowComponents(partSelect(null));
 
-  return [header("Blocos", "Blocos"), lista, atual, row(btn("msg:go:home", "Voltar"))];
+  return [header("Blocos"), lista, atual, row(btn("msg:go:home", "Voltar"))];
 }
 
 // ---------- texto ----------
@@ -325,14 +321,20 @@ function buildLookPanel({ draft }) {
 
 // ---------- botões ----------
 
+// O que o botão faz ao ser clicado
+function buttonKind(x) {
+  if (x.url) return "`link`";
+  if (!hasResponse(x)) return `\`decorativo, ${BUTTON_STYLES[x.style] ?? "Cinza"}\``;
+  return `\`resposta: ${RESPONSE_MODES[x.response.mode].label}, ${BUTTON_STYLES[x.style] ?? "Cinza"}\``;
+}
+
 function buildButtonsPanel({ draft }) {
   const b = currentBlock(draft);
 
   const lines = b.buttons.length
     ? b.buttons.map((x, i) => {
         const name = x.label ? clip(x.label, 40) : "só emoji";
-        const kind = x.url ? "`link`" : `\`decorativo, ${BUTTON_STYLES[x.style] ?? "Cinza"}\``;
-        return `**${i + 1}**  ${name}  ${kind}  \`${PLACES[x.place] ?? PLACES.inside}\``;
+        return `**${i + 1}**  ${name}  ${buttonKind(x)}  \`${PLACES[x.place] ?? PLACES.inside}\``;
       })
     : ["-# Nenhum botão neste bloco."];
 
@@ -340,18 +342,173 @@ function buildButtonsPanel({ draft }) {
     text(
       [
         `### Botões extras  (${b.buttons.length} de ${LIMITS.buttons})`,
-        "-# Com link, o botão abre o endereço. Sem link, ele é só decorativo e o clique não faz nada.",
+        "-# Com link, o botão abre o endereço. Sem link, ele pode responder ao clique com texto, embed ou Componentes V2.",
         ...lines,
       ].join("\n")
     )
   );
 
   const acoes = box().addActionRowComponents(
-    ...b.buttons.map((_, i) => row(btn(`msg:btn:edit:${i}`, `Editar botão ${i + 1}`), btn(`msg:btn:del:${i}`, `Remover botão ${i + 1}`, ButtonStyle.Danger))),
+    ...b.buttons.map((x, i) =>
+      row(
+        btn(`msg:btn:edit:${i}`, `Editar botão ${i + 1}`),
+        btn(`msg:btn:resp:${i}`, `Resposta ${i + 1}`, hasResponse(x) ? ButtonStyle.Primary : ButtonStyle.Secondary).setDisabled(Boolean(x.url)),
+        btn(`msg:btn:del:${i}`, `Remover botão ${i + 1}`, ButtonStyle.Danger)
+      )
+    ),
     row(btn("msg:btn:add", "Adicionar botão", ButtonStyle.Success).setDisabled(b.buttons.length >= LIMITS.buttons))
   );
 
   return [partTitle(draft, "Botões"), lista, acoes, partNav(draft, "btns")];
+}
+
+// ---------- resposta do botão ----------
+
+const respButton = (draft) => currentBlock(draft).buttons[draft.btnCursor];
+const buttonName = (x) => (x.label ? clip(x.label, 40) : "só emoji");
+const maxRespText = (mode) => LIMITS.respText[mode] ?? LIMITS.respText.text;
+
+const respSourceTag = (source) => (!source ? "`vazia`" : isStored(source) ? "`arquivo enviado`" : "`link`");
+
+function buildResponsePanel({ draft }) {
+  const x = respButton(draft);
+  if (!x) return buildButtonsPanel({ draft });
+
+  const r = x.response;
+  const mode = r.mode;
+  const info = RESPONSE_MODES[mode];
+
+  const head = header(`Resposta do botão ${draft.btnCursor + 1}`, {
+    intro: `Bloco ${draft.cursor + 1}  ·  ${buttonName(x)}\n-# O que aparece quando alguém clica neste botão.`,
+  });
+  const back = row(btn("msg:go:btns", "Voltar aos botões"), btn("msg:rsp:prev", "Ver resposta").setDisabled(mode === "none"));
+
+  // Botão de link só abre o endereço
+  if (x.url) {
+    return [head, box().addTextDisplayComponents(text("Este botão tem link, então ele abre o endereço e não envia resposta.\n-# Edite o botão e deixe o link vazio para configurar uma resposta.")), back];
+  }
+
+  const tipo = box()
+    .addTextDisplayComponents(
+      text(
+        [
+          `### Tipo de resposta  \`${info.label}\``,
+          mode === "none" ? "-# Sem resposta, o clique no botão não faz nada." : `-# ${info.desc}.`,
+          ...(mode === "none" ? [] : [`**Quem vê**  ${r.hidden ? "`só quem clicou`" : "`todos no canal`"}`]),
+        ].join("\n")
+      )
+    )
+    .addActionRowComponents(
+      row(
+        new StringSelectMenuBuilder()
+          .setCustomId("msg:rsp:mode")
+          .setPlaceholder("Escolha o tipo de resposta")
+          .addOptions(Object.entries(RESPONSE_MODES).map(([value, i]) => ({ label: i.label, description: i.desc, value, default: mode === value })))
+      ),
+      ...(mode === "none"
+        ? []
+        : [row(r.hidden ? btn("msg:rsp:hidden", "Só quem clicou vê: sim", ButtonStyle.Success) : btn("msg:rsp:hidden", "Só quem clicou vê: não"))])
+    );
+
+  if (mode === "none") return [head, tipo, back];
+
+  // ----- conteúdo -----
+  const lines = ["### Conteúdo"];
+  if (mode === "embed") lines.push(`**Título**  ${r.title.trim() ? clip(r.title, 80) : "`vazio`"}`);
+  lines.push(r.text.trim() ? quote(r.text, 400) : "-# Nenhum texto.");
+  if (mode === "embed") lines.push(`**Rodapé**  ${r.footer.trim() ? clip(r.footer, 80) : "`vazio`"}`);
+  lines.push(`-# ${num(r.text.length)} de ${num(maxRespText(mode))} caracteres.${mode === "v2" ? " [separador] e [separador_largo] funcionam aqui." : ""}`);
+
+  const anyText = Boolean(r.text.trim() || r.title.trim() || r.footer.trim());
+  const conteudo = box()
+    .addTextDisplayComponents(text(lines.join("\n")))
+    .addActionRowComponents(
+      row(
+        btn("msg:rsp:txt", mode === "embed" ? "Editar título e texto" : "Editar texto", ButtonStyle.Primary),
+        btn("msg:rsp:xtxt", "Limpar texto", ButtonStyle.Danger).setDisabled(!anyText)
+      )
+    );
+
+  // ----- mídia -----
+  const midia = box()
+    .addTextDisplayComponents(
+      text(
+        mode === "text"
+          ? `### Imagem  ${respSourceTag(r.image)}\n-# Arquivo enviado vai como anexo. Com link, o Discord mostra a prévia do endereço.`
+          : `### Imagem e miniatura\n**Imagem**  ${respSourceTag(r.image)}  ·  **Miniatura**  ${respSourceTag(r.thumb)}\n-# ${
+              mode === "embed" ? "A miniatura fica no canto da embed e precisa de texto ou título." : "A miniatura fica ao lado do primeiro trecho de texto."
+            }`
+      )
+    )
+    .addActionRowComponents(
+      row(
+        btn("msg:rsp:img", r.image ? "Trocar imagem" : "Definir imagem", ButtonStyle.Primary),
+        btn("msg:rsp:ximg", "Remover imagem", ButtonStyle.Danger).setDisabled(!r.image),
+        ...(mode === "text"
+          ? []
+          : [
+              btn("msg:rsp:thumb", r.thumb ? "Trocar miniatura" : "Definir miniatura", ButtonStyle.Primary),
+              btn("msg:rsp:xthumb", "Remover miniatura", ButtonStyle.Danger).setDisabled(!r.thumb),
+            ])
+      )
+    );
+
+  // ----- cor (embed e caixa V2) -----
+  const cor =
+    mode === "text"
+      ? null
+      : box()
+          .addTextDisplayComponents(text(`### Cor ${mode === "embed" ? "da embed" : "da caixa"}  \`${colorLabel(r.color)}\`\n-# Barra de cor na lateral.`))
+          .addActionRowComponents(
+            row(
+              new StringSelectMenuBuilder()
+                .setCustomId("msg:rsp:color")
+                .setPlaceholder("Escolha uma cor pronta")
+                .addOptions([
+                  { label: "Sem cor", value: "none", default: !r.color },
+                  ...Object.entries(COLORS).map(([value, c]) => ({ label: c.label, value, default: r.color === value })),
+                ])
+            ),
+            row(btn("msg:rsp:hex", "Cor personalizada"))
+          );
+
+  // ----- botões da resposta -----
+  const botoes = box()
+    .addTextDisplayComponents(
+      text(
+        [
+          `### Botões da resposta  (${r.buttons.length} de ${LIMITS.respButtons})`,
+          r.buttons.length ? r.buttons.map((y, i) => `**${i + 1}**  ${y.label ? clip(y.label, 40) : "só emoji"}`).join("\n") : "-# Nenhum botão na resposta.",
+        ].join("\n")
+      )
+    )
+    .addActionRowComponents(row(btn("msg:go:rbtns", "Gerenciar botões", ButtonStyle.Primary)));
+
+  return [head, tipo, conteudo, midia, ...(cor ? [cor] : []), botoes, back];
+}
+
+// Botões de link dentro da resposta
+function buildResponseButtonsPanel({ draft }) {
+  const x = respButton(draft);
+  if (!x) return buildButtonsPanel({ draft });
+  const r = x.response;
+
+  const head = header("Botões da resposta", {
+    intro: `Botão ${draft.btnCursor + 1} do bloco ${draft.cursor + 1}\n-# Aparecem embaixo da resposta. Aqui só cabe botão de link.`,
+  });
+
+  const lines = r.buttons.length
+    ? r.buttons.map((y, i) => `**${i + 1}**  ${y.label ? clip(y.label, 40) : "só emoji"}  \`${clip(y.url, 40)}\``)
+    : ["-# Nenhum botão na resposta."];
+
+  const lista = box()
+    .addTextDisplayComponents(text([`### Botões  (${r.buttons.length} de ${LIMITS.respButtons})`, ...lines].join("\n")))
+    .addActionRowComponents(
+      ...r.buttons.map((_, i) => row(btn(`msg:rbtn:edit:${i}`, `Editar botão ${i + 1}`), btn(`msg:rbtn:del:${i}`, `Remover botão ${i + 1}`, ButtonStyle.Danger))),
+      row(btn("msg:rbtn:add", "Adicionar botão", ButtonStyle.Success).setDisabled(r.buttons.length >= LIMITS.respButtons))
+    );
+
+  return [head, lista, row(btn("msg:go:resp", "Voltar à resposta"))];
 }
 
 // ---------- áudio ----------
@@ -374,7 +531,7 @@ function buildAudioPanel({ draft }) {
       row(btn("msg:aud:set", has ? "Trocar arquivo" : "Enviar arquivo", ButtonStyle.Primary), btn("msg:aud:clear", "Remover áudio", ButtonStyle.Danger).setDisabled(!has))
     );
 
-  return [header("Áudio", "Áudio"), estado, row(btn("msg:go:home", "Voltar"))];
+  return [header("Áudio"), estado, row(btn("msg:go:home", "Voltar"))];
 }
 
 // ---------- envio ----------
@@ -413,12 +570,12 @@ function buildSendPanel({ guild, draft, report }) {
       )
     );
 
-  return [header("Envio", "Envio"), destino, situacao, row(btn("msg:go:home", "Voltar"))];
+  return [header("Envio"), destino, situacao, row(btn("msg:go:home", "Voltar"))];
 }
 
 function buildResetConfirm() {
   return [
-    header("Limpar rascunho", "Envio › Limpar"),
+    header("Limpar rascunho"),
     box().addTextDisplayComponents(
       text("### Tem certeza?\n-# Todos os blocos, imagens e o áudio do seu rascunho serão apagados. As mensagens já publicadas não mudam.")
     ),
@@ -433,6 +590,8 @@ const VIEWS = {
   media: buildMediaPanel,
   look: buildLookPanel,
   btns: buildButtonsPanel,
+  resp: buildResponsePanel,
+  rbtns: buildResponseButtonsPanel,
   audio: buildAudioPanel,
   send: buildSendPanel,
   reset: buildResetConfirm,

@@ -5,6 +5,10 @@ const MessageAsset = require("../../database/models/MessageAsset");
 const LIMITS = {
   blocks: 5,
   buttons: 2,
+  respButtons: 3, // botões de link dentro de uma resposta
+  respText: { text: 2000, embed: 4000, v2: 3800 }, // limite de texto por tipo de resposta
+  respTitle: 256,
+  respFooter: 2048,
   textTotal: 4000, // soma do texto de todos os blocos (limite do Discord para Components V2)
   components: 40, // limite de componentes por mensagem (contando os aninhados)
   imageBytes: 4 * 1024 * 1024,
@@ -30,6 +34,58 @@ const COLORS = {
 
 const BUTTON_STYLES = { secondary: "Cinza", primary: "Azul", success: "Verde", danger: "Vermelho" };
 const PLACES = { inside: "Dentro da caixa", below: "Embaixo da caixa" };
+
+// O que o botão faz ao ser clicado (só botões sem link)
+const RESPONSE_MODES = {
+  none: { label: "Sem resposta", desc: "O botão fica só decorativo" },
+  text: { label: "Texto puro", desc: "Mensagem simples, sem caixa" },
+  embed: { label: "Embed", desc: "Embed clássico, com título, cor e imagem" },
+  v2: { label: "Componentes V2", desc: "Caixa moderna com texto, imagem e botões" },
+};
+
+// ---------- respostas de botão ----------
+
+const newResponse = () => ({
+  mode: "none",
+  text: "",
+  title: "",
+  footer: "",
+  image: null,
+  thumb: null,
+  color: null,
+  hidden: true,
+  buttons: [],
+});
+
+function normalizeResponse(raw) {
+  const r = raw ?? {};
+  const str = (v) => String(v ?? "");
+  return {
+    mode: r.mode in RESPONSE_MODES ? r.mode : "none",
+    text: str(r.text),
+    title: str(r.title),
+    footer: str(r.footer),
+    image: r.image || null,
+    thumb: r.thumb || null,
+    color: r.color || null,
+    hidden: r.hidden !== false,
+    buttons: (r.buttons ?? []).slice(0, LIMITS.respButtons).map((b) => ({ label: str(b.label), url: str(b.url), emoji: str(b.emoji) })),
+  };
+}
+
+// Botão com resposta configurada (botão de link nunca responde, ele só abre o link)
+const hasResponse = (btn) => Boolean(btn && !btn.url && btn.response && btn.response.mode && btn.response.mode !== "none");
+
+// A resposta tem algo para mostrar?
+function responseHasContent(r) {
+  if (!r || r.mode === "none") return false;
+  if (String(r.text ?? "").trim() || r.image || (r.buttons ?? []).some((b) => b.url)) return true;
+  return r.mode === "embed" && Boolean(String(r.title ?? "").trim() || String(r.footer ?? "").trim());
+}
+
+const responseSources = (r) => [r?.image, r?.thumb].filter(Boolean);
+const buttonSources = (btn) => responseSources(btn?.response);
+const blockSources = (b) => [b.image, b.thumb, ...(b.buttons ?? []).flatMap(buttonSources)].filter(Boolean);
 
 // ---------- cores ----------
 
@@ -66,7 +122,7 @@ function normalize(doc) {
   const blocks = raw.slice(0, LIMITS.blocks).map((b) => ({
     ...newBlock(),
     ...(b ?? {}),
-    buttons: (b?.buttons ?? []).slice(0, LIMITS.buttons).map((x) => ({ ...x })),
+    buttons: (b?.buttons ?? []).slice(0, LIMITS.buttons).map((x) => ({ ...x, response: normalizeResponse(x.response) })),
   }));
   const cursor = Math.min(Math.max(Number(doc?.cursor) || 0, 0), blocks.length - 1);
   return {
@@ -74,6 +130,7 @@ function normalize(doc) {
     audio: { source: doc?.audio?.source ?? null, name: doc?.audio?.name ?? null },
     channelId: doc?.channelId ?? null,
     cursor,
+    btnCursor: Math.min(Math.max(Number(doc?.btnCursor) || 0, 0), Math.max(LIMITS.buttons - 1, 0)),
   };
 }
 
@@ -136,7 +193,7 @@ async function saveImage({ guildId, userId, file }) {
   if (file.size > LIMITS.imageBytes) return { error: "Imagem muito pesada. O máximo é 4 MB por imagem." };
 
   const used = await MessageAsset.aggregate([
-    { $match: { guildId, userId, kind: "image" } },
+    { $match: { guildId, userId, kind: "image", published: { $ne: true } } },
     { $group: { _id: null, total: { $sum: "$size" } } },
   ]);
   if ((used[0]?.total ?? 0) + file.size > LIMITS.imageTotalBytes) {
@@ -199,10 +256,30 @@ async function dropSources(sources) {
   if (ids.length) await MessageAsset.deleteMany({ _id: { $in: ids } });
 }
 
+// Copia um arquivo guardado (usado ao publicar: a resposta publicada fica independente do rascunho).
+// Links são devolvidos como estão. Devolve null se o arquivo original não existir mais.
+async function cloneAsset(source) {
+  if (!isStored(source)) return source;
+  const doc = await MessageAsset.findById(storedId(source));
+  if (!doc) return null;
+  const copy = await MessageAsset.create({
+    guildId: doc.guildId,
+    userId: doc.userId,
+    kind: doc.kind,
+    name: doc.name,
+    contentType: doc.contentType,
+    ext: doc.ext,
+    size: doc.size,
+    data: doc.data,
+    published: true,
+  });
+  return `db:${copy._id}`;
+}
+
 // Fontes de arquivos guardados em uso num rascunho
 function draftSources(draft) {
   const list = [draft.audio?.source];
-  for (const b of draft.blocks) list.push(b.image, b.thumb);
+  for (const b of draft.blocks) list.push(...blockSources(b));
   return list.filter(Boolean);
 }
 
@@ -212,6 +289,15 @@ module.exports = {
   COLORS,
   BUTTON_STYLES,
   PLACES,
+  RESPONSE_MODES,
+  newResponse,
+  normalizeResponse,
+  hasResponse,
+  responseHasContent,
+  responseSources,
+  buttonSources,
+  blockSources,
+  cloneAsset,
   parseHex,
   colorValue,
   colorLabel,
