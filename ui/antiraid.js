@@ -93,7 +93,7 @@ function buildAntiRaidHome(guild, cfg) {
     )
   );
 
-  return [head, nucleo, modulos, row(btn("ar:open", "Abrir configurações", ButtonStyle.Primary), btn("ar:home:refresh", "Atualizar"))];
+  return [head, nucleo, modulos, row(btn("ar:open", "Abrir configurações", ButtonStyle.Primary), btn("ar:home:refresh", "Atualizar").setEmoji({ name: "update", id: "1569724363954065498", animated: true }))];
 }
 
 // ---------- Menu geral (módulos agrupados) ----------
