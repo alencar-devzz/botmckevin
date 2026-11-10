@@ -1,6 +1,6 @@
 const { AuditLogEvent } = require("discord.js");
 const { getAntiRaidConfig } = require("./store");
-const { sendModuleAlert } = require("./alert");
+const { sendModuleAlert, code } = require("./alert");
 const { isAuthorized } = require("./audit");
 const { punish } = require("./engine");
 const { MV_ACTIONS, PUNISHMENTS } = require("./defaults");
@@ -36,13 +36,14 @@ async function onAuditEntry(entry, guild) {
   const result = m.punishment !== "none" ? await punish(guild, entry.executorId, m.punishment) : null;
 
   await sendModuleAlert(guild, cfg, m.alertChannelId, {
-    title: "Anti-Raid · mov call em massa",
+    system: "Mov call",
+    action: "Movimentação em massa",
+    author: entry.executorId,
     color: result ? 0xed4245 : 0xfaa61a,
-    lines: [
-      `**Autor**  <@${entry.executorId}> (\`${entry.executorId}\`)`,
-      `**Última ação**  ${MV_ACTIONS[kind]}`,
-      `**Total**  ${total} membros em ${m.windowSec}s (limite ${m.limit})`,
-      `**Punição** (${PUNISHMENTS[m.punishment].label})  ${result ?? "nenhuma, só aviso"}`,
+    fields: [
+      ["Última ação", MV_ACTIONS[kind]],
+      ["Total", `${code(`${total} membros em ${m.windowSec}s`)} (limite ${m.limit})`],
+      [`Punição (${PUNISHMENTS[m.punishment].label})`, result ?? "nenhuma, só aviso"],
       "Mover e desconectar não podem ser desfeitos pelo bot.",
     ],
   });

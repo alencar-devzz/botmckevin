@@ -201,12 +201,11 @@ async function onMessage(message) {
     if (Date.now() - last > PERM_GAP) {
       permWarned.set(message.guild.id, Date.now());
       await sendModuleAlert(message.guild, cfg, a.alertChannelId, {
-        title: "Anti-link · não consegui apagar",
-        lines: [
-          `**Canal**  <#${message.channelId}>`,
-          `**Autor**  <@${message.author.id}>`,
-          "O bot precisa de **Gerenciar mensagens** e **Ver canal** neste canal.",
-        ],
+        system: "Anti-link",
+        action: "Não consegui apagar",
+        author: message.author,
+        channel: message.channel,
+        fields: [["Mensagem ID", code(message.id)], "O bot precisa de **Gerenciar mensagens** e **Ver canal** neste canal."],
         color: 0xed4245,
       });
     }
@@ -229,23 +228,19 @@ async function onMessage(message) {
     const shown = blocked.slice(0, 4).map((b) => `${inline(b.link.raw)} · ${b.why}`);
     if (blocked.length > 4) shown.push(`e mais ${blocked.length - 4} link(s)`);
     await sendModuleAlert(message.guild, cfg, a.alertChannelId, {
-      title: "Anti-link — Mensagem apagada",
-      color: 0xe50000,
-      thumbnail: message.author.displayAvatarURL(),
-      groups: [
-        [userBlock(message.author, "Autor")],
-        [
-          channelBlock(message.channel),
-          `**Sistema:** ${code("Anti-link")}`,
-          `**Mensagem ID:** ${code(message.id)}`,
-          `**Motivo:** ${shown.join("\n")}`,
-          ...(a.punishment !== "none"
-            ? [`**Infrações:** ${code(`${count} de ${a.strikeLimit}`)} (${AL_PUNISH[a.punishment].label.toLowerCase()})`]
-            : []),
-          ...(punishment ? [`**Punição:** ${punishment}`] : []),
-        ],
-        ["**Conteúdo**", codeBlock(message.content)],
+      system: "Anti-link",
+      action: "Mensagem apagada",
+      author: message.author,
+      channel: message.channel,
+      fields: [
+        ["Mensagem ID", code(message.id)],
+        ["Motivo", shown.join("\n")],
+        ...(a.punishment !== "none"
+          ? [["Infrações", `${code(`${count} de ${a.strikeLimit}`)} (${AL_PUNISH[a.punishment].label.toLowerCase()})`]]
+          : []),
+        ...(punishment ? [["Punição", punishment]] : []),
       ],
+      content: message.content,
     });
   }
 }

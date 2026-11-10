@@ -1,6 +1,6 @@
 const { AuditLogEvent, PermissionsBitField } = require("discord.js");
 const { getAntiRaidConfig } = require("./store");
-const { sendModuleAlert } = require("./alert");
+const { sendModuleAlert, code } = require("./alert");
 const { findAuditEntry, isAuthorized } = require("./audit");
 const { punish } = require("./engine");
 const { DP_PERMS, DP_RESPONSES } = require("./defaults");
@@ -36,15 +36,17 @@ async function handle(role, cfg, added, auditType) {
     executorId && response.punish !== "none" ? await punish(guild, executorId, response.punish) : null;
 
   await sendModuleAlert(guild, cfg, d.alertChannelId, {
-    title: "Anti-Raid · permissão perigosa",
+    system: "Permissões perigosas",
+    action: "Permissão perigosa dada",
+    author: executorId,
     color: response.revert ? 0xed4245 : 0xfaa61a,
-    lines: [
-      `**Cargo**  <@&${role.id}>`,
-      `**Permissões**  ${added.map((a) => DP_PERMS[a.key].label).join(", ")}`,
-      `**Autor**  ${executorId ? `<@${executorId}>` : "não identificado (falta permissão de auditoria?)"}`,
-      `**Resposta**  ${response.label}`,
-      `**Reversão**  ${reverted}`,
-      ...(punished ? [`**Punição**  ${punished}`] : []),
+    fields: [
+      ...(executorId ? [] : [["Autor", "não identificado (falta permissão de auditoria?)"]]),
+      ["Cargo", `<@&${role.id}> — ${code(role.name)} (${code(role.id)})`],
+      ["Permissões", added.map((a) => DP_PERMS[a.key].label).join(", ")],
+      ["Resposta", response.label],
+      ["Reversão", reverted],
+      ...(punished ? [["Punição", punished]] : []),
     ],
   });
 }

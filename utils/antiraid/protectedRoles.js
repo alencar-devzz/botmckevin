@@ -1,6 +1,6 @@
 const { AuditLogEvent } = require("discord.js");
 const { getAntiRaidConfig } = require("./store");
-const { sendModuleAlert } = require("./alert");
+const { sendModuleAlert, code } = require("./alert");
 const { findAuditEntry, isAuthorized } = require("./audit");
 const { punish } = require("./engine");
 const { PUNISHMENTS } = require("./defaults");
@@ -39,14 +39,15 @@ async function onMemberUpdate(oldMember, newMember) {
   const punished = p.punishment !== "none" ? await punish(guild, executorId, p.punishment) : null;
 
   await sendModuleAlert(guild, cfg, p.alertChannelId, {
-    title: "Anti-Raid · cargo protegido",
+    system: "Cargos protegidos",
+    action: "Cargo protegido entregue",
+    author: executorId,
     color: 0xed4245,
-    lines: [
-      `**Cargo(s)**  ${[...added.keys()].map((id) => `<@&${id}>`).join(" ")}`,
-      `**Entregue a**  <@${newMember.id}>`,
-      `**Por**  <@${executorId}>`,
-      `**Reversão**  ${reverted}`,
-      `**Punição** (${PUNISHMENTS[p.punishment].label})  ${punished ?? "nenhuma"}`,
+    fields: [
+      ["Cargo(s)", [...added.keys()].map((id) => `<@&${id}>`).join(" ")],
+      ["Entregue a", `<@${newMember.id}> — ${code(newMember.user.username)} (${code(newMember.id)})`],
+      ["Reversão", reverted],
+      [`Punição (${PUNISHMENTS[p.punishment].label})`, punished ?? "nenhuma"],
     ],
   });
 }

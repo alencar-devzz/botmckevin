@@ -1,10 +1,5 @@
-const {
-  AuditLogEvent,
-  PermissionFlagsBits,
-  MessageFlags,
-  ContainerBuilder,
-  TextDisplayBuilder,
-} = require("discord.js");
+const { AuditLogEvent, PermissionFlagsBits } = require("discord.js");
+const { sendModuleAlert, code } = require("./alert");
 const { getAntiRaidConfig } = require("./store");
 const { CORE_ACTIONS, PUNISHMENTS } = require("./defaults");
 
@@ -80,25 +75,6 @@ async function punish(guild, executorId, punishment) {
   return removable.size ? "Não consegui remover os cargos." : "Não havia cargos que eu pudesse remover.";
 }
 
-async function sendAlert(guild, cfg, lines, live) {
-  const channel = cfg.core.alertChannelId ? guild.channels.cache.get(cfg.core.alertChannelId) : null;
-  if (!channel?.isTextBased()) return;
-  await channel
-    .send({
-      components: [
-        new ContainerBuilder()
-          .setAccentColor(live ? 0xed4245 : 0xfaa61a)
-          .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(`### Anti-Raid · ${live ? "punição aplicada" : "simulação (modo teste)"}`),
-            new TextDisplayBuilder().setContent(lines.join("\n"))
-          ),
-      ],
-      flags: MessageFlags.IsComponentsV2,
-      allowedMentions: { parse: [] },
-    })
-    .catch(() => {});
-}
-
 // Chamado pelos eventos (events/antiRaid.js)
 async function track(guild, action, targetId = null) {
   const cfg = await getAntiRaidConfig(guild.id);
@@ -124,18 +100,18 @@ async function track(guild, action, targetId = null) {
   const live = core.mode === "live";
   const result = live ? await punish(guild, executorId, core.punishment) : "Nada foi aplicado (modo teste).";
 
-  await sendAlert(
-    guild,
-    cfg,
-    [
-      `**Autor**  <@${executorId}> (\`${executorId}\`)`,
-      `**Ação**  ${CORE_ACTIONS[action]}`,
-      `**Gatilho**  ${list.length} ações em ${core.windowSec}s (limite ${core.limit})`,
-      `**Punição configurada**  ${PUNISHMENTS[core.punishment].label}`,
-      `**Resultado**  ${result}`,
+  await sendModuleAlert(guild, cfg, null, {
+    system: "Anti-Raid",
+    action: live ? "Punição aplicada" : "Simulação (modo teste)",
+    author: executorId,
+    color: live ? 0xe50000 : 0xfaa61a,
+    fields: [
+      ["Ação", CORE_ACTIONS[action]],
+      ["Gatilho", `${code(`${list.length} ações em ${core.windowSec}s`)} (limite ${core.limit})`],
+      ["Punição configurada", PUNISHMENTS[core.punishment].label],
+      ["Resultado", result],
     ],
-    live
-  );
+  });
 }
 
 module.exports = { track, punish };

@@ -1,6 +1,6 @@
 const { MessageFlags, ContainerBuilder, TextDisplayBuilder } = require("discord.js");
 const { getAntiRaidConfig, updateAntiRaidConfig } = require("./store");
-const { sendModuleAlert } = require("./alert");
+const { sendModuleAlert, code } = require("./alert");
 const { AA_RESPONSES } = require("./defaults");
 
 const DAY = 86_400_000;
@@ -88,12 +88,14 @@ async function onAltJoin(member) {
   }
 
   await sendModuleAlert(guild, cfg, a.alertChannelId, {
-    title: "Anti-Raid · conta nova barrada",
-    lines: [
-      `**Conta**  <@${member.id}> (\`${member.id}\`)`,
-      `**Idade**  ${(age / DAY).toFixed(1)} dia(s) (mínimo ${a.minAgeDays})`,
-      `**Resposta**  ${AA_RESPONSES[a.response].label}`,
-      `**Resultado**  ${ok ? "aplicado" : "não consegui aplicar (permissão ou hierarquia)"}`,
+    system: "Anti-alt",
+    action: "Conta nova barrada",
+    author: member.user,
+    authorLabel: "Conta",
+    fields: [
+      ["Idade", `${code(`${(age / DAY).toFixed(1)} dia(s)`)} (mínimo ${a.minAgeDays})`],
+      ["Resposta", AA_RESPONSES[a.response].label],
+      ["Resultado", ok ? "aplicado" : "não consegui aplicar (permissão ou hierarquia)"],
     ],
   });
 }

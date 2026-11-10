@@ -183,14 +183,16 @@ async function handle(oldGuild, guild) {
   const punished = executorId && response.punish !== "none" ? await punish(guild, executorId, response.punish) : null;
 
   await sendModuleAlert(guild, cfg, v.alertChannelId, {
-    title: "Anti-Raid · visual do servidor",
+    system: "Visual do servidor",
+    action: "Alteração detectada",
+    author: executorId,
     color: response.revert ? 0xed4245 : 0xfaa61a,
-    lines: [
-      `**Alterado**  ${differing.map((k) => VS_FIELDS[k]).join(", ")}`,
-      `**Autor**  ${executorId ? `<@${executorId}> (\`${executorId}\`)` : "não identificado (falta permissão de auditoria?)"}`,
-      `**Resposta**  ${response.label}`,
-      `**Reversão**  ${result}`,
-      ...(punished ? [`**Punição**  ${punished}`] : []),
+    fields: [
+      ...(executorId ? [] : [["Autor", "não identificado (falta permissão de auditoria?)"]]),
+      ["Alterado", differing.map((k) => VS_FIELDS[k]).join(", ")],
+      ["Resposta", response.label],
+      ["Reversão", result],
+      ...(punished ? [["Punição", punished]] : []),
     ],
   });
 }

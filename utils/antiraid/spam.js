@@ -1,6 +1,6 @@
 const { PermissionFlagsBits, MessageFlags, ContainerBuilder, TextDisplayBuilder } = require("discord.js");
 const { getAntiRaidConfig } = require("./store");
-const { sendModuleAlert } = require("./alert");
+const { sendModuleAlert, code } = require("./alert");
 const { suppressMessage } = require("../logs/suppress");
 
 // Anti-spam: conta mensagens por pessoa numa janela curta. O volume sozinho só pune
@@ -115,15 +115,16 @@ async function onMessage(message) {
     .catch(() => false);
 
   await sendModuleAlert(message.guild, cfg, s.alertChannelId, {
-    title: "Anti-Raid — Spam detectado",
-    thumbnail: message.author.displayAvatarURL(),
-    lines: [
-      `**Autor**  <@${message.author.id}> (\`${message.author.id}\`)`,
-      `**Canal**  <#${message.channelId}>`,
-      `**Volume**  ${flagged.length} mensagens em ${s.windowSec}s`,
-      `**Sinais**  ${found.length ? found.join(", ") : "só volume"}`,
-      `**Resultado**  ${ok ? `timeout de ${s.timeoutMin} min aplicado` : "não consegui aplicar o timeout (cargo dele acima do meu?)"}`,
+    system: "Anti-spam",
+    action: "Spam detectado",
+    author: message.author,
+    channel: message.channel,
+    fields: [
+      ["Volume", code(`${flagged.length} mensagens em ${s.windowSec}s`)],
+      ["Sinais", found.length ? found.join(", ") : "só volume"],
+      ["Resultado", ok ? `timeout de ${s.timeoutMin} min aplicado` : "não consegui aplicar o timeout (cargo dele acima do meu?)"],
     ],
+    content: message.content,
   });
 }
 

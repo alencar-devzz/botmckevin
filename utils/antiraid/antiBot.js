@@ -1,6 +1,6 @@
 const { AuditLogEvent, PermissionFlagsBits, UserFlags } = require("discord.js");
 const { getAntiRaidConfig } = require("./store");
-const { sendModuleAlert } = require("./alert");
+const { sendModuleAlert, code } = require("./alert");
 const { punish } = require("./engine");
 const { AB_MODES, PUNISHMENTS } = require("./defaults");
 
@@ -47,14 +47,16 @@ async function onBotJoin(member) {
   const inviterResult = inviterId && ab.inviterAction !== "none" ? await punish(guild, inviterId, ab.inviterAction) : null;
 
   await sendModuleAlert(guild, cfg, ab.alertChannelId, {
-    title: "Anti-Raid · bot barrado",
+    system: "Anti-bot",
+    action: "Bot barrado",
+    author: member.user,
+    authorLabel: "Bot",
     color: 0xed4245,
-    lines: [
-      `**Bot**  ${member.user.tag} (\`${member.id}\`)`,
-      `**Modo**  ${AB_MODES[ab.mode].label}`,
-      `**Adicionado por**  ${inviterId ? `<@${inviterId}>` : "não identificado (falta permissão de auditoria?)"}`,
-      `**Resultado**  ${blocked ? (ab.action === "ban" ? "bot banido" : "bot expulso") : "não consegui remover o bot (cargo dele acima do meu?)"}`,
-      ...(inviterResult ? [`**Punição de quem adicionou** (${PUNISHMENTS[ab.inviterAction].label})  ${inviterResult}`] : []),
+    fields: [
+      ["Modo", AB_MODES[ab.mode].label],
+      ["Adicionado por", inviterId ? `<@${inviterId}> — ${code(inviterId)}` : "não identificado (falta permissão de auditoria?)"],
+      ["Resultado", blocked ? (ab.action === "ban" ? "bot banido" : "bot expulso") : "não consegui remover o bot (cargo dele acima do meu?)"],
+      ...(inviterResult ? [[`Punição de quem adicionou (${PUNISHMENTS[ab.inviterAction].label})`, inviterResult]] : []),
     ],
   });
 }

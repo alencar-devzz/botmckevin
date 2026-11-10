@@ -1,6 +1,6 @@
 const { GuildVerificationLevel } = require("discord.js");
 const { getAntiRaidConfig, updateAntiRaidConfig } = require("./store");
-const { sendModuleAlert } = require("./alert");
+const { sendModuleAlert, code } = require("./alert");
 const { MJ_SUSPECT_ACTIONS } = require("./defaults");
 
 // Entrada em massa: percebe ondas de entradas, analisa a qualidade das contas
@@ -69,14 +69,15 @@ async function startLockdown(guild, cfg, suspects, total) {
 
   const punished = await applySuspectAction(guild, suspects, m.suspectAction);
   await sendModuleAlert(guild, cfg, m.alertChannelId, {
-    title: "Anti-Raid · lockdown por entrada em massa",
+    system: "Entrada em massa",
+    action: "Lockdown ativado",
     color: 0xed4245,
-    lines: [
-      `**Entradas na janela**  ${total} em ${m.windowSec}s`,
-      `**Contas suspeitas**  ${suspects.length}`,
-      `**Verificação**  ${raise ? "elevada" : "já estava no nível pedido ou acima"}`,
-      `**Fim previsto**  <t:${Math.floor(until / 1000)}:R>`,
-      `**Suspeitos**  ${MJ_SUSPECT_ACTIONS[m.suspectAction].label}${m.suspectAction !== "none" ? ` (${punished} afetado(s))` : ""}`,
+    fields: [
+      ["Entradas na janela", code(`${total} em ${m.windowSec}s`)],
+      ["Contas suspeitas", code(suspects.length)],
+      ["Verificação", raise ? "elevada" : "já estava no nível pedido ou acima"],
+      ["Fim previsto", `<t:${Math.floor(until / 1000)}:R>`],
+      ["Suspeitos", `${MJ_SUSPECT_ACTIONS[m.suspectAction].label}${m.suspectAction !== "none" ? ` (${punished} afetado(s))` : ""}`],
     ],
   });
 }
@@ -93,9 +94,10 @@ async function endLockdown(guild, reason = "Encerrado manualmente.") {
   }
   await updateAntiRaidConfig(guild.id, { "massJoin.lockdown": null });
   await sendModuleAlert(guild, cfg, cfg.massJoin.alertChannelId, {
-    title: "Anti-Raid · lockdown encerrado",
+    system: "Entrada em massa",
+    action: "Lockdown encerrado",
     color: 0x3ba55d,
-    lines: [reason, lock.prev != null ? "A verificação voltou ao nível anterior." : "A verificação não precisou ser restaurada."],
+    fields: [["Motivo", reason], ["Verificação", lock.prev != null ? "voltou ao nível anterior" : "não precisou ser restaurada"]],
   });
   return true;
 }
@@ -136,10 +138,11 @@ async function onMemberAdd(member) {
   if (suspects.length >= needed) return startLockdown(guild, cfg, suspects, list.length);
 
   await sendModuleAlert(guild, cfg, m.alertChannelId, {
-    title: "Anti-Raid · volume alto de entradas",
-    lines: [
-      `**Entradas na janela**  ${list.length} em ${m.windowSec}s`,
-      `**Contas suspeitas**  ${suspects.length} (precisa de ${needed} para o lockdown)`,
+    system: "Entrada em massa",
+    action: "Volume alto de entradas",
+    fields: [
+      ["Entradas na janela", code(`${list.length} em ${m.windowSec}s`)],
+      ["Contas suspeitas", `${code(suspects.length)} (precisa de ${needed} para o lockdown)`],
       "Só o volume não aciona o lockdown. Nada foi alterado.",
     ],
   });
