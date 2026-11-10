@@ -137,9 +137,9 @@ async function handleMessageButton(interaction) {
 
   // Botão com resposta de uma mensagem publicada: qualquer pessoa pode clicar
   if (customId.startsWith("msg:r:")) {
-    const resp = await respond.findPublishedResponse(customId.slice("msg:r:".length));
-    if (!resp || resp.mode === "none") return notice(interaction, "Essa resposta não está mais disponível.");
-    return respond.sendResponse(interaction, resp, { ephemeral: resp.hidden });
+    const entry = await respond.getPublished(customId.slice("msg:r:".length));
+    if (!entry || entry.resp.mode === "none") return notice(interaction, "Essa resposta não está mais disponível.");
+    return respond.sendResponse(interaction, entry.resp, { ephemeral: entry.resp.hidden, assets: entry.assets });
   }
 
   if (!(await guard(interaction))) return;

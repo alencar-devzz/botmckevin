@@ -25,6 +25,7 @@ const {
   responseHasContent,
   cloneAsset,
   dropSources,
+  responseSources,
 } = require("./store");
 const { chunkText, parseEmoji, loadAssets, blockHasContent } = require("./render");
 
@@ -52,13 +53,13 @@ function linkRow(buttons) {
 
 // Monta a mensagem da resposta. Devolve { payload, problems }.
 // payload (sem flags de ephemeral): { content?, embeds?, components?, files, flags? }
-async function buildResponse(raw, { withData = true } = {}) {
+async function buildResponse(raw, { withData = true, assets: preloaded = null } = {}) {
   const resp = normalizeResponse(raw);
   if (resp.mode === "none") return { payload: null, problems: [] };
   if (!responseHasContent(resp)) return { payload: null, problems: ["A resposta está vazia."] };
 
   const problems = [];
-  const assets = await loadAssets([resp.image, resp.thumb].filter(Boolean), withData);
+  const assets = preloaded ?? (await loadAssets([resp.image, resp.thumb].filter(Boolean), withData));
   const files = [];
 
   // Link vira o próprio endereço; arquivo guardado vira anexo
@@ -168,8 +169,8 @@ async function buildResponse(raw, { withData = true } = {}) {
 }
 
 // Responde ao clique. ephemeral = só quem clicou vê.
-async function sendResponse(interaction, raw, { ephemeral = true } = {}) {
-  const { payload, problems } = await buildResponse(raw, { withData: true });
+async function sendResponse(interaction, raw, { ephemeral = true, assets = null } = {}) {
+  const { payload, problems } = await buildResponse(raw, { withData: true, assets });
   if (!payload) {
     return interaction
       .reply({ content: problems[0] ?? "Esse botão não tem resposta.", flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } })
@@ -184,6 +185,63 @@ async function sendResponse(interaction, raw, { ephemeral = true } = {}) {
 }
 
 // ---------- respostas das mensagens publicadas ----------
+
+// As respostas publicadas nunca mudam (são cópias), então ficam em memória junto com os bytes das imagens.
+// O primeiro clique depois de reiniciar o bot busca no banco; os seguintes respondem na hora.
+const CACHE_MAX_ITEMS = 300;
+const CACHE_MAX_BYTES = 40 * 1024 * 1024;
+const cache = new Map(); // id -> { resp, assets, bytes } (o mais antigo fica no começo)
+const loading = new Map(); // id -> Promise (evita buscar duas vezes se clicarem seguido)
+let cacheBytes = 0;
+
+function cacheDrop(id) {
+  const entry = cache.get(id);
+  if (!entry) return;
+  cache.delete(id);
+  cacheBytes -= entry.bytes;
+}
+
+function cachePut(id, entry) {
+  cacheDrop(id);
+  cache.set(id, entry);
+  cacheBytes += entry.bytes;
+  while ((cache.size > CACHE_MAX_ITEMS || cacheBytes > CACHE_MAX_BYTES) && cache.size > 1) {
+    cacheDrop(cache.keys().next().value);
+  }
+}
+
+async function fetchPublished(id) {
+  const doc = await MessageButtonResponse.findById(id).select("response").lean();
+  if (!doc?.response) return null;
+  const resp = normalizeResponse(doc.response);
+  const assets = await loadAssets(responseSources(resp), true);
+  const bytes = 2000 + [...assets.values()].reduce((n, a) => n + (a.size || 0), 0);
+  return { resp, assets, bytes };
+}
+
+// Resposta pronta para enviar: { resp, assets } ou null se não existir mais
+async function getPublished(id) {
+  if (!/^[0-9a-f]{24}$/i.test(id)) return null;
+
+  const hit = cache.get(id);
+  if (hit) {
+    cachePut(id, hit); // marca como usada recentemente
+    return hit;
+  }
+
+  if (!loading.has(id)) {
+    loading.set(
+      id,
+      fetchPublished(id)
+        .then((entry) => {
+          if (entry) cachePut(id, entry);
+          return entry;
+        })
+        .finally(() => loading.delete(id))
+    );
+  }
+  return loading.get(id);
+}
 
 // Guarda uma cópia da resposta de cada botão que responde. Devolve Map "bloco:botão" -> id.
 async function createPublishedResponses({ guildId, channelId, userId, draft }) {
@@ -221,11 +279,14 @@ async function createPublishedResponses({ guildId, channelId, userId, draft }) {
 async function attachResponses(ids, messageId) {
   const list = [...ids.values()];
   if (list.length) await MessageButtonResponse.updateMany({ _id: { $in: list } }, { $set: { messageId } });
+  // já deixa as respostas em memória: o primeiro clique também responde rápido
+  for (const id of list) getPublished(id).catch(() => {});
 }
 
 // Apaga respostas (e as imagens copiadas delas) pelos ids dos documentos
 async function discardResponses(ids) {
   if (!ids.length) return;
+  ids.forEach(cacheDrop);
   const docs = await MessageButtonResponse.find({ _id: { $in: ids } }).select("sources");
   await dropSources(docs.flatMap((d) => d.sources));
   await MessageButtonResponse.deleteMany({ _id: { $in: ids } });
@@ -238,13 +299,6 @@ async function purgeMessages(messageIds) {
   if (docs.length) await discardResponses(docs.map((d) => String(d._id)));
 }
 
-// Resposta guardada de um botão publicado (ou null)
-async function findPublishedResponse(id) {
-  if (!/^[0-9a-f]{24}$/i.test(id)) return null;
-  const doc = await MessageButtonResponse.findById(id).lean();
-  return doc?.response ? normalizeResponse(doc.response) : null;
-}
-
 module.exports = {
   buildResponse,
   sendResponse,
@@ -252,5 +306,5 @@ module.exports = {
   attachResponses,
   discardResponses,
   purgeMessages,
-  findPublishedResponse,
+  getPublished,
 };
