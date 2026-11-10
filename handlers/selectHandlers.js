@@ -7,6 +7,7 @@ const { buildAutoRolesPanel } = require("../ui/autoroles");
 const { handleTicketSelect } = require("./ticketHandlers");
 const { handleBotcallSelect } = require("./botcallHandlers");
 const { handleAntiRaidSelect } = require("./antiRaidHandlers");
+const { handleMessageSelect } = require("./mensagemHandlers");
 const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHandlers");
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
@@ -29,6 +30,11 @@ async function handleSelect(interaction) {
   // Painel do Anti-Raid (comando painelps)
   if (customId.startsWith("ar:")) {
     return handleAntiRaidSelect(interaction);
+  }
+
+  // Criador de mensagens (comando mensagem)
+  if (customId.startsWith("msg:")) {
+    return handleMessageSelect(interaction);
   }
 
   // Calls temporárias: configuração no n!menu e seletores do painel da call
