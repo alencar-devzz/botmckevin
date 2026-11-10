@@ -8,6 +8,7 @@ const { buildMassJoinPanel, buildSpamPanel, buildSpamResponsePanel } = require("
 const { buildAntiBotPanel, buildAntiAltPanel } = require("../ui/antiraidAccess");
 const { buildDangerPermsPanel, buildProtectedRolesPanel, buildMovCallPanel } = require("../ui/antiraidSensitive");
 const server = require("./antiRaidServerHandlers");
+const antiLink = require("./antiLinkHandlers");
 
 const V2 = MessageFlags.IsComponentsV2;
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -25,6 +26,8 @@ const PANELS = {
   movCall: buildMovCallPanel,
   // Parte 5: visual, native, nativeChannels e autoMod
   ...server.PANELS,
+  // Anti-link: antiLink e antiLinkResp
+  ...antiLink.PANELS,
 };
 
 // Valor numérico de um select, só se estiver na lista permitida
@@ -90,6 +93,7 @@ async function handleAntiRaidButton(interaction) {
   if (customId.startsWith("ar:core:")) return handleCoreButton(interaction);
   if (customId.startsWith("ar:mj:")) return handleMassJoinButton(interaction);
   if (customId.startsWith("ar:sp:")) return handleSpamButton(interaction);
+  if (customId.startsWith("ar:al:")) return antiLink.handleAntiLinkButton(interaction);
   if (customId.startsWith("ar:aa:")) return handleAntiAltButton(interaction);
   if (customId.startsWith("ar:dp:") || customId.startsWith("ar:pr:") || customId.startsWith("ar:mv:")) {
     return handleSensitiveToggle(interaction);
@@ -127,6 +131,7 @@ async function handleAntiRaidSelect(interaction) {
   if (interaction.customId.startsWith("ar:core:")) return handleCoreSelect(interaction);
   if (interaction.customId.startsWith("ar:mj:")) return handleMassJoinSelect(interaction);
   if (interaction.customId.startsWith("ar:sp:")) return handleSpamSelect(interaction);
+  if (interaction.customId.startsWith("ar:al:")) return antiLink.handleAntiLinkSelect(interaction);
   if (interaction.customId.startsWith("ar:ab:")) return handleAntiBotSelect(interaction);
   if (interaction.customId.startsWith("ar:aa:")) return handleAntiAltSelect(interaction);
   if (interaction.customId.startsWith("ar:dp:")) return handleDangerPermsSelect(interaction);

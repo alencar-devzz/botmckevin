@@ -45,6 +45,30 @@ const DEFAULTS = {
     exemptUsers: [],
     alertChannelId: null, // vazio = usa o canal do núcleo
   },
+  antiLink: {
+    enabled: false,
+    mode: "invites", // invites = só convites de servidores | all = todos os links | custom = só os tipos escolhidos
+    blockTypes: ["invite"], // tipos apagados no modo "custom" (chaves de AL_TYPES)
+    allowedTypes: [], // tipos que nunca são apagados, em qualquer modo
+    allowedDomains: [], // "dominio.com" ou "dominio.com/caminho"; sempre liberados
+    blockedDomains: [], // sempre apagados, mesmo fora do modo escolhido
+    allowOwnInvites: true, // convites do próprio servidor passam
+    allowedGuilds: [], // [{ id, name }] servidores parceiros: os convites deles passam
+    bareDomains: true, // também pega "site.com" escrito sem https://
+    ignoreStaff: true, // ignora quem tem Gerenciar Mensagens
+    exemptRoles: [],
+    exemptChannels: [],
+    exemptUsers: [],
+    notify: true, // avisa no canal (o aviso some sozinho)
+    message: "{user}, não é permitido enviar {tipo} aqui.",
+    noticeSec: 8,
+    punishment: "none", // chaves de AL_PUNISH
+    strikeLimit: 3, // mensagens apagadas dentro da janela até punir
+    strikeWindowMin: 10,
+    timeoutMin: 10,
+    logEnabled: true,
+    alertChannelId: null, // vazio = usa o canal do núcleo
+  },
   antiBot: {
     mode: "off", // off | all (qualquer bot novo) | unverified (só bots não verificados pelo Discord)
     action: "kick", // o que fazer com o bot barrado: kick | ban
@@ -130,6 +154,7 @@ const MODULES = [
   { key: "core", label: "Núcleo anti-raid", desc: "Exclusões, criações e punições feitas em massa.", built: true, active: (c) => c.core.enabled },
   { key: "massJoin", label: "Entrada em massa", desc: "Detecta ondas de contas entrando juntas.", built: true, active: (c) => c.massJoin.enabled },
   { key: "spam", label: "Anti-spam", desc: "Controle de flood de mensagens.", built: true, active: (c) => c.spam.enabled },
+  { key: "antiLink", label: "Anti-link", desc: "Apaga convites de servidores e, se quiser, outros links.", built: true, active: (c) => c.antiLink.enabled },
   { key: "antiBot", label: "Anti-bot", desc: "Controle de bots que entram no servidor.", built: true, active: (c) => c.antiBot.mode !== "off" },
   { key: "antiAlt", label: "Anti-alt", desc: "Idade mínima das contas que entram.", built: true, active: (c) => c.antiAlt.minAgeDays > 0 },
   { key: "dangerPerms", label: "Permissões perigosas", desc: "Vigia permissões administrativas novas.", built: true, active: (c) => c.dangerPerms.enabled },
@@ -174,6 +199,38 @@ const SPAM_SIGNALS = {
   invites: "Convites de outros servidores",
   links: "Vários links",
 };
+
+// ---- Anti-link ----
+const AL_MODES = {
+  invites: { label: "Só convites de servidores", desc: "Apaga apenas divulgação de outros servidores. Os demais links ficam livres." },
+  all: { label: "Todos os links", desc: "Apaga qualquer link, menos o que estiver liberado." },
+  custom: { label: "Só os tipos que eu escolher", desc: "Apaga apenas os tipos marcados em \"Tipos que apaga\"." },
+};
+// label aparece no painel; noun entra no aviso ({tipo})
+const AL_TYPES = {
+  invite: { label: "Convites de servidores", noun: "convites de outros servidores" },
+  gift: { label: "Presentes e Nitro", noun: "links de presente" },
+  discord: { label: "Outros links do Discord", noun: "links do Discord" },
+  youtube: { label: "YouTube", noun: "links do YouTube" },
+  twitch: { label: "Twitch", noun: "links da Twitch" },
+  social: { label: "Redes sociais", noun: "links de redes sociais" },
+  gif: { label: "GIFs (Tenor, Giphy)", noun: "links de GIF" },
+  media: { label: "Imagens e vídeos", noun: "links de imagens e vídeos" },
+  files: { label: "Arquivos e downloads", noun: "links de download" },
+  shortener: { label: "Encurtadores de link", noun: "links encurtados" },
+  other: { label: "Sites em geral (outros)", noun: "links" },
+};
+const AL_PUNISH = {
+  none: { label: "Só apagar a mensagem", desc: "Sem punição, mesmo que repita." },
+  timeout: { label: "Apagar e silenciar (timeout)", desc: "Aplica timeout quando passar do limite." },
+  kick: { label: "Apagar e expulsar", desc: "Expulsa quando passar do limite." },
+  ban: { label: "Apagar e banir", desc: "Bane quando passar do limite." },
+};
+const AL_STRIKES = [1, 2, 3, 5, 10];
+const AL_STRIKE_WINDOW = [5, 10, 30, 60, 180];
+const AL_TIMEOUT_MIN = [1, 5, 10, 30, 60, 180, 1440];
+const AL_MAX_DOMAINS = 60;
+const AL_MAX_GUILDS = 20;
 
 // ---- Anti-bot ----
 const AB_MODES = {
@@ -274,6 +331,14 @@ const NV_AUTOMOD = {
 };
 
 module.exports = {
+  AL_MODES,
+  AL_TYPES,
+  AL_PUNISH,
+  AL_STRIKES,
+  AL_STRIKE_WINDOW,
+  AL_TIMEOUT_MIN,
+  AL_MAX_DOMAINS,
+  AL_MAX_GUILDS,
   VS_FIELDS,
   VS_RESPONSES,
   NV_VERIFICATION,

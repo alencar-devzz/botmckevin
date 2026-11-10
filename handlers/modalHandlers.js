@@ -6,11 +6,17 @@ const { handleTicketModal } = require("./ticketHandlers");
 const { handlePostModal, handlePostsConfigModal } = require("./postsHandlers");
 const { handleClConfigModal } = require("./clHandlers");
 const { handleRoleManageModal, handleRoleManageConfigModal } = require("./roleManageHandlers");
+const { handleAntiLinkModal } = require("./antiLinkHandlers");
 
 const { handleCallHubConfigModal, handleCallPanelModal } = require("./callHubHandlers");
 
 async function handleModal(interaction) {
   const { customId } = interaction;
+
+  // Anti-link (listas de domínios, servidores parceiros e mensagem do aviso)
+  if (customId.startsWith("ar:al:modal:")) {
+    return handleAntiLinkModal(interaction);
+  }
 
   if (customId.startsWith("chcfg_modal:")) {
     return handleCallHubConfigModal(interaction);

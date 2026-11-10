@@ -103,7 +103,7 @@ function buildAntiRaidHome(guild, cfg) {
 // ---------- Menu geral (módulos agrupados) ----------
 const GROUPS = [
   { title: "Base e ajustes", keys: ["core", "native"] },
-  { title: "Entrada e mensagens", keys: ["massJoin", "spam"] },
+  { title: "Entrada e mensagens", keys: ["massJoin", "spam", "antiLink"] },
   { title: "Acesso e permissões", keys: ["antiBot", "antiAlt", "dangerPerms", "visual"] },
   { title: "Proteções sensíveis", keys: ["protectedRoles", "movCall"] },
 ];
