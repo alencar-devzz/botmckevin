@@ -1,6 +1,7 @@
 const { PermissionFlagsBits, MessageFlags, ContainerBuilder, TextDisplayBuilder } = require("discord.js");
 const { getAntiRaidConfig } = require("./store");
 const { sendModuleAlert } = require("./alert");
+const { suppressMessage } = require("../logs/suppress");
 
 // Anti-spam: conta mensagens por pessoa numa janela curta. O volume sozinho só pune
 // se o painel permitir; por padrão exige também um sinal real de spam.
@@ -39,6 +40,7 @@ function isExempt(message, s) {
 
 async function deleteFlagged(message, entries) {
   const byChannel = new Map();
+  for (const e of entries) suppressMessage(e.id); // não vira "Mensagem apagada" nos logs gerais
   for (const e of entries) byChannel.set(e.channelId, [...(byChannel.get(e.channelId) ?? []), e.id]);
   for (const [channelId, ids] of byChannel) {
     const channel = message.guild.channels.cache.get(channelId);
@@ -99,7 +101,10 @@ async function onMessage(message) {
         allowedMentions: { users: [message.author.id] },
       })
       .catch(() => null);
-    if (notice) setTimeout(() => notice.delete().catch(() => {}), s.warnSec * 1000);
+    if (notice) {
+      suppressMessage(notice.id);
+      setTimeout(() => notice.delete().catch(() => {}), s.warnSec * 1000);
+    }
     return;
   }
 
@@ -110,7 +115,8 @@ async function onMessage(message) {
     .catch(() => false);
 
   await sendModuleAlert(message.guild, cfg, s.alertChannelId, {
-    title: "Anti-Raid · spam detectado",
+    title: "Anti-Raid — Spam detectado",
+    thumbnail: message.author.displayAvatarURL(),
     lines: [
       `**Autor**  <@${message.author.id}> (\`${message.author.id}\`)`,
       `**Canal**  <#${message.channelId}>`,

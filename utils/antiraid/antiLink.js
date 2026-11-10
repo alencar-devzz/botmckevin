@@ -3,6 +3,8 @@ const { getAntiRaidConfig } = require("./store");
 const { sendModuleAlert } = require("./alert");
 const { AL_TYPES, AL_PUNISH } = require("./defaults");
 const { extractLinks, matchesAny, isResolvableInvite, findWrapped } = require("./linkTools");
+const { suppressMessage } = require("../logs/suppress");
+const { userBlock, channelBlock, codeBlock, code } = require("../logs/format");
 
 // Anti-link: apaga mensagens com links proibidos conforme o painel.
 // Padrão: só convites de outros servidores. Ordem de decisão para cada link:
@@ -112,7 +114,10 @@ async function sendNotice(message, a, types) {
       allowedMentions: { users: [message.author.id] },
     })
     .catch(() => null);
-  if (notice) setTimeout(() => notice.delete().catch(() => {}), (a.noticeSec || 8) * 1000);
+  if (notice) {
+    suppressMessage(notice.id); // o aviso some sozinho e não vira "Mensagem apagada" nos logs
+    setTimeout(() => notice.delete().catch(() => {}), (a.noticeSec || 8) * 1000);
+  }
 }
 
 async function punish(member, a) {
@@ -186,6 +191,7 @@ async function onMessage(message) {
 
   // 1) apaga
   let deleted = true;
+  suppressMessage(message.id); // quem avisa é só o log do Anti-link, o log geral de mensagens fica quieto
   try {
     await message.delete();
   } catch (err) {
@@ -223,17 +229,23 @@ async function onMessage(message) {
     const shown = blocked.slice(0, 4).map((b) => `${inline(b.link.raw)} · ${b.why}`);
     if (blocked.length > 4) shown.push(`e mais ${blocked.length - 4} link(s)`);
     await sendModuleAlert(message.guild, cfg, a.alertChannelId, {
-      title: "Anti-link · mensagem apagada",
-      lines: [
-        `**Autor**  <@${message.author.id}> (\`${message.author.id}\`)`,
-        `**Canal**  <#${message.channelId}>`,
-        `**Links**  ${shown.join("\n")}`,
-        ...(a.punishment !== "none"
-          ? [`**Infrações**  ${count} de ${a.strikeLimit} (${AL_PUNISH[a.punishment].label.toLowerCase()})`]
-          : []),
-        ...(punishment ? [`**Punição**  ${punishment}`] : []),
+      title: "Anti-link — Mensagem apagada",
+      color: 0xe50000,
+      thumbnail: message.author.displayAvatarURL(),
+      groups: [
+        [userBlock(message.author, "Autor")],
+        [
+          channelBlock(message.channel),
+          `**Sistema:** ${code("Anti-link")}`,
+          `**Mensagem ID:** ${code(message.id)}`,
+          `**Motivo:** ${shown.join("\n")}`,
+          ...(a.punishment !== "none"
+            ? [`**Infrações:** ${code(`${count} de ${a.strikeLimit}`)} (${AL_PUNISH[a.punishment].label.toLowerCase()})`]
+            : []),
+          ...(punishment ? [`**Punição:** ${punishment}`] : []),
+        ],
+        ["**Conteúdo**", codeBlock(message.content)],
       ],
-      color: punishment ? 0xed4245 : 0xfaa61a,
     });
   }
 }
