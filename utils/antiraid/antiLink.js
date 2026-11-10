@@ -2,7 +2,7 @@ const { PermissionFlagsBits, MessageFlags, ContainerBuilder, TextDisplayBuilder 
 const { getAntiRaidConfig } = require("./store");
 const { sendModuleAlert } = require("./alert");
 const { AL_TYPES, AL_PUNISH } = require("./defaults");
-const { extractLinks, matchesAny, isResolvableInvite } = require("./linkTools");
+const { extractLinks, matchesAny, isResolvableInvite, findWrapped } = require("./linkTools");
 
 // Anti-link: apaga mensagens com links proibidos conforme o painel.
 // Padrão: só convites de outros servidores. Ordem de decisão para cada link:
@@ -83,7 +83,7 @@ const NOTICE_GAP = 4_000;
 const PERM_GAP = 10 * 60_000;
 
 function joinNouns(types) {
-  const nouns = [...new Set(types.map((t) => AL_TYPES[t]?.noun ?? "links"))];
+  const nouns = [...new Set(types.map((t) => (t === "wrapped" ? "textos entre símbolos proibidos" : AL_TYPES[t]?.noun ?? "links")))];
   if (nouns.length <= 1) return nouns[0] ?? "links";
   return `${nouns.slice(0, -1).join(", ")} e ${nouns.at(-1)}`;
 }
@@ -165,7 +165,8 @@ async function onMessage(message) {
   if (!a.enabled) return;
 
   const links = extractLinks(message.content, { bare: a.bareDomains });
-  if (!links.length) return;
+  const angles = a.wrappers?.length ? findWrapped(message.content, a.wrappers) : [];
+  if (!links.length && !angles.length) return;
 
   const member = message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null));
   if (!member) return;
@@ -175,6 +176,9 @@ async function onMessage(message) {
   for (const link of links.slice(0, 15)) {
     const why = await judge(link, a, message.guild);
     if (why) blocked.push({ link, why });
+  }
+  for (const raw of angles.slice(0, 5)) {
+    blocked.push({ link: { raw, type: "wrapped" }, why: "texto entre símbolos" });
   }
   if (!blocked.length) return;
 

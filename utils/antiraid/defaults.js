@@ -55,6 +55,7 @@ const DEFAULTS = {
     allowOwnInvites: true, // convites do próprio servidor passam
     allowedGuilds: [], // [{ id, name }] servidores parceiros: os convites deles passam
     bareDomains: true, // também pega "site.com" escrito sem https://
+    wrappers: [], // pares de símbolos configurados no painel, ex.: ["<>", "[]"]: apaga qualquer texto escrito entre eles
     ignoreStaff: true, // ignora quem tem Gerenciar Mensagens
     exemptRoles: [],
     exemptChannels: [],
@@ -330,7 +331,10 @@ const NV_AUTOMOD = {
   profanity: { name: `${NV_RULE_PREFIX}palavras ofensivas`, label: "Palavras ofensivas" },
 };
 
+const AL_MAX_WRAPPERS = 10;
+
 module.exports = {
+  AL_MAX_WRAPPERS,
   AL_MODES,
   AL_TYPES,
   AL_PUNISH,

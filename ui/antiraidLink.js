@@ -12,6 +12,7 @@ const { userPick } = access.helpers;
 
 const typeLabels = Object.fromEntries(Object.entries(D.AL_TYPES).map(([key, info]) => [key, info.label]));
 const typeNames = (keys) => keys.map((k) => D.AL_TYPES[k]?.label).filter(Boolean);
+const { wrapLabel } = require("../utils/antiraid/linkTools");
 const yesNo = (on) => `\`${on ? "Sim" : "Não"}\``;
 
 // Resume uma lista numa linha: "a, b, c e mais 4"
@@ -79,6 +80,7 @@ function buildAntiLinkPanel(guild, cfg) {
           `**Domínios liberados**  ${brief(a.allowedDomains)}`,
           `**Domínios bloqueados**  ${brief(a.blockedDomains)}`,
           `**Servidores parceiros**  ${brief(a.allowedGuilds.map((g) => g.name || g.id))}`,
+          `**Texto entre símbolos**  ${brief(a.wrappers.map(wrapLabel))}  ·  apaga qualquer palavra escrita dentro desses pares`,
         ].join("\n")
       )
     )
@@ -87,7 +89,8 @@ function buildAntiLinkPanel(guild, cfg) {
       row(
         btn("ar:al:domAllow", `Domínios liberados (${a.allowedDomains.length})`),
         btn("ar:al:domBlock", `Domínios bloqueados (${a.blockedDomains.length})`),
-        btn("ar:al:guilds", `Servidores parceiros (${a.allowedGuilds.length})`)
+        btn("ar:al:guilds", `Servidores parceiros (${a.allowedGuilds.length})`),
+        btn("ar:al:wrap", `Texto entre símbolos (${a.wrappers.length})`)
       )
     );
 
@@ -238,6 +241,23 @@ function buildGuildsModal(current) {
   );
 }
 
+function buildWrapModal(current) {
+  return modal(
+    "ar:al:modal:wrap",
+    "Texto entre símbolos",
+    textLabel({
+      id: "list",
+      label: "Pares de símbolos que apagam",
+      description: "Um par por linha, abrir e fechar separados por espaço. Esvazie para desligar.",
+      style: TextInputStyle.Paragraph,
+      max: 400,
+      required: false,
+      value: current.map(wrapLabel).join("\n"),
+      placeholder: "< >\n[ ]\n{ }",
+    })
+  );
+}
+
 function buildMessageModal(current) {
   return modal(
     "ar:al:modal:msg",
@@ -260,5 +280,6 @@ module.exports = {
   buildAntiLinkResponsePanel,
   buildDomainModal,
   buildGuildsModal,
+  buildWrapModal,
   buildMessageModal,
 };
