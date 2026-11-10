@@ -10,7 +10,6 @@ const BULK_LIMIT = DAY14 - 5 * 60 * 1000; // margem de segurança do bulkDelete 
 const running = new Set(); // "guildId:userId" executando agora
 const lastUse = new Map(); // "guildId:userId" -> timestamp do último uso
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const REQUIRED = [
   PermissionFlagsBits.ViewChannel,
   PermissionFlagsBits.ManageMessages,
@@ -33,56 +32,116 @@ async function notice(channel, content, seconds = 5) {
   }
 }
 
-// Procura (do mais novo para o mais antigo) as mensagens do usuário no canal
-async function collect(channel, userId, cfg, limit, skipId) {
-  const found = [];
-  const minTs = cfg.includeOld ? 0 : Date.now() - BULK_LIMIT;
-  let before;
-  let scanned = 0;
+// Roda fn em todos os itens, no máximo `limit` ao mesmo tempo
+async function mapLimit(list, limit, fn) {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, list.length) }, async () => {
+    while (next < list.length) await fn(list[next++]);
+  });
+  await Promise.all(workers);
+}
 
-  while (scanned < cfg.scanLimit && found.length < limit) {
-    const batch = await channel.messages.fetch({ limit: 100, before }).catch(() => null);
+const deleteOne = (msg) => msg.delete().then(() => 1).catch(() => 0);
+
+// Apaga em lote (instantâneo) o que tem menos de 14 dias e, em paralelo, o que for mais antigo (um a um, vários ao mesmo tempo).
+// Todos os pedidos saem juntos: a fila de limite de taxa do discord.js organiza o resto.
+async function remove(channel, messages) {
+  const limit = Date.now() - BULK_LIMIT;
+  const fresh = messages.filter((m) => m.createdTimestamp > limit);
+  const old = messages.filter((m) => m.createdTimestamp <= limit);
+  let deleted = 0;
+  const jobs = [];
+
+  for (let i = 0; i < fresh.length; i += 100) {
+    const chunk = fresh.slice(i, i + 100);
+    jobs.push(
+      (async () => {
+        if (chunk.length === 1) return deleteOne(chunk[0]);
+        const result = await channel.bulkDelete(chunk.map((m) => m.id), true).catch(() => null);
+        if (result) return result.size;
+        let n = 0; // o lote falhou: apaga uma a uma, várias ao mesmo tempo
+        await mapLimit(chunk, 6, async (m) => {
+          n += await deleteOne(m);
+        });
+        return n;
+      })().then((n) => {
+        deleted += n;
+      })
+    );
+  }
+  if (old.length) {
+    jobs.push(
+      mapLimit(old, 6, async (m) => {
+        deleted += await deleteOne(m);
+      })
+    );
+  }
+
+  await Promise.all(jobs);
+  return deleted;
+}
+
+// Varre o canal (do mais novo para o mais antigo) apagando as mensagens da pessoa ENQUANTO busca a próxima página:
+// a busca e a exclusão andam juntas em vez de uma esperar a outra.
+// budget = { remaining } é compartilhado entre os canais (limite de quantidade do painel).
+async function sweep(channel, userId, cfg, budget, skipId, ids) {
+  const minTs = cfg.includeOld ? 0 : Date.now() - BULK_LIMIT;
+  const pending = [];
+  const seen = new Set();
+  let deleted = 0;
+
+  const launch = (list) => {
+    if (!list.length) return;
+    list.forEach((m) => {
+      seen.add(m.id);
+      suppressMessage(m.id); // não gera "Mensagem apagada" individual
+      ids.push(m.id);
+    });
+    pending.push(
+      remove(channel, list).then((n) => {
+        deleted += n;
+        budget.remaining += list.length - n; // o que não foi apagado volta para o limite
+      })
+    );
+  };
+
+  const mine = (msg) =>
+    msg.id !== skipId && msg.author?.id === userId && !(cfg.skipPinned && msg.pinned) && !seen.has(msg.id);
+
+  // Sem limite de quantidade: o que o bot já tem em memória começa a ser apagado agora, sem esperar a busca
+  if (budget.remaining === Infinity) {
+    const cached = [...channel.messages.cache.values()].filter((m) => m.createdTimestamp >= minTs && mine(m));
+    launch(cached);
+  }
+
+  let scanned = 0;
+  let page = channel.messages.fetch({ limit: 100 }).catch(() => null);
+
+  while (budget.remaining > 0) {
+    const batch = await page;
     if (!batch?.size) break;
     scanned += batch.size;
-    before = batch.last().id;
 
     let reachedOld = false;
+    const found = [];
     for (const msg of batch.values()) {
       if (msg.createdTimestamp < minTs) {
         reachedOld = true;
         break;
       }
-      if (msg.id === skipId || msg.author?.id !== userId) continue;
-      if (cfg.skipPinned && msg.pinned) continue;
-      found.push(msg);
-      if (found.length >= limit) break;
+      if (mine(msg)) found.push(msg);
     }
-    if (reachedOld || batch.size < 100) break;
-  }
-  return found;
-}
 
-// Apaga em lote (instantâneo) o que tem menos de 14 dias e uma a uma o que for mais antigo
-async function remove(channel, messages) {
-  let deleted = 0;
-  const fresh = messages.filter((m) => m.createdTimestamp > Date.now() - BULK_LIMIT);
-  const old = messages.filter((m) => m.createdTimestamp <= Date.now() - BULK_LIMIT);
+    const take = found.slice(0, budget.remaining);
+    budget.remaining -= take.length;
 
-  for (let i = 0; i < fresh.length; i += 100) {
-    const chunk = fresh.slice(i, i + 100);
-    if (chunk.length === 1) {
-      deleted += (await chunk[0].delete().then(() => 1).catch(() => 0));
-      continue;
-    }
-    const result = await channel.bulkDelete(chunk.map((m) => m.id), true).catch(() => null);
-    if (result) {
-      deleted += result.size;
-    } else {
-      for (const msg of chunk) deleted += await msg.delete().then(() => 1).catch(() => 0);
-    }
+    const more = !reachedOld && batch.size >= 100 && scanned < cfg.scanLimit && budget.remaining > 0;
+    if (more) page = channel.messages.fetch({ limit: 100, before: batch.last().id }).catch(() => null); // já busca a próxima
+    launch(take);
+    if (!more) break;
   }
 
-  for (const msg of old) deleted += await msg.delete().then(() => 1).catch(() => 0);
+  await Promise.all(pending);
   return deleted;
 }
 
@@ -180,34 +239,41 @@ module.exports = {
       // 2) depois todas as mensagens da pessoa
       const results = [];
       let total = 0;
-      let remaining = cfg.amount > 0 ? cfg.amount : Infinity;
+      const budget = { remaining: cfg.amount > 0 ? cfg.amount : Infinity };
+      const channels = targetChannels(message, cfg);
 
-      for (const target of targetChannels(message, cfg)) {
-        if (remaining <= 0) break;
-        const found = await collect(target, author.id, cfg, remaining, message.id);
-        if (!found.length) continue;
-
-        found.forEach((m) => suppressMessage(m.id)); // não gera "Mensagem apagada" individual
-        allIds.push(...found.map((m) => m.id));
-
-        const deleted = await remove(target, found);
-        results.push({ channel: target, deleted });
+      const run = async (target, index) => {
+        const deleted = await sweep(target, author.id, cfg, budget, message.id, allIds);
         total += deleted;
-        remaining -= deleted;
-        if (target.id !== channel.id) await sleep(300); // respiro entre canais
+        if (deleted) results.push({ channel: target, deleted, index });
+      };
+
+      if (budget.remaining === Infinity) {
+        // sem limite de quantidade: todos os canais ao mesmo tempo (vários por vez)
+        await mapLimit(channels.map((c, i) => [c, i]), 6, ([c, i]) => run(c, i));
+      } else {
+        // com limite: o canal atual vem primeiro, para a quantidade valer do mais novo para o mais antigo
+        await run(channels[0], 0);
+        await mapLimit(channels.slice(1).map((c, i) => [c, i + 1]), 6, async ([c, i]) => {
+          if (budget.remaining > 0) await run(c, i);
+        });
       }
+      results.sort((x, y) => x.index - y.index);
 
-      await sendLog({ message, cfg, results, total, startedAt }).catch((err) =>
-        console.error("[CL] Erro ao enviar log:", err)
-      );
-
+      // log e aviso saem juntos
+      const tasks = [
+        sendLog({ message, cfg, results, total, startedAt }).catch((err) => console.error("[CL] Erro ao enviar log:", err)),
+      ];
       if (cfg.notice) {
-        await notice(
-          channel,
-          `<@${author.id}> **${total}** mensagem(ns) apagada(s) em ${formatDuration(Date.now() - startedAt)}.`,
-          cfg.noticeSeconds
+        tasks.push(
+          notice(
+            channel,
+            `<@${author.id}> **${total}** mensagem(ns) apagada(s) em ${formatDuration(Date.now() - startedAt)}.`,
+            cfg.noticeSeconds
+          )
         );
       }
+      await Promise.all(tasks);
     } catch (err) {
       console.error("[CL] Erro ao limpar mensagens:", err);
     } finally {
