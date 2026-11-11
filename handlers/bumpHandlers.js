@@ -164,6 +164,10 @@ async function handleBumpButton(interaction) {
       await updateBumpConfig(guild.id, { [`${arg}.embedTimestamp`]: !cfg[arg].embedTimestamp });
       return interaction.update({ components: await page() });
 
+    case "bumpcfg_thumb":
+      await updateBumpConfig(guild.id, { [`${arg}.thumbnailServer`]: !cfg[arg].thumbnailServer });
+      return interaction.update({ components: await page() });
+
     case "bumpcfg_resetmsg":
       await resetBumpMessage(guild.id, arg);
       return interaction.update({ components: await page() });

@@ -36,6 +36,7 @@ function toMessage(doc, kind) {
     embedAuthorIcon: str(doc?.embedAuthorIcon, d.embedAuthorIcon),
     embedThumbnail: str(doc?.embedThumbnail, d.embedThumbnail),
     embedImage: str(doc?.embedImage, d.embedImage),
+    thumbnailServer: doc?.thumbnailServer ?? false,
     embedTimestamp: doc?.embedTimestamp ?? d.embedTimestamp,
   };
 }

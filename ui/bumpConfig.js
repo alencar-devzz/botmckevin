@@ -192,8 +192,8 @@ function buildBumpMessagePage(cfg, kind) {
     ? [
         "**Container (Components V2)**",
         codeBlock(msg.containerText, 700),
-        `**Cor lateral:** ${msg.containerColor ? `\`${msg.containerColor}\`` : "`nenhuma`"} · **Miniatura:** ${msg.containerThumbnail ? "definida" : "nenhuma"} · **Imagem:** ${msg.containerImage ? "definida" : "nenhuma"}`,
-        "-# Uma linha só com `---` vira um separador dentro do container.",
+        `**Cor lateral:** ${msg.containerColor ? `\`${msg.containerColor}\`` : "`nenhuma`"} · **Imagem de canto:** ${msg.thumbnailServer ? "ícone do servidor" : msg.containerThumbnail ? "link definido" : "nenhuma"} · **Imagem:** ${msg.containerImage ? "definida" : "nenhuma"}`,
+        "-# Uma linha só com `[separador]` vira um separador dentro do container.",
       ]
     : isEmbed
     ? [
@@ -201,7 +201,7 @@ function buildBumpMessagePage(cfg, kind) {
         `**Título:** ${inline(msg.embedTitle)}${msg.embedUrl ? " (com link)" : ""}`,
         `**Descrição:** ${codeBlock(msg.embedDescription, 500)}`,
         `**Cor:** \`${msg.embedColor}\` · **Autor:** ${inline(msg.embedAuthor, 40)} · **Rodapé:** ${inline(msg.embedFooter, 40)}`,
-        `**Imagem:** ${msg.embedImage ? "definida" : "nenhuma"} · **Miniatura:** ${msg.embedThumbnail ? "definida" : "nenhuma"} · **Horário:** ${yesNo(msg.embedTimestamp)}`,
+        `**Imagem:** ${msg.embedImage ? "definida" : "nenhuma"} · **Imagem de canto:** ${msg.thumbnailServer ? "ícone do servidor" : msg.embedThumbnail ? "link definido" : "nenhuma"} · **Horário:** ${yesNo(msg.embedTimestamp)}`,
       ]
     : ["**Texto da mensagem**", codeBlock(msg.text, 700)];
 
@@ -224,6 +224,7 @@ function buildBumpMessagePage(cfg, kind) {
     )
     .addActionRowComponents(
       new ActionRowBuilder().addComponents(
+        btn(`bumpcfg_thumb:${kind}`, `Imagem de canto: ${msg.thumbnailServer ? "Servidor" : "Link"}`, ButtonStyle.Secondary, msg.mode === "text"),
         btn(`bumpcfg_preview:${kind}`, "Pré-visualizar"),
         btn(`bumpcfg_resetmsg:${kind}`, "Restaurar esta mensagem", ButtonStyle.Danger)
       )
@@ -291,7 +292,7 @@ function buildTextModal(cfg, kind) {
       textLabel({
         id: "text",
         label: "Texto do container",
-        description: "Markdown (## títulos, -# pequeno) e variáveis. Uma linha só com --- vira separador.",
+        description: "Markdown (## títulos, -# pequeno) e variáveis. Uma linha só com [separador] vira separador.",
         style: TextInputStyle.Paragraph,
         max: 3500,
         value: cfg[kind].containerText,
@@ -326,7 +327,7 @@ function buildContainerStyleModal(cfg, kind) {
       value: m.containerColor,
       placeholder: "#5865F2",
     }),
-    textLabel({ id: "thumbnail", label: "Miniatura (ao lado do texto)", description: url, max: 500, value: m.containerThumbnail }),
+    textLabel({ id: "thumbnail", label: "Imagem de canto (link)", description: "Só vale se \"Imagem de canto\" estiver em Link. " + url, max: 500, value: m.containerThumbnail }),
     textLabel({ id: "image", label: "Imagem grande (embaixo)", description: url, max: 500, value: m.containerImage })
   );
 }
@@ -364,7 +365,7 @@ function buildMediaModal(cfg, kind) {
     `bumpcfg_modal:media:${kind}`,
     `Imagens e links: ${KIND_LABEL[kind]}`,
     textLabel({ id: "image", label: "Imagem grande", description: url, max: 500, value: m.embedImage }),
-    textLabel({ id: "thumbnail", label: "Miniatura (canto direito)", description: url, max: 500, value: m.embedThumbnail }),
+    textLabel({ id: "thumbnail", label: "Imagem de canto (link)", description: url, max: 500, value: m.embedThumbnail }),
     textLabel({ id: "url", label: "Link do título", description: url, max: 500, value: m.embedUrl }),
     textLabel({ id: "authorIcon", label: "Ícone do autor", description: url, max: 500, value: m.embedAuthorIcon }),
     textLabel({ id: "footerIcon", label: "Ícone do rodapé", description: url, max: 500, value: m.embedFooterIcon })

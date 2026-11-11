@@ -95,6 +95,10 @@ function buildBumpMessage(kind, cfg, ctx) {
   if (ctx.pingUser && ctx.user && !used("user")) pings.push(`<@${ctx.user.id}>`);
 
   const f = (value) => fill(value, vars);
+
+  // Imagem de canto: ícone do servidor (se ligado e o servidor tiver ícone) ou o link configurado
+  const serverIcon = ctx.guild?.iconURL?.({ extension: "png", size: 512 }) ?? null;
+  const corner = (link) => (msg.thumbnailServer && serverIcon ? serverIcon : isUrl(link) ? link : null);
   const payload = {
     allowedMentions: {
       parse: [],
@@ -108,7 +112,7 @@ function buildBumpMessage(kind, cfg, ctx) {
     const body = f(msg.containerText).trim() || fill(defaults.containerText, vars);
     const parts = body
       .slice(0, 3500)
-      .split(/\n[ \t]*---[ \t]*\n/)
+      .split(/\n[ \t]*\[separador\][ \t]*\n/i)
       .map((p) => p.trim())
       .filter(Boolean);
 
@@ -119,11 +123,12 @@ function buildBumpMessage(kind, cfg, ctx) {
     const display = (value) => new TextDisplayBuilder().setContent(value);
     parts.forEach((part, i) => {
       if (i > 0) container.addSeparatorComponents(new SeparatorBuilder());
-      if (i === 0 && isUrl(msg.containerThumbnail)) {
+      const thumb = corner(msg.containerThumbnail);
+      if (i === 0 && thumb) {
         container.addSectionComponents(
           new SectionBuilder()
             .addTextDisplayComponents(display(part))
-            .setThumbnailAccessory(new ThumbnailBuilder().setURL(msg.containerThumbnail))
+            .setThumbnailAccessory(new ThumbnailBuilder().setURL(thumb))
         );
       } else {
         container.addTextDisplayComponents(display(part));
@@ -164,7 +169,8 @@ function buildBumpMessage(kind, cfg, ctx) {
       });
     }
 
-    if (isUrl(msg.embedThumbnail)) embed.setThumbnail(msg.embedThumbnail);
+    const embedThumb = corner(msg.embedThumbnail);
+    if (embedThumb) embed.setThumbnail(embedThumb);
     if (isUrl(msg.embedImage)) embed.setImage(msg.embedImage);
     if (msg.embedTimestamp) embed.setTimestamp(ctx.now);
 

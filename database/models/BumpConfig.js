@@ -19,6 +19,8 @@ const messageSchema = new Schema(
     containerThumbnail: { type: String },
     containerImage: { type: String },
 
+    thumbnailServer: { type: Boolean, default: false }, // imagem de canto = ícone do servidor (container e embed)
+
     // Modo embed
     embedTitle: { type: String },
     embedUrl: { type: String }, // link do título
