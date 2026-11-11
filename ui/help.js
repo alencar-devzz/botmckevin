@@ -153,8 +153,9 @@ function buildHelpPanel({ prefix, commands, categories, cat = "all", page = 0, s
 
   // ---- BOTÕES EMBAIXO, dentro da embed ----
   container.addSeparatorComponents(new SeparatorBuilder());
+  // Cada botão precisa de um customId único na mensagem: nos detalhes, o 🔄 recarrega o próprio comando
   const refresh = new ButtonBuilder()
-    .setCustomId(`help:nav:${activeCat}:${current}`)
+    .setCustomId(detail ? `help:det:${activeCat}:${current}:${detail.key}` : `help:nav:${activeCat}:${current}`)
     .setEmoji("🔄")
     .setStyle(ButtonStyle.Secondary);
 
