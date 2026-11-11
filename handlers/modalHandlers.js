@@ -6,6 +6,7 @@ const { handleTicketModal } = require("./ticketHandlers");
 const { handlePostModal, handlePostsConfigModal } = require("./postsHandlers");
 const { handleClConfigModal } = require("./clHandlers");
 const { handleRoleManageModal, handleRoleManageConfigModal } = require("./roleManageHandlers");
+const { handleBumpModal } = require("./bumpHandlers");
 const { handleAntiLinkModal } = require("./antiLinkHandlers");
 const { handleMessageModal } = require("./mensagemHandlers");
 
@@ -38,6 +39,10 @@ async function handleModal(interaction) {
 
   if (customId.startsWith("rmcfg_modal:")) {
     return handleRoleManageConfigModal(interaction);
+  }
+
+  if (customId.startsWith("bumpcfg_modal:")) {
+    return handleBumpModal(interaction);
   }
 
   if (customId.startsWith("clcfg_modal:")) {

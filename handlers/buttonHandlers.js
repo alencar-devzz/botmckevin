@@ -16,6 +16,7 @@ const { handleHelpButton } = require("./helpHandlers");
 const { handleTicketConfigButton } = require("./ticketConfigHandlers");
 const { handleClConfigButton } = require("./clHandlers");
 const { handleRoleManageButton, handleRoleManageConfigButton } = require("./roleManageHandlers");
+const { handleBumpButton } = require("./bumpHandlers");
 const { handleAntiRaidButton } = require("./antiRaidHandlers");
 const { handleMessageButton } = require("./mensagemHandlers");
 
@@ -58,6 +59,11 @@ async function handleButton(interaction) {
 
   if (customId.startsWith("rmcfg_")) {
     return handleRoleManageConfigButton(interaction);
+  }
+
+  // Bump reminder (n!menu > Moderação)
+  if (customId.startsWith("bumpcfg_")) {
+    return handleBumpButton(interaction);
   }
 
   // Configuração do comando cl no n!menu

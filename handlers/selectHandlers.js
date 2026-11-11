@@ -7,6 +7,7 @@ const { buildAutoRolesPanel } = require("../ui/autoroles");
 const { handleTicketSelect } = require("./ticketHandlers");
 const { handleBotcallSelect } = require("./botcallHandlers");
 const { handleHelpSelect } = require("./helpHandlers");
+const { openBumpPanel, handleBumpSelect } = require("./bumpHandlers");
 const { handleAntiRaidSelect } = require("./antiRaidHandlers");
 const { handleMessageSelect } = require("./mensagemHandlers");
 const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHandlers");
@@ -59,6 +60,11 @@ async function handleSelect(interaction) {
 
   if (customId.startsWith("rmcfg_")) {
     return handleRoleManageConfigSelect(interaction);
+  }
+
+  // Bump reminder (n!menu > Moderação)
+  if (customId.startsWith("bumpcfg_")) {
+    return handleBumpSelect(interaction);
   }
 
   // Configuração do comando cl no n!menu
@@ -129,6 +135,9 @@ async function handleSelect(interaction) {
       }
       if (value === "cl") {
         return openClPanel(interaction);
+      }
+      if (value === "bump") {
+        return openBumpPanel(interaction);
       }
       return;
     }

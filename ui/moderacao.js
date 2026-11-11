@@ -40,6 +40,11 @@ function buildModeracaoPanel() {
         label: "Comando cl",
         description: "Apaga as mensagens de quem digita cl. Quem usa, canais e limites.",
         value: "cl",
+      },
+      {
+        label: "Bump reminder",
+        description: "Lembrete de bump, agradecimento, cargos, tempos e embeds.",
+        value: "bump",
       }
     );
 
