@@ -16,7 +16,10 @@ module.exports = {
       }
 
       // Renova o prazo de expiração do menu principal
-      if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+      if (
+        (interaction.isMessageComponent() || interaction.isModalSubmit()) &&
+        !interaction.customId?.startsWith("help:") // o /help não renova o prazo do n!menu
+      ) {
         touchMenu(interaction);
       }
 

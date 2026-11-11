@@ -26,7 +26,7 @@ module.exports = {
     const commandName = args.shift().toLowerCase();
 
     const command = message.client.commands.get(commandName);
-    if (!command) return;
+    if (!command || typeof command.execute !== "function") return; // comandos só-slash (ex.: /help)
 
     // Apaga a mensagem do comando assim que ele é reconhecido.
     // Marca como "suprimida" para o sistema de logs não registrar como mensagem apagada.

@@ -6,6 +6,7 @@ const { openPortaria, handlePortariaSelect } = require("./portariaHandlers");
 const { buildAutoRolesPanel } = require("../ui/autoroles");
 const { handleTicketSelect } = require("./ticketHandlers");
 const { handleBotcallSelect } = require("./botcallHandlers");
+const { handleHelpSelect } = require("./helpHandlers");
 const { handleAntiRaidSelect } = require("./antiRaidHandlers");
 const { handleMessageSelect } = require("./mensagemHandlers");
 const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHandlers");
@@ -26,6 +27,11 @@ const {
 
 async function handleSelect(interaction) {
   const { customId, values } = interaction;
+
+  // Central de ajuda (comando /help)
+  if (customId.startsWith("help:")) {
+    return handleHelpSelect(interaction);
+  }
 
   // Painel do Anti-Raid (comando painelps)
   if (customId.startsWith("ar:")) {
