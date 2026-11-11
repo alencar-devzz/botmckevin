@@ -421,7 +421,7 @@ function buildMainModal(cfg) {
       label: "Descrição",
       description: "Formatação livre. Ex.: > citação ou -# pequeno. Vazio = padrão.",
       style: PARAGRAPH,
-      max: 300,
+      max: 1500,
       value: cfg.texts.desc,
     }),
     textLabel({
@@ -461,7 +461,7 @@ function buildSectionModal(sectionId, cfg) {
       label: "Descrição da seção (opcional)",
       description: "Aparece abaixo do título. Aceita formatação. Vazio = sem descrição.",
       style: PARAGRAPH,
-      max: 300,
+      max: 1000,
       value: cfg.texts[section.descKey],
     })
   );

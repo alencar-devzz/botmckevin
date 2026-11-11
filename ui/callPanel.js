@@ -95,7 +95,7 @@ function buildCallPanel(cfg, guild, { disabled = false } = {}) {
   // Cabeçalho: título grande, descrição (em citação ou texto normal) e a miniatura à direita
   // Formatação livre: o texto vai exatamente como foi escrito (n!menu → Painel da call)
   const title = text(clip(t.title, 200) || " ");
-  const desc = text(clip(t.desc, 300) || " ");
+  const desc = text(clip(t.desc, 1500) || " ");
   const thumb = resolveThumb(cfg, guild);
   if (thumb) {
     container.addSectionComponents(
@@ -115,7 +115,7 @@ function buildCallPanel(cfg, guild, { disabled = false } = {}) {
     container.addSeparatorComponents(gap(cfg));
 
     const heading = clip(t[section.titleKey], 200);
-    const about = clip(t[section.descKey], 300);
+    const about = clip(t[section.descKey], 1000);
     const legend = cfg.legend
       ? keys
           .map((key) => clip(say(cfg, "legendLine", { nome: clip(t[`b_${key}`], 40), descricao: clip(t[`d_${key}`], 150) }), 300))
