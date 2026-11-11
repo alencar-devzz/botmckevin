@@ -21,14 +21,30 @@ const cut = (value, max) => {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 };
 
-// "/ban · prefixo" (slash + prefixo) · "/unban_all" (só slash) · "n!menu" (só prefixo)
-function displayName(entry, prefix) {
+// Filtros especiais do select de categorias (o "@" nunca aparece em slug de categoria)
+const TYPE_SLASH = "@slash";
+const TYPE_PREFIX = "@prefix";
+
+// Filtra os comandos pelo valor do select: "all", "@slash", "@prefix" ou o slug de uma categoria
+function filterCommands(commands, cat) {
+  if (cat === TYPE_SLASH) return commands.filter((c) => c.hasSlash);
+  if (cat === TYPE_PREFIX) return commands.filter((c) => c.hasPrefix);
+  if (cat === "all") return commands;
+  return commands.filter((c) => c.categorySlug === cat);
+}
+
+// Todas: "/ban · prefixo" (slash + prefixo) · "/unban_all" (só slash) · "n!menu" (só prefixo)
+// Slash: sempre "/nome" · Prefixo: sempre "n!nome"
+function displayName(entry, prefix, mode = "all") {
+  if (mode === TYPE_SLASH) return `/${entry.slashName}`;
+  if (mode === TYPE_PREFIX) return `${prefix}${entry.prefixName}`;
   if (entry.hasSlash) return `/${entry.slashName}`;
   return `${prefix}${entry.prefixName}`;
 }
 
-function rowTitle(entry, prefix) {
-  return `**${displayName(entry, prefix)}**${entry.hasSlash && entry.hasPrefix ? " · prefixo" : ""}`;
+function rowTitle(entry, prefix, mode = "all") {
+  const tag = mode !== TYPE_SLASH && mode !== TYPE_PREFIX && entry.hasSlash && entry.hasPrefix ? " · prefixo" : "";
+  return `**${displayName(entry, prefix, mode)}**${tag}`;
 }
 
 function optionLine(option) {
@@ -36,8 +52,8 @@ function optionLine(option) {
   return `- ${code(option.name)} · ${option.type} · ${req}${option.description ? ` — ${option.description}` : ""}`;
 }
 
-function detailText(entry, prefix) {
-  const lines = [`### ${rowTitle(entry, prefix)}`, entry.description, "", `**Categoria:** ${entry.category}`];
+function detailText(entry, prefix, mode = "all") {
+  const lines = [`### ${rowTitle(entry, prefix, mode)}`, entry.description, "", `**Categoria:** ${entry.category}`];
 
   if (entry.hasSlash) {
     const args = entry.options.map((o) => (o.required ? `<${o.name}>` : `[${o.name}]`));
@@ -67,9 +83,15 @@ function detailText(entry, prefix) {
 
 // cat: "all" ou o slug de uma categoria  ·  selected: key do comando aberto em "Detalhes" (ou null)
 function buildHelpPanel({ prefix, commands, categories, cat = "all", page = 0, selected = null }) {
-  const activeCat = categories.some((c) => c.slug === cat) ? cat : "all";
-  const filtered = activeCat === "all" ? commands : commands.filter((c) => c.categorySlug === activeCat);
-  const categoryName = categories.find((c) => c.slug === activeCat)?.name ?? null;
+  const isType = cat === TYPE_SLASH || cat === TYPE_PREFIX;
+  const activeCat = isType || categories.some((c) => c.slug === cat) ? cat : "all";
+  const filtered = filterCommands(commands, activeCat);
+  const categoryName =
+    activeCat === TYPE_SLASH
+      ? "Slash"
+      : activeCat === TYPE_PREFIX
+        ? "Prefixo"
+        : (categories.find((c) => c.slug === activeCat)?.name ?? null);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const current = Math.min(Math.max(0, Number(page) || 0), totalPages - 1);
@@ -84,7 +106,19 @@ function buildHelpPanel({ prefix, commands, categories, cat = "all", page = 0, s
     .setPlaceholder("Filtrar por categoria...")
     .addOptions(
       { label: "Todas", description: `${commands.length} comando(s)`, value: "all", default: activeCat === "all" },
-      ...categories.slice(0, SELECT_LIMIT - 1).map((c) => ({
+      {
+        label: "Slash",
+        description: `${filterCommands(commands, TYPE_SLASH).length} comando(s) com /`,
+        value: TYPE_SLASH,
+        default: activeCat === TYPE_SLASH,
+      },
+      {
+        label: "Prefixo",
+        description: cut(`${filterCommands(commands, TYPE_PREFIX).length} comando(s) com ${prefix}`, 100),
+        value: TYPE_PREFIX,
+        default: activeCat === TYPE_PREFIX,
+      },
+      ...categories.slice(0, SELECT_LIMIT - 3).map((c) => ({
         label: cut(c.name, 100),
         description: `${c.count} comando(s)`,
         value: c.slug,
@@ -99,7 +133,7 @@ function buildHelpPanel({ prefix, commands, categories, cat = "all", page = 0, s
   if (jumpList.length) {
     jumpSelect.setPlaceholder("Ir direto a um comando...").addOptions(
       jumpList.map((entry) => ({
-        label: cut(displayName(entry, prefix), 100),
+        label: cut(displayName(entry, prefix, activeCat), 100),
         description: cut(entry.description, 100),
         value: entry.key,
         default: detail?.key === entry.key,
@@ -123,7 +157,7 @@ function buildHelpPanel({ prefix, commands, categories, cat = "all", page = 0, s
   if (activeCat !== "all" && categoryName) crumbs.push(categoryName);
   let subtitle;
   if (detail) {
-    crumbs.push(displayName(detail, prefix));
+    crumbs.push(displayName(detail, prefix, activeCat));
     subtitle = crumbs.join(" › ");
   } else {
     subtitle = `${crumbs.join(" › ")} · pág. ${current + 1}/${totalPages}`;
@@ -133,14 +167,14 @@ function buildHelpPanel({ prefix, commands, categories, cat = "all", page = 0, s
 
   // ---- CONTEÚDO ----
   if (detail) {
-    container.addTextDisplayComponents(text(detailText(detail, prefix)));
+    container.addTextDisplayComponents(text(detailText(detail, prefix, activeCat)));
   } else if (!items.length) {
     container.addTextDisplayComponents(text("-# Não há comandos disponíveis para você nesta categoria."));
   } else {
     for (const entry of items) {
       container.addSectionComponents(
         new SectionBuilder()
-          .addTextDisplayComponents(text(`${rowTitle(entry, prefix)}\n-# ${cut(entry.description, 120)}`))
+          .addTextDisplayComponents(text(`${rowTitle(entry, prefix, activeCat)}\n-# ${cut(entry.description, 120)}`))
           .setButtonAccessory(
             new ButtonBuilder()
               .setCustomId(`help:det:${activeCat}:${current}:${entry.key}`)
@@ -191,4 +225,4 @@ function buildHelpPanel({ prefix, commands, categories, cat = "all", page = 0, s
   return [container];
 }
 
-module.exports = { buildHelpPanel, PAGE_SIZE };
+module.exports = { buildHelpPanel, filterCommands, PAGE_SIZE };

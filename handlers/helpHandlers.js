@@ -1,4 +1,4 @@
-const { buildHelpPanel, PAGE_SIZE } = require("../ui/help");
+const { buildHelpPanel, filterCommands, PAGE_SIZE } = require("../ui/help");
 const { collectHelp } = require("../utils/helpRegistry");
 
 // Monta o painel do /help para quem interagiu. A lista é recalculada a cada clique,
@@ -20,7 +20,7 @@ async function handleHelpSelect(interaction) {
   if (kind === "cmd") {
     // Abre os detalhes na página onde o comando está
     const data = await collectHelp(interaction);
-    const filtered = cat === "all" ? data.commands : data.commands.filter((c) => c.categorySlug === cat);
+    const filtered = filterCommands(data.commands, cat);
     const index = filtered.findIndex((c) => c.key === value);
     const targetPage = index >= 0 ? Math.floor(index / PAGE_SIZE) : Number(page) || 0;
     return interaction.update({
