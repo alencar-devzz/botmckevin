@@ -18,6 +18,7 @@ const {
   buildTimingModal,
   buildTextModal,
   buildEmbedModal,
+  buildContainerStyleModal,
   buildMediaModal,
 } = require("../ui/bumpConfig");
 
@@ -25,6 +26,7 @@ const V2 = MessageFlags.IsComponentsV2;
 const EPHEMERAL = MessageFlags.Ephemeral;
 
 const KINDS = ["reminder", "thanks"];
+const MODE_NEXT = { container: "embed", embed: "text", text: "container" };
 const TOGGLES = ["enabled", "remind", "thank", "mentionLastBumper", "thanksMention", "deleteOldReminder"];
 
 // Quem configura: Administrador ou cargos da equipe
@@ -82,12 +84,12 @@ async function preview(interaction, kinds) {
       pingUser: kind === "reminder" ? cfg.mentionLastBumper : cfg.thanksMention,
       pingRoles: kind === "reminder",
     });
-    return { ...payload, allowedMentions: { parse: [] } };
+    return { ...payload, allowedMentions: { parse: [] }, flags: (payload.flags ?? 0) | EPHEMERAL };
   });
 
-  await interaction.reply({ ...payloads[0], flags: EPHEMERAL });
+  await interaction.reply(payloads[0]);
   for (const payload of payloads.slice(1)) {
-    await interaction.followUp({ ...payload, flags: EPHEMERAL });
+    await interaction.followUp(payload);
   }
 }
 
@@ -155,7 +157,7 @@ async function handleBumpButton(interaction) {
 
   switch (action) {
     case "bumpcfg_mode":
-      await updateBumpConfig(guild.id, { [`${arg}.mode`]: cfg[arg].mode === "embed" ? "text" : "embed" });
+      await updateBumpConfig(guild.id, { [`${arg}.mode`]: MODE_NEXT[cfg[arg].mode] });
       return interaction.update({ components: await page() });
 
     case "bumpcfg_ts":
@@ -170,7 +172,9 @@ async function handleBumpButton(interaction) {
       return interaction.showModal(buildTextModal(cfg, arg));
 
     case "bumpcfg_embed":
-      return interaction.showModal(buildEmbedModal(cfg, arg));
+      return interaction.showModal(
+        cfg[arg].mode === "container" ? buildContainerStyleModal(cfg, arg) : buildEmbedModal(cfg, arg)
+      );
 
     case "bumpcfg_media":
       return interaction.showModal(buildMediaModal(cfg, arg));
@@ -259,6 +263,22 @@ async function handleBumpModal(interaction) {
   if (name === "text") {
     const value = field(interaction, "text") ?? "";
     await updateBumpConfig(guild.id, { [`${kind}.text`]: value });
+  } else if (name === "ctext") {
+    await updateBumpConfig(guild.id, { [`${kind}.containerText`]: field(interaction, "text") ?? "" });
+  } else if (name === "cstyle") {
+    const color = field(interaction, "color");
+    if (color && parseColor(color) === null) {
+      return deny(interaction, "Cor: use um código hex, por exemplo #5865F2.");
+    }
+    const { patch, error } = readUrls(interaction, {
+      thumbnail: ["containerThumbnail", "Miniatura"],
+      image: ["containerImage", "Imagem grande"],
+    });
+    if (error) return deny(interaction, error);
+    await updateBumpConfig(guild.id, {
+      [`${kind}.containerColor`]: color ? `#${color.replace("#", "").toUpperCase()}` : "",
+      ...Object.fromEntries(Object.entries(patch).map(([k, v]) => [`${kind}.${k}`, v])),
+    });
   } else if (name === "embed") {
     const color = field(interaction, "color");
     if (color && parseColor(color) === null) {

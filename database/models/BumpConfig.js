@@ -8,10 +8,16 @@ const { Schema, model } = require("mongoose");
 // campo salvo como "" = o usuário limpou de propósito.
 const messageSchema = new Schema(
   {
-    mode: { type: String, enum: ["text", "embed"], default: "text" },
+    mode: { type: String, enum: ["text", "embed", "container"] }, // ausente = container
 
     // Modo texto
     text: { type: String },
+
+    // Modo container (Components V2)
+    containerText: { type: String }, // "---" sozinho numa linha vira um separador
+    containerColor: { type: String }, // cor lateral (hex); vazio = sem cor
+    containerThumbnail: { type: String },
+    containerImage: { type: String },
 
     // Modo embed
     embedTitle: { type: String },

@@ -18,7 +18,11 @@ const DEFAULT_COLOR = "#5865F2";
 
 const MESSAGE_DEFAULTS = {
   reminder: {
-    mode: "text",
+    mode: "container",
+    containerText: "## <:alert:1569387419634106448> Hora de dar bump!\nDigite /bump neste Canal e ajude o servidor!",
+    containerColor: "",
+    containerThumbnail: "",
+    containerImage: "",
     text: "## <:alert:1569387419634106448> Hora de dar bump!\nDigite /bump neste Canal e ajude o servidor!",
     embedTitle: "<:alert:1569387419634106448> Hora de dar bump!",
     embedUrl: "",
@@ -33,7 +37,11 @@ const MESSAGE_DEFAULTS = {
     embedTimestamp: false,
   },
   thanks: {
-    mode: "text",
+    mode: "container",
+    containerText: "## Bump!\nTmj negão, próximo Bump em `{interval}`\n-# proximo bump: {next}",
+    containerColor: "",
+    containerThumbnail: "",
+    containerImage: "",
     text: "## Bump!\nTmj negão, próximo Bump em `{interval}`\n-# proximo bump: {next}",
     embedTitle: "Bump!",
     embedUrl: "",

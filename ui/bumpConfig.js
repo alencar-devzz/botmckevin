@@ -18,8 +18,9 @@ const { DISBOARD_ID, KIND_LABEL, VARIABLES, DEFAULT_SUCCESS_KEYWORDS } = require
 // Painéis do menu: Moderação → Bump reminder
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3000));
-const btn = (id, label, style = ButtonStyle.Secondary) =>
-  new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
+const btn = (id, label, style = ButtonStyle.Secondary, disabled = false) =>
+  new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style).setDisabled(disabled);
+const MODE_LABEL = { text: "Texto", embed: "Embed", container: "Container (V2)" };
 const yesNo = (value) => (value ? "Sim" : "Não");
 const onOff = (value) => (value ? "ativado" : "desativado");
 
@@ -66,8 +67,8 @@ function buildBumpHome(guild, cfg, state) {
         `**Bot de bump:** \`${botLabel}\` · comando \`/${cfg.commandName}\``,
         `**Tempo entre bumps:** \`${formatInterval(cfg.intervalMinutes)}\` · **Repetir lembrete:** ${cfg.repeatMinutes ? `a cada \`${formatInterval(cfg.repeatMinutes)}\`` : "`não`"}`,
         `**Cargos marcados no lembrete:** ${mentionRoles(cfg.mentionRoles.filter((id) => guild.roles.cache.has(id)))}`,
-        `**Lembrete:** ${onOff(cfg.remind)} · formato \`${cfg.reminder.mode === "embed" ? "embed" : "texto"}\` · marca quem bumpou por último: ${yesNo(cfg.mentionLastBumper)}`,
-        `**Agradecimento:** ${onOff(cfg.thank)} · formato \`${cfg.thanks.mode === "embed" ? "embed" : "texto"}\` · marca quem bumpou: ${yesNo(cfg.thanksMention)}`,
+        `**Lembrete:** ${onOff(cfg.remind)} · formato \`${MODE_LABEL[cfg.reminder.mode]}\` · marca quem bumpou por último: ${yesNo(cfg.mentionLastBumper)}`,
+        `**Agradecimento:** ${onOff(cfg.thank)} · formato \`${MODE_LABEL[cfg.thanks.mode]}\` · marca quem bumpou: ${yesNo(cfg.thanksMention)}`,
         `**Apagar lembrete antigo ao bumpar:** ${yesNo(cfg.deleteOldReminder)}`,
         "",
         `**Último bump:** ${lastLine}`,
@@ -175,18 +176,26 @@ function buildBumpChannels(guild, cfg) {
 function buildBumpMessagePage(cfg, kind) {
   const msg = cfg[kind];
   const isEmbed = msg.mode === "embed";
+  const isContainer = msg.mode === "container";
 
   const header = new ContainerBuilder().addTextDisplayComponents(
     text(`### ${KIND_LABEL[kind]}`),
     text(
-      `-# Formato atual: **${isEmbed ? "Embed" : "Texto"}**. ` +
+      `-# Formato atual: **${MODE_LABEL[msg.mode]}**. ` +
         (kind === "reminder"
           ? "Quem bumpou por último e os cargos escolhidos são marcados numa linha acima da mensagem."
           : "Se \"Marcar no agradecimento\" estiver ligado, quem bumpou é marcado numa linha acima da mensagem.")
     )
   );
 
-  const current = isEmbed
+  const current = isContainer
+    ? [
+        "**Container (Components V2)**",
+        codeBlock(msg.containerText, 700),
+        `**Cor lateral:** ${msg.containerColor ? `\`${msg.containerColor}\`` : "`nenhuma`"} · **Miniatura:** ${msg.containerThumbnail ? "definida" : "nenhuma"} · **Imagem:** ${msg.containerImage ? "definida" : "nenhuma"}`,
+        "-# Uma linha só com `---` vira um separador dentro do container.",
+      ]
+    : isEmbed
     ? [
         "**Embed**",
         `**Título:** ${inline(msg.embedTitle)}${msg.embedUrl ? " (com link)" : ""}`,
@@ -206,11 +215,11 @@ function buildBumpMessagePage(cfg, kind) {
     .addSeparatorComponents(new SeparatorBuilder())
     .addActionRowComponents(
       new ActionRowBuilder().addComponents(
-        btn(`bumpcfg_mode:${kind}`, `Formato: ${isEmbed ? "Embed" : "Texto"}`, ButtonStyle.Primary),
-        btn(`bumpcfg_text:${kind}`, "Editar texto"),
-        btn(`bumpcfg_embed:${kind}`, "Editar embed"),
-        btn(`bumpcfg_media:${kind}`, "Imagens e links"),
-        btn(`bumpcfg_ts:${kind}`, `Horário na embed: ${yesNo(msg.embedTimestamp)}`)
+        btn(`bumpcfg_mode:${kind}`, `Formato: ${MODE_LABEL[msg.mode]}`, ButtonStyle.Primary),
+        btn(`bumpcfg_text:${kind}`, "Editar texto", ButtonStyle.Secondary, isEmbed),
+        btn(`bumpcfg_embed:${kind}`, isContainer ? "Cor e imagens" : "Editar embed", ButtonStyle.Secondary, !isEmbed && !isContainer),
+        btn(`bumpcfg_media:${kind}`, "Imagens e links", ButtonStyle.Secondary, !isEmbed),
+        btn(`bumpcfg_ts:${kind}`, `Horário na embed: ${yesNo(msg.embedTimestamp)}`, ButtonStyle.Secondary, !isEmbed)
       )
     )
     .addActionRowComponents(
@@ -275,6 +284,20 @@ function buildTimingModal(cfg) {
 }
 
 function buildTextModal(cfg, kind) {
+  if (cfg[kind].mode === "container") {
+    return modal(
+      `bumpcfg_modal:ctext:${kind}`,
+      `Texto: ${KIND_LABEL[kind]}`,
+      textLabel({
+        id: "text",
+        label: "Texto do container",
+        description: "Markdown (## títulos, -# pequeno) e variáveis. Uma linha só com --- vira separador.",
+        style: TextInputStyle.Paragraph,
+        max: 3500,
+        value: cfg[kind].containerText,
+      })
+    );
+  }
   return modal(
     `bumpcfg_modal:text:${kind}`,
     `Texto: ${KIND_LABEL[kind]}`,
@@ -286,6 +309,25 @@ function buildTextModal(cfg, kind) {
       max: 2000,
       value: cfg[kind].text,
     })
+  );
+}
+
+function buildContainerStyleModal(cfg, kind) {
+  const m = cfg[kind];
+  const url = "Link direto começando com https://. Vazio = nenhum.";
+  return modal(
+    `bumpcfg_modal:cstyle:${kind}`,
+    `Cor e imagens: ${KIND_LABEL[kind]}`,
+    textLabel({
+      id: "color",
+      label: "Cor lateral do container (hex)",
+      description: "Ex.: #5865F2. Vazio = sem cor.",
+      max: 7,
+      value: m.containerColor,
+      placeholder: "#5865F2",
+    }),
+    textLabel({ id: "thumbnail", label: "Miniatura (ao lado do texto)", description: url, max: 500, value: m.containerThumbnail }),
+    textLabel({ id: "image", label: "Imagem grande (embaixo)", description: url, max: 500, value: m.containerImage })
   );
 }
 
@@ -337,5 +379,6 @@ module.exports = {
   buildTimingModal,
   buildTextModal,
   buildEmbedModal,
+  buildContainerStyleModal,
   buildMediaModal,
 };
