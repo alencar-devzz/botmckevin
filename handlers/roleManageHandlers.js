@@ -87,8 +87,17 @@ async function show(interaction, state, results = null) {
     state,
     results,
   });
-  // Sem "flags" na edição (era isso que travava); allowedMentions continua para as menções não pingarem
-  return interaction.editReply({ components, allowedMentions: noMentions });
+  // editReply com allowedMentions travava, então edita a mensagem do painel direto (aceita allowedMentions:
+  // as menções de cargo nunca pingam). Não existe mais reserva que possa pingar: se falhar, avisa e pronto.
+  try {
+    await Promise.race([
+      interaction.message.edit({ components, allowedMentions: noMentions }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("tempo esgotado")), 10000)),
+    ]);
+  } catch (err) {
+    console.error("[GROLES] Não consegui editar o painel:", err);
+    await deny(interaction, "Não consegui atualizar o painel. Abra um novo com o comando e tente de novo.");
+  }
 }
 
 async function applyChange(interaction, state, kind) {
