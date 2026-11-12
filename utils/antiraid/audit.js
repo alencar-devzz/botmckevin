@@ -1,13 +1,9 @@
-const { PermissionFlagsBits } = require("discord.js");
+const { waitForEntry } = require("./auditHub");
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Procura no registro de auditoria uma entrada recente. O evento chega antes dela, então espera um pouco.
-async function findAuditEntry(guild, type, match, maxAgeMs = 10_000) {
-  if (!guild.members.me?.permissions.has(PermissionFlagsBits.ViewAuditLog)) return null;
-  await sleep(700);
-  const logs = await guild.fetchAuditLogs({ type, limit: 8 }).catch(() => null);
-  return logs?.entries.find((e) => Date.now() - e.createdTimestamp < maxAgeMs && match(e)) ?? null;
+// Procura no registro de auditoria uma entrada recente. Usa o hub (entradas em tempo real) e só
+// consulta a API se a entrada não chegar a tempo. Mantém a assinatura antiga.
+function findAuditEntry(guild, type, match, maxAgeMs = 10_000) {
+  return waitForEntry(guild, type, match, { maxAgeMs });
 }
 
 // O dono e o próprio bot são sempre autorizados; o resto vem da lista de pessoas e cargos

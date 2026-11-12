@@ -82,7 +82,7 @@ function buildMassJoinPanel(guild, cfg) {
       text(
         [
           "### Detecção",
-          "-# Percebe ondas de contas entrando juntas e eleva a verificação do servidor por um tempo. Volume sozinho só gera alerta.",
+          `-# Percebe ondas de contas entrando juntas e eleva a verificação do servidor por um tempo (e pausa convites e DMs, se ligado). Volume sozinho só gera alerta, a não ser que chegue a ${m.threshold * (m.volumeFactor || 2)} entradas na janela e "Volume alto = lockdown" esteja ligado.`,
           `**Análise de entradas**  ${tag(m.enabled)}`,
           locked ? `**Lockdown em andamento**  termina ${ts(m.lockdown.until)}` : null,
         ]
@@ -129,6 +129,16 @@ function buildMassJoinPanel(guild, cfg) {
         "Suspeitos",
         Object.entries(D.MJ_SUSPECT_ACTIONS).map(([value, i]) => ({ label: i.label, description: i.desc, value })),
         m.suspectAction
+      ),
+      pickMany(
+        "ar:mj:opts",
+        "Opções do lockdown",
+        {
+          volume: `Volume muito alto (${m.threshold * (m.volumeFactor || 2)}+ entradas) aciona o lockdown`,
+          invites: "Pausar a criação de convites durante o lockdown",
+          dms: "Pausar as DMs entre membros durante o lockdown",
+        },
+        [m.volumeLockdown && "volume", m.pauseInvites && "invites", m.pauseDms && "dms"].filter(Boolean)
       )
     );
 
@@ -169,7 +179,8 @@ function buildSpamPanel(guild, cfg) {
           "-# Detecta flood de mensagens por pessoa. Aqui fica a detecção; a resposta e as exceções ficam no outro painel.",
           `**Anti-spam**  ${tag(s.enabled)}`,
           `**Ignorar equipe**  \`${s.ignoreStaff ? "Sim" : "Não"}\`  ·  quem tem Gerenciar Mensagens nunca é analisado`,
-          `**Exigir sinal de spam**  \`${s.requireSignal ? "Sim" : "Não"}\`  ·  ligado, só volume não pune`,
+          `**Exigir sinal de spam**  \`${s.requireSignal ? "Sim" : "Não"}\`  ·  ligado, só volume não pune até ${s.limit * (s.volumeFactor || 2)} mensagens na janela`,
+          `**Analisar webhooks**  \`${s.includeWebhooks ? "Sim" : "Não"}\`  ·  webhook que faz spam é apagado`,
         ].join("\n")
       )
     )
@@ -177,7 +188,8 @@ function buildSpamPanel(guild, cfg) {
       row(
         toggleBtn("ar:sp:toggle", s.enabled),
         flagBtn("ar:sp:staff", "Ignorar equipe", s.ignoreStaff),
-        flagBtn("ar:sp:signal", "Exigir sinal", s.requireSignal)
+        flagBtn("ar:sp:signal", "Exigir sinal", s.requireSignal),
+        flagBtn("ar:sp:webhooks", "Webhooks", s.includeWebhooks)
       )
     );
 

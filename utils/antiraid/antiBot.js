@@ -1,17 +1,16 @@
-const { AuditLogEvent, PermissionFlagsBits, UserFlags } = require("discord.js");
+const { AuditLogEvent, UserFlags } = require("discord.js");
+const { waitForEntry } = require("./auditHub");
 const { getAntiRaidConfig } = require("./store");
 const { sendModuleAlert, code } = require("./alert");
 const { punish } = require("./engine");
 const { AB_MODES, PUNISHMENTS } = require("./defaults");
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Quem adicionou o bot, lido no registro de auditoria
+// Quem adicionou o bot: a entrada BotAdd chega em tempo real pelo hub (sem esperar nem buscar o registro inteiro)
 async function findInviterId(guild, botId) {
-  if (!guild.members.me?.permissions.has(PermissionFlagsBits.ViewAuditLog)) return null;
-  await sleep(700);
-  const logs = await guild.fetchAuditLogs({ type: AuditLogEvent.BotAdd, limit: 6 }).catch(() => null);
-  const entry = logs?.entries.find((e) => e.targetId === botId && Date.now() - e.createdTimestamp < 15_000);
+  const entry = await waitForEntry(guild, AuditLogEvent.BotAdd, (e) => e.targetId === botId, {
+    timeoutMs: 3000,
+    maxAgeMs: 30_000,
+  });
   return entry?.executorId ?? null;
 }
 
@@ -24,20 +23,21 @@ async function isTrusted(guild, ab, inviterId) {
   return !!member?.roles.cache.hasAny(...ab.trustedRoles);
 }
 
+// Devolve true se o bot foi barrado (removido do servidor)
 async function onBotJoin(member) {
-  if (!member.user.bot) return;
+  if (!member.user.bot) return false;
   const { guild } = member;
-  if (member.id === guild.client.user.id) return;
+  if (member.id === guild.client.user.id) return false;
 
   const cfg = await getAntiRaidConfig(guild.id);
   const ab = cfg.antiBot;
-  if (ab.mode === "off") return;
+  if (ab.mode === "off") return false;
 
-  if (ab.allowedBots.includes(member.id)) return;
-  if (ab.mode === "unverified" && member.user.flags?.has(UserFlags.VerifiedBot)) return;
+  if (ab.allowedBots.includes(member.id)) return false;
+  if (ab.mode === "unverified" && member.user.flags?.has(UserFlags.VerifiedBot)) return false;
 
   const inviterId = await findInviterId(guild, member.id);
-  if (await isTrusted(guild, ab, inviterId)) return;
+  if (await isTrusted(guild, ab, inviterId)) return false;
 
   const reason = "Anti-Raid: bot não autorizado";
   const blocked = await (ab.action === "ban" ? member.ban({ reason }) : member.kick(reason))
@@ -59,6 +59,7 @@ async function onBotJoin(member) {
       ...(inviterResult ? [[`Punição de quem adicionou (${PUNISHMENTS[ab.inviterAction].label})`, inviterResult]] : []),
     ],
   });
+  return blocked;
 }
 
 module.exports = { onBotJoin };

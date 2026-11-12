@@ -5,7 +5,7 @@ const access = require("./antiraidAccess");
 const D = require("../utils/antiraid/defaults");
 
 // Painéis da parte 4: Permissões perigosas, Cargos protegidos e Mov call.
-const { text, row, tag, box, header, backRow, toggleBtn } = ui;
+const { text, row, tag, box, header, backRow, toggleBtn, flagBtn } = ui;
 const { pickOne, pickMany, nums, alertPick } = helpers;
 const { userPick, rolePick } = access.helpers;
 
@@ -21,10 +21,11 @@ function buildDangerPermsPanel(guild, cfg) {
           "### Vigilância",
           "-# Vigia cargos que ganham uma permissão sensível, seja ao editar o cargo ou ao criá-lo já com ela.",
           `**Monitoramento de permissões**  ${tag(d.enabled)}`,
+          `**Vigiar entrega de cargos**  \`${d.guardGrants ? "Sim" : "Não"}\`  ·  também confere quem entrega a alguém um cargo que já tem uma permissão monitorada`,
         ].join("\n")
       )
     )
-    .addActionRowComponents(row(toggleBtn("ar:dp:toggle", d.enabled)));
+    .addActionRowComponents(row(toggleBtn("ar:dp:toggle", d.enabled), flagBtn("ar:dp:grants", "Vigiar entrega", d.guardGrants)));
 
   const monitoradas = box()
     .addTextDisplayComponents(text("### Permissões monitoradas\n-# Só estas permissões disparam a proteção."))

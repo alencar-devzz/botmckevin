@@ -1,6 +1,7 @@
 const { MessageFlags, ContainerBuilder, TextDisplayBuilder } = require("discord.js");
 const { getGuildConfig } = require("../database/getGuildConfig");
 const { sendGreeting, sendWelcomeDm, accountAgeDays } = require("../utils/portaria");
+const { runGate } = require("../utils/antiraid/joinGate");
 
 async function addRoles(member, roleIds) {
   for (const roleId of roleIds ?? []) {
@@ -39,6 +40,9 @@ async function filterNewAccount(member, config) {
 module.exports = {
   name: "guildMemberAdd",
   async execute(member) {
+    // O Anti-Raid (anti-bot e anti-alt) decide primeiro: quem for barrado não ganha cargo nem boas-vindas
+    if (await runGate(member)) return;
+
     const config = await getGuildConfig(member.guild.id);
 
     // Bots: só recebem os cargos exclusivos de bots

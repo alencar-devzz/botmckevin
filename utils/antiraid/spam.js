@@ -1,4 +1,4 @@
-const { PermissionFlagsBits, MessageFlags, ContainerBuilder, TextDisplayBuilder } = require("discord.js");
+const { PermissionFlagsBits, MessageFlags, ContainerBuilder, TextDisplayBuilder, WebhookType } = require("discord.js");
 const { getAntiRaidConfig } = require("./store");
 const { sendModuleAlert, code } = require("./alert");
 const { suppressMessage } = require("../logs/suppress");
@@ -10,6 +10,17 @@ const INVITE = /(discord\.gg|discord(?:app)?\.com\/invite)\/\S+/i;
 const LINK = /https?:\/\/\S+/i;
 
 const states = new Map(); // "guild:user" -> { entries: [], warns, last }
+
+// Texto "limpo" para comparar mensagens parecidas: só letras, sem espaços, números, símbolos nem
+// maiúsculas. "oi gente 123" e "OI gente!! 987" contam como iguais (spam costuma mudar um número no fim).
+// Mensagem só com anexo/figurinha usa uma assinatura dos anexos.
+function contentKey(message) {
+  const text = message.content.toLowerCase().normalize("NFKD").replace(/[^\p{L}]/gu, "").slice(0, 200);
+  if (text) return text;
+  const files = [...message.attachments.values()].map((a) => `${a.size}`).join(",");
+  const stickers = [...message.stickers.keys()].join(",");
+  return files || stickers ? `anexo:${files}|${stickers}` : "";
+}
 
 function mentionCount(message) {
   return message.mentions.users.size + message.mentions.roles.size + (message.mentions.everyone ? 5 : 0);
@@ -30,6 +41,10 @@ function detectSignals(entries, s) {
 
 function isExempt(message, s) {
   const { member, guild, channel } = message;
+  if (!member) {
+    // webhook: não tem cargos nem permissões, só dá para isentar o canal
+    return s.exemptChannels.includes(channel.id) || (channel.parentId && s.exemptChannels.includes(channel.parentId));
+  }
   if (member.id === guild.ownerId || s.exemptUsers.includes(member.id)) return true;
   if (s.exemptChannels.includes(channel.id) || (channel.parentId && s.exemptChannels.includes(channel.parentId))) return true;
   if (s.exemptRoles.length && member.roles.cache.hasAny(...s.exemptRoles)) return true;
@@ -50,14 +65,50 @@ async function deleteFlagged(message, entries) {
   }
 }
 
+// Spam por webhook: o webhook não pode ser silenciado, então a resposta é apagar as mensagens e o próprio webhook
+async function handleWebhookSpam(message, cfg, flagged, found) {
+  const s = cfg.spam;
+  if (s.deleteMessages) await deleteFlagged(message, flagged);
+
+  const hook = await message.fetchWebhook().catch(() => null);
+  let result = "não consegui achar o webhook";
+  if (hook) {
+    if (hook.type !== WebhookType.Incoming) {
+      result = "webhook de integração/seguidor: só apaguei as mensagens";
+    } else {
+      result = await hook
+        .delete("Anti-Raid: spam por webhook")
+        .then(() => "webhook apagado")
+        .catch(() => "não consegui apagar o webhook (falta Gerenciar webhooks?)");
+    }
+  }
+
+  await sendModuleAlert(message.guild, cfg, s.alertChannelId, {
+    system: "Anti-spam",
+    action: "Spam por webhook",
+    author: message.author,
+    channel: message.channel,
+    fields: [
+      ["Volume", code(`${flagged.length} mensagens em ${s.windowSec}s`)],
+      ["Sinais", found.length ? found.join(", ") : "só volume"],
+      ...(hook?.owner ? [["Webhook criado por", `<@${hook.owner.id}> — ${code(hook.owner.id)}`]] : []),
+      ["Resultado", result],
+    ],
+    content: message.content,
+  });
+}
+
 async function onMessage(message) {
-  if (!message.guild || message.author.bot || message.system || !message.member) return;
+  if (!message.guild || message.system) return;
+  const isWebhook = !!message.webhookId;
+  if (message.author.bot && !isWebhook) return;
+  if (!isWebhook && !message.member) return;
 
   const cfg = await getAntiRaidConfig(message.guild.id);
   const s = cfg.spam;
-  if (!s.enabled || isExempt(message, s)) return;
+  if (!s.enabled || (isWebhook && !s.includeWebhooks) || isExempt(message, s)) return;
 
-  const key = `${message.guild.id}:${message.author.id}`;
+  const key = `${message.guild.id}:${isWebhook ? `wh${message.webhookId}` : message.author.id}`;
   const now = Date.now();
   const state = states.get(key) ?? { entries: [], warns: 0, last: now };
   state.entries = state.entries.filter((e) => now - e.at < s.windowSec * 1000);
@@ -65,21 +116,29 @@ async function onMessage(message) {
     id: message.id,
     channelId: message.channelId,
     at: now,
-    content: message.content.trim().toLowerCase().slice(0, 200),
+    content: contentKey(message),
     mentions: mentionCount(message),
     invite: INVITE.test(message.content),
     link: LINK.test(message.content),
   });
+  // (o texto das mensagens com anexo vem da assinatura de anexos acima)
   state.last = now;
   states.set(key, state);
 
   if (state.entries.length < s.limit) return;
 
   const found = detectSignals(state.entries, s);
-  if (s.requireSignal && !found.length) return;
+  // "Exigir sinal" só protege contra falso positivo em conversa rápida: volume MUITO alto pune mesmo sem sinal
+  // (spam com texto variado nunca repete mensagem, não tem link nem menção)
+  if (s.requireSignal && !found.length && state.entries.length < s.limit * (s.volumeFactor || 2)) return;
 
   const flagged = state.entries;
   state.entries = [];
+
+  if (isWebhook) {
+    states.delete(key);
+    return handleWebhookSpam(message, cfg, flagged, found);
+  }
 
   if (s.deleteMessages) await deleteFlagged(message, flagged);
 

@@ -23,7 +23,18 @@ const AUDIT_KEY = {
   splash: "splash_hash",
   discoverySplash: "discovery_splash_hash",
   description: "description",
+  verification: "verification_level",
+  contentFilter: "explicit_content_filter",
+  vanity: "vanity_url_code",
 };
+
+// Campos cujo nome na guilda é diferente da chave do painel
+const PROP = { verification: "verificationLevel", contentFilter: "explicitContentFilter", vanity: "vanityURLCode" };
+const REV = Object.fromEntries(Object.entries(PROP).map(([k, v]) => [v, k]));
+const prop = (kind) => PROP[kind] ?? kind;
+const valueOf = (guild, kind) => norm(guild[prop(kind)]);
+// A URL personalizada o bot só consegue detectar e avisar: a API pública não permite trocá-la de volta
+const NOT_REVERTIBLE = ["vanity"];
 
 const URL_OF = {
   icon: (g) => g.iconURL({ size: 1024 }),
@@ -59,7 +70,7 @@ async function takeSnapshot(guild, kinds = KINDS) {
   const failed = [];
 
   for (const kind of kinds) {
-    snap[kind] = norm(guild[kind]);
+    snap[kind] = valueOf(guild, kind);
     if (!IMAGES.includes(kind)) continue;
 
     if (!snap[kind]) {
@@ -97,8 +108,12 @@ async function restore(guild, snap, fields, fallback = null) {
   const failed = [];
 
   for (const kind of fields) {
+    if (NOT_REVERTIBLE.includes(kind)) {
+      failed.push(kind);
+      continue;
+    }
     if (!IMAGES.includes(kind)) {
-      data[kind] = snap[kind] ?? null;
+      data[prop(kind)] = snap[kind] ?? null;
       continue;
     }
     if (!snap[kind]) {
@@ -126,7 +141,7 @@ async function restore(guild, snap, fields, fallback = null) {
       }
       return ok;
     });
-  return { done, failed };
+  return { done: done.map((k) => REV[k] ?? k), failed: failed.map((k) => REV[k] ?? k) };
 }
 
 // ---- Evento ----
@@ -143,7 +158,7 @@ async function handle(oldGuild, guild) {
   const v = cfg.visual;
   if (!v.enabled) return;
 
-  const changed = KINDS.filter((k) => norm(oldGuild[k]) !== norm(guild[k]));
+  const changed = KINDS.filter((k) => valueOf(oldGuild, k) !== valueOf(guild, k));
   if (!changed.length) return;
 
   // Campos que não estão protegidos só atualizam a referência, em silêncio
@@ -166,9 +181,9 @@ async function handle(oldGuild, guild) {
   }
 
   // Sem referência ainda: usa o servidor como estava antes da mudança
-  const snap = v.snapshot ?? Object.fromEntries(KINDS.map((k) => [k, norm(oldGuild[k])]));
+  const snap = v.snapshot ?? Object.fromEntries(KINDS.map((k) => [k, valueOf(oldGuild, k)]));
   const response = VS_RESPONSES[v.response] ?? VS_RESPONSES.revert;
-  const differing = inside.filter((k) => norm(snap[k]) !== norm(guild[k]));
+  const differing = inside.filter((k) => norm(snap[k]) !== valueOf(guild, k));
   if (!differing.length) return; // já está igual à referência (por exemplo, depois da nossa reversão)
 
   let result = "não solicitada";

@@ -12,6 +12,14 @@ const KIND = { [AuditLogEvent.MemberMove]: "move", [AuditLogEvent.MemberDisconne
 const counts = new Map(); // "guild:autor" -> [{ t, n }]
 const cooldown = new Map();
 
+// Limpa os registros antigos para não crescerem sem fim
+const cleaner = setInterval(() => {
+  const now = Date.now();
+  for (const [key, list] of counts) if (!list.length || now - list.at(-1).t > 5 * 60_000) counts.delete(key);
+  for (const [key, at] of cooldown) if (now - at > 10 * 60_000) cooldown.delete(key);
+}, 5 * 60_000);
+cleaner.unref?.();
+
 async function onAuditEntry(entry, guild) {
   const kind = KIND[entry.action];
   if (!kind || !entry.executorId) return;

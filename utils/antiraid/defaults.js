@@ -6,8 +6,9 @@ const DEFAULTS = {
     enabled: false,
     mode: "test", // "test" = só registra e avisa | "live" = pune de verdade
     punishment: "strip", // none | strip | kick | ban
-    actions: ["channelDelete", "roleDelete", "ban", "kick"],
-    limit: 3,
+    actions: ["channelDelete", "roleDelete", "ban", "kick", "webhookCreate"],
+    limit: 3, // ações do MESMO tipo dentro da janela
+    totalLimit: 0, // ações de tipos diferentes somadas (0 = automático: 1,5x o limite)
     windowSec: 10,
     alertChannelId: null,
     exemptUsers: [],
@@ -23,7 +24,11 @@ const DEFAULTS = {
     newAccountDays: 7,
     lockdownLevel: "high", // nível de verificação durante o lockdown
     lockdownMin: 10,
-    suspectAction: "none", // none | timeout | kick
+    suspectAction: "timeout", // none | timeout | kick
+    volumeLockdown: true, // volume MUITO acima do gatilho já aciona o lockdown, mesmo sem contas suspeitas
+    volumeFactor: 2, // "muito acima" = gatilho x este fator
+    pauseInvites: true, // durante o lockdown, pausa a criação de convites (incident actions do Discord)
+    pauseDms: true, // durante o lockdown, pausa as DMs entre membros do servidor
     pausedUntil: 0, // modo evento: timestamp até quando a análise fica pausada
     alertChannelId: null, // vazio = usa o canal do núcleo
     lockdown: null, // { until, prev, level } enquanto estiver em lockdown
@@ -31,7 +36,9 @@ const DEFAULTS = {
   spam: {
     enabled: false,
     ignoreStaff: true, // ignora quem tem Gerenciar Mensagens
-    requireSignal: true, // volume sozinho não pune: exige um sinal de spam
+    requireSignal: true, // volume sozinho não pune até chegar ao limite x volumeFactor: antes disso exige um sinal de spam
+    volumeFactor: 2, // com "exigir sinal" ligado, volume puro pune a partir de limite x este fator
+    includeWebhooks: true, // também analisa mensagens enviadas por webhooks (e apaga o webhook que fizer spam)
     limit: 6,
     windowSec: 5,
     signals: ["duplicates", "mentions", "invites", "links"],
@@ -57,6 +64,7 @@ const DEFAULTS = {
     bareDomains: true, // também pega "site.com" escrito sem https://
     wrappers: [], // pares de símbolos configurados no painel, ex.: ["<>", "[]"]: apaga qualquer texto escrito entre eles
     ignoreStaff: true, // ignora quem tem Gerenciar Mensagens
+    includeWebhooks: true, // também confere mensagens enviadas por webhooks
     exemptRoles: [],
     exemptChannels: [],
     exemptUsers: [],
@@ -92,6 +100,7 @@ const DEFAULTS = {
     enabled: false,
     monitored: ["administrator", "manageGuild", "manageRoles", "manageChannels", "manageWebhooks", "banMembers", "kickMembers"],
     response: "revert",
+    guardGrants: true, // também vigia a ENTREGA de cargos que têm permissão monitorada (não só a edição do cargo)
     authorizedUsers: [],
     authorizedRoles: [],
     alertChannelId: null,
@@ -138,6 +147,11 @@ const CORE_ACTIONS = {
   roleCreate: "Criar cargos",
   ban: "Banir membros",
   kick: "Expulsar membros",
+  webhookCreate: "Criar webhooks",
+  emojiDelete: "Excluir emojis e figurinhas",
+  channelPerms: "Alterar permissões de canais",
+  inviteCreate: "Criar convites",
+  timeout: "Silenciar membros (timeout)",
 };
 
 const CORE_LIMITS = [2, 3, 4, 5, 6, 8, 10, 15];
@@ -288,6 +302,9 @@ const VS_FIELDS = {
   splash: "Plano de fundo do convite",
   discoverySplash: "Plano de fundo da descoberta",
   description: "Descrição",
+  verification: "Nível de verificação",
+  contentFilter: "Filtro de conteúdo explícito",
+  vanity: "URL personalizada (vanity)",
 };
 const VS_RESPONSES = {
   warn: { label: "Somente avisar · não reverter", desc: "Não desfaz nada e não pune.", revert: false, punish: "none" },

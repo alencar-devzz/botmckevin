@@ -1,4 +1,4 @@
-const { GuildVerificationLevel } = require("discord.js");
+const { GuildVerificationLevel, PermissionFlagsBits } = require("discord.js");
 const { getAntiRaidConfig, updateAntiRaidConfig } = require("./store");
 const { sendModuleAlert, code } = require("./alert");
 const { MJ_SUSPECT_ACTIONS } = require("./defaults");
@@ -10,6 +10,7 @@ const LEVEL = { high: GuildVerificationLevel.High, veryHigh: GuildVerificationLe
 const joins = new Map(); // guildId -> [{ id, at, createdAt, noAvatar, stem }]
 const volumeCooldown = new Map(); // guildId -> timestamp do último alerta de volume
 const timers = new Map(); // guildId -> timeout do fim do lockdown
+const starting = new Set(); // guilds com um lockdown sendo iniciado (evita iniciar duas vezes)
 
 const stemOf = (name) => String(name ?? "").toLowerCase().replace(/[^a-z]/g, "");
 
@@ -56,18 +57,43 @@ function scheduleEnd(guild, until) {
   timers.set(guild.id, t);
 }
 
-async function startLockdown(guild, cfg, suspects, total) {
+// Pausa convites e DMs do servidor (incident actions do Discord). Devolve true se conseguiu.
+async function setIncidents(guild, until, m) {
+  if (!m.pauseInvites && !m.pauseDms) return false;
+  if (!guild.members.me?.permissions.has(PermissionFlagsBits.ManageGuild)) return false;
+  return guild
+    .setIncidentActions({
+      invitesDisabledUntil: m.pauseInvites ? new Date(until) : null,
+      dmsDisabledUntil: m.pauseDms ? new Date(until) : null,
+    })
+    .then(() => true)
+    .catch(() => false);
+}
+
+async function startLockdown(guild, cfg, suspects, total, byVolume = false) {
   const m = cfg.massJoin;
   const target = LEVEL[m.lockdownLevel] ?? LEVEL.high;
   const prev = guild.verificationLevel;
-  const raise = prev < target;
-  if (raise) await guild.setVerificationLevel(target, "Anti-Raid: lockdown por entrada em massa").catch(() => {});
+  const needsRaise = prev < target;
+
+  // Só diz "elevada" se o Discord aceitou de verdade (antes o erro era engolido e o alerta mentia)
+  let raised = false;
+  if (needsRaise) {
+    raised = await guild
+      .setVerificationLevel(target, "Anti-Raid: lockdown por entrada em massa")
+      .then(() => true)
+      .catch(() => false);
+  }
 
   const until = Date.now() + m.lockdownMin * 60_000;
-  await updateAntiRaidConfig(guild.id, { "massJoin.lockdown": { until, prev: raise ? prev : null, level: target } });
+  const incidents = await setIncidents(guild, until, m);
+  await updateAntiRaidConfig(guild.id, {
+    "massJoin.lockdown": { until, prev: raised ? prev : null, level: target, incidents },
+  });
   scheduleEnd(guild, until);
 
   const punished = await applySuspectAction(guild, suspects, m.suspectAction);
+  const paused = [m.pauseInvites && "convites", m.pauseDms && "DMs"].filter(Boolean).join(" e ");
   await sendModuleAlert(guild, cfg, m.alertChannelId, {
     system: "Entrada em massa",
     action: "Lockdown ativado",
@@ -75,7 +101,18 @@ async function startLockdown(guild, cfg, suspects, total) {
     fields: [
       ["Entradas na janela", code(`${total} em ${m.windowSec}s`)],
       ["Contas suspeitas", code(suspects.length)],
-      ["Verificação", raise ? "elevada" : "já estava no nível pedido ou acima"],
+      ...(byVolume && suspects.length < Math.max(2, Math.ceil(m.threshold / 2))
+        ? [["Motivo", `volume muito acima do gatilho (${m.volumeFactor}x), mesmo sem contas suspeitas suficientes`]]
+        : []),
+      [
+        "Verificação",
+        raised
+          ? "elevada"
+          : needsRaise
+            ? "não consegui elevar (falta Gerenciar servidor?)"
+            : "já estava no nível pedido ou acima",
+      ],
+      ...(paused ? [["Convites e DMs", incidents ? `pausados (${paused})` : `não consegui pausar (${paused}); falta Gerenciar servidor?`]] : []),
       ["Fim previsto", `<t:${Math.floor(until / 1000)}:R>`],
       ["Suspeitos", `${MJ_SUSPECT_ACTIONS[m.suspectAction].label}${m.suspectAction !== "none" ? ` (${punished} afetado(s))` : ""}`],
     ],
@@ -91,6 +128,9 @@ async function endLockdown(guild, reason = "Encerrado manualmente.") {
 
   if (lock.prev != null && guild.verificationLevel === lock.level) {
     await guild.setVerificationLevel(lock.prev, "Anti-Raid: fim do lockdown").catch(() => {});
+  }
+  if (lock.incidents) {
+    await guild.setIncidentActions({ invitesDisabledUntil: null, dmsDisabledUntil: null }).catch(() => {});
   }
   await updateAntiRaidConfig(guild.id, { "massJoin.lockdown": null });
   await sendModuleAlert(guild, cfg, cfg.massJoin.alertChannelId, {
@@ -129,13 +169,25 @@ async function onMemberAdd(member) {
   }
 
   if (list.length < m.threshold) return;
-  if (now - (volumeCooldown.get(guild.id) ?? 0) < 60_000) return;
-  volumeCooldown.set(guild.id, now);
 
   const suspects = findSuspects(list, m);
   const needed = Math.max(2, Math.ceil(m.threshold / 2));
+  // Volume muito acima do gatilho já é raid, mesmo com contas "limpas" (velhas, com avatar, nomes variados)
+  const byVolume = m.volumeLockdown && list.length >= m.threshold * (m.volumeFactor || 2);
 
-  if (suspects.length >= needed) return startLockdown(guild, cfg, suspects, list.length);
+  if (suspects.length >= needed || byVolume) {
+    if (starting.has(guild.id)) return;
+    starting.add(guild.id);
+    try {
+      return await startLockdown(guild, cfg, suspects, list.length, byVolume);
+    } finally {
+      starting.delete(guild.id);
+    }
+  }
+
+  // O cooldown vale SÓ para o alerta de volume: o lockdown acima é reavaliado a cada entrada
+  if (now - (volumeCooldown.get(guild.id) ?? 0) < 60_000) return;
+  volumeCooldown.set(guild.id, now);
 
   await sendModuleAlert(guild, cfg, m.alertChannelId, {
     system: "Entrada em massa",
@@ -143,10 +195,20 @@ async function onMemberAdd(member) {
     fields: [
       ["Entradas na janela", code(`${list.length} em ${m.windowSec}s`)],
       ["Contas suspeitas", `${code(suspects.length)} (precisa de ${needed} para o lockdown)`],
-      "Só o volume não aciona o lockdown. Nada foi alterado.",
+      m.volumeLockdown
+        ? `O lockdown sai sozinho se chegar a ${m.threshold * (m.volumeFactor || 2)} entradas na janela ou se as contas suspeitas passarem do mínimo. Nada foi alterado.`
+        : "Só o volume não aciona o lockdown. Nada foi alterado.",
     ],
   });
 }
+
+// Limpa as listas de entradas de servidores que ficaram quietos
+const cleaner = setInterval(() => {
+  const now = Date.now();
+  for (const [guildId, list] of joins) if (!list.length || now - list.at(-1).at > 5 * 60_000) joins.delete(guildId);
+  for (const [guildId, at] of volumeCooldown) if (now - at > 10 * 60_000) volumeCooldown.delete(guildId);
+}, 5 * 60_000);
+cleaner.unref?.();
 
 // Ao ligar o bot: retoma lockdowns que estavam em andamento
 async function resumeLockdowns(client) {

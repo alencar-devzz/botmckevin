@@ -245,6 +245,13 @@ async function handleMassJoinSelect(interaction) {
       if (n !== null) patch = { "massJoin.pausedUntil": n === 0 ? 0 : Date.now() + n * 60_000 };
       break;
     }
+    case "ar:mj:opts":
+      patch = {
+        "massJoin.volumeLockdown": values.includes("volume"),
+        "massJoin.pauseInvites": values.includes("invites"),
+        "massJoin.pauseDms": values.includes("dms"),
+      };
+      break;
     case "ar:mj:alert":
       patch = { "massJoin.alertChannelId": values[0] ?? null };
       break;
@@ -262,6 +269,7 @@ const SPAM_FLAGS = {
   "ar:sp:toggle": "enabled",
   "ar:sp:staff": "ignoreStaff",
   "ar:sp:signal": "requireSignal",
+  "ar:sp:webhooks": "includeWebhooks",
   "ar:sp:delete": "deleteMessages",
 };
 
@@ -440,9 +448,14 @@ const SENSITIVE_TOGGLES = {
 };
 
 async function handleSensitiveToggle(interaction) {
+  const guildId = interaction.guild.id;
+  if (interaction.customId === "ar:dp:grants") {
+    const { dangerPerms } = await getAntiRaidConfig(guildId);
+    await updateAntiRaidConfig(guildId, { "dangerPerms.guardGrants": !dangerPerms.guardGrants });
+    return showPanel(interaction, "dangerPerms");
+  }
   const target = SENSITIVE_TOGGLES[interaction.customId];
   if (!target) return;
-  const guildId = interaction.guild.id;
   const cfg = await getAntiRaidConfig(guildId);
   await updateAntiRaidConfig(guildId, { [`${target.key}.enabled`]: !cfg[target.key].enabled });
   return showPanel(interaction, target.key);

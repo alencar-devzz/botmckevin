@@ -46,13 +46,15 @@ function isScoped(a, type) {
 }
 
 // Devolve um texto com o motivo se o link deve ser apagado, ou null se pode ficar
-async function judge(link, a, guild) {
+// canResolve = false: já consultei convites demais nesta mensagem (limite contra flood de consultas);
+// o convite que sobrar não é resolvido e fica bloqueado (na dúvida, apaga).
+async function judge(link, a, guild, canResolve = true) {
   if (matchesAny(a.allowedDomains, link)) return null;
   if (matchesAny(a.blockedDomains, link)) return "domínio bloqueado";
   if (a.allowedTypes.includes(link.type)) return null;
   if (!isScoped(a, link.type)) return null;
 
-  if (isResolvableInvite(link) && (a.allowOwnInvites || a.allowedGuilds.length)) {
+  if (canResolve && isResolvableInvite(link) && (a.allowOwnInvites || a.allowedGuilds.length)) {
     if (a.allowOwnInvites && guild.vanityURLCode && link.code.toLowerCase() === guild.vanityURLCode.toLowerCase()) return null;
     const guildId = await resolveInviteGuild(guild.client, link.code);
     if (guildId) {
@@ -66,6 +68,10 @@ async function judge(link, a, guild) {
 // ---------- Exceções ----------
 function isExempt(message, member, a) {
   const { guild, channel } = message;
+  if (!member) {
+    // webhook: não tem cargos nem permissões, só dá para isentar o canal
+    return [channel.id, channel.parentId, channel.parent?.parentId].filter(Boolean).some((id) => a.exemptChannels.includes(id));
+  }
   if (member.id === guild.ownerId || a.exemptUsers.includes(member.id)) return true;
 
   // canal, categoria do canal e, em threads, o canal pai e a categoria dele
@@ -160,27 +166,71 @@ function addStrike(message, a) {
 
 const inline = (text, max = 90) => `\`${String(text).replace(/`/g, "'").slice(0, max)}\``;
 
+// ---------- Texto da mensagem ----------
+// Junta tudo o que pode carregar link: o texto, o conteúdo das mensagens ENCAMINHADAS (o Discord guarda
+// em messageSnapshots e deixa o "content" vazio) e os links dos embeds. De webhook, também o texto dos
+// embeds, que o autor escreve à mão. De pessoas comuns, a descrição de um embed NÃO entra: é o texto de
+// outro site (um vídeo do YouTube com um convite na descrição não pode apagar a mensagem).
+function collectText(message, isWebhook) {
+  const parts = [message.content];
+
+  const embedParts = (embeds, full) => {
+    for (const e of embeds ?? []) {
+      parts.push(e.url);
+      if (!full) continue;
+      parts.push(e.title, e.description, e.footer?.text, e.author?.name, e.author?.url);
+      for (const f of e.fields ?? []) parts.push(f.name, f.value);
+    }
+  };
+
+  embedParts(message.embeds, isWebhook);
+  for (const snap of message.messageSnapshots?.values?.() ?? []) {
+    parts.push(snap.content);
+    embedParts(snap.embeds, isWebhook);
+  }
+  return parts.filter(Boolean).join("\n");
+}
+
+const MAX_LINKS = 80; // teto de links julgados por mensagem
+const MAX_INVITE_LOOKUPS = 8; // consultas ao Discord por mensagem
+
 // ---------- Entrada principal ----------
 async function onMessage(message) {
-  if (!message.guild || !message.author || message.author.bot || message.system || message.webhookId) return;
-  if (!message.content) return;
+  if (!message.guild || !message.author || message.system) return;
+  const isWebhook = !!message.webhookId;
+  if (message.author.bot && !isWebhook) return;
+
+  const text = collectText(message, isWebhook);
+  if (!text) return;
 
   const cfg = await getAntiRaidConfig(message.guild.id);
   const a = cfg.antiLink;
-  if (!a.enabled) return;
+  if (!a.enabled || (isWebhook && !a.includeWebhooks)) return;
 
-  const links = extractLinks(message.content, { bare: a.bareDomains });
-  const angles = a.wrappers?.length ? findWrapped(message.content, a.wrappers) : [];
+  const links = extractLinks(text, { bare: a.bareDomains });
+  const angles = a.wrappers?.length ? findWrapped(text, a.wrappers) : [];
   if (!links.length && !angles.length) return;
 
-  const member = message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null));
-  if (!member) return;
+  // Webhook não tem membro; para todo o resto o membro é necessário
+  const member = isWebhook
+    ? null
+    : (message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null)));
+  if (!isWebhook && !member) return;
   if (isExempt(message, member, a)) return;
 
+  // Julga TODOS os links (até o teto), convites primeiro: antes só os 15 primeiros eram conferidos, e
+  // bastava encher a mensagem de links liberados para esconder um convite no fim.
+  links.sort((x, y) => Number(y.type === "invite") - Number(x.type === "invite"));
   const blocked = [];
-  for (const link of links.slice(0, 15)) {
-    const why = await judge(link, a, message.guild);
+  let lookups = 0;
+  for (const link of links.slice(0, MAX_LINKS)) {
+    const resolvable = isResolvableInvite(link);
+    const why = await judge(link, a, message.guild, !resolvable || lookups < MAX_INVITE_LOOKUPS);
+    if (resolvable) lookups++;
     if (why) blocked.push({ link, why });
+  }
+  if (links.length > MAX_LINKS) {
+    blocked.push({ link: { raw: `${links.length - MAX_LINKS} link(s) a mais`, type: "other" }, why: "excesso de links na mesma mensagem" });
   }
   for (const raw of angles.slice(0, 5)) {
     blocked.push({ link: { raw, type: "wrapped" }, why: "texto entre símbolos" });
@@ -217,10 +267,10 @@ async function onMessage(message) {
   // 3) conta a infração e pune se passou do limite
   let punishment = null;
   let count = 0;
-  if (deleted && a.punishment !== "none") {
+  if (deleted && a.punishment !== "none" && member) {
     const strike = addStrike(message, a);
     count = strike.count;
-    if (strike.reached) punishment = await punish(member, a);
+    if (strike.reached && member) punishment = await punish(member, a);
   }
 
   // 4) registra
@@ -240,7 +290,7 @@ async function onMessage(message) {
           : []),
         ...(punishment ? [["Punição", punishment]] : []),
       ],
-      content: message.content,
+      content: text,
     });
   }
 }
