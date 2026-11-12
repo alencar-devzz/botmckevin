@@ -14,6 +14,8 @@ const {
 } = require("../utils/roleManage");
 const { TEXT_KEYS, DEFAULT_TEXTS } = require("../utils/roleManageDefaults");
 const { getPrefix } = require("../utils/getPrefix");
+const { suppressRoleChange, unsuppressRoleChange } = require("../utils/logs/suppress");
+const { logPanelRoleChange } = require("../utils/logs/panelRoles");
 const { buildRolePanel, buildSearchModal, buildNotice } = require("../ui/grolesPanel");
 const {
   buildRoleManageHome,
@@ -44,15 +46,13 @@ const staleNotice = (interaction) =>
 // ======================= Painel do comando groles =======================
 
 // Monta os componentes do painel para um estado (usado pelo comando e pelas interações)
-async function renderRolePanel({ guild, executor, state, results = null, mark = () => {} }) {
+async function renderRolePanel({ guild, executor, state, results = null }) {
   const cfg = await getRoleManageConfig(guild.id);
-  mark("config carregada");
   // Carregar todos os membros pode levar até 20s; o painel não espera por isso (só uns instantes).
+  // A contagem de membros por cargo se completa assim que o carregamento termina em segundo plano.
   await Promise.race([ensureMembers(guild), new Promise((resolve) => setTimeout(resolve, 2000))]);
-  mark("membros ok");
 
   const target = state.t ? await guild.members.fetch(state.t).catch(() => null) : null;
-  mark("pessoa carregada");
   const role = state.r ? guild.roles.cache.get(state.r) ?? null : null;
 
   const items = state.v === "l" ? collectRoles(guild, cfg, executor, target, state.f) : [];
@@ -63,9 +63,7 @@ async function renderRolePanel({ guild, executor, state, results = null, mark = 
         )
       : [];
 
-  const built = buildRolePanel({ cfg, guild, executor, target, role, state, results, items, holders });
-  mark("painel montado");
-  return built;
+  return buildRolePanel({ cfg, guild, executor, target, role, state, results, items, holders });
 }
 
 // Só quem abriu o painel mexe nele, e só enquanto ainda tiver permissão
@@ -83,18 +81,14 @@ async function guardPanel(interaction, state) {
 }
 
 async function show(interaction, state, results = null) {
-  const started = Date.now();
-  const mark = (label) => console.log(`[GROLES] ${label} (+${Date.now() - started}ms)`);
   const components = await renderRolePanel({
     guild: interaction.guild,
     executor: interaction.member,
     state,
     results,
-    mark,
   });
-  mark("enviando edição");
-  await interaction.editReply({ components, flags: V2, allowedMentions: noMentions });
-  mark("painel atualizado");
+  // Só components, igual aos outros painéis do bot (mandar flags/allowedMentions aqui travava a edição)
+  return interaction.editReply({ components });
 }
 
 async function applyChange(interaction, state, kind) {
@@ -127,12 +121,22 @@ async function applyChange(interaction, state, kind) {
       await deny(interaction, "Essa pessoa já tem esse cargo.");
     } else {
       const reason = `Gerenciamento de cargos por ${interaction.user.username} (${interaction.user.id})`;
+      // Marca antes de alterar: o log genérico de cargos ignora essa mudança e o painel envia o log próprio
+      suppressRoleChange(guild.id, target.id, role.id, kind);
+      let changed = false;
       try {
         if (kind === "add") await target.roles.add(role, reason);
         else await target.roles.remove(role, reason);
+        changed = true;
       } catch (err) {
+        unsuppressRoleChange(guild.id, target.id, role.id, kind);
         console.error("[GROLES] Erro ao alterar cargo:", err);
         await deny(interaction, "Não consegui alterar o cargo dessa pessoa.");
+      }
+      if (changed) {
+        logPanelRoleChange({ guild, executor: interaction.user, target, role, kind }).catch((err) =>
+          console.error("[GROLES] Erro ao registrar log:", err)
+        );
       }
       // O cache do membro só atualiza quando o evento do gateway chega; força a leitura para o painel já sair certo
       await guild.members.fetch({ user: target.id, force: true }).catch(() => {});
@@ -161,7 +165,6 @@ async function handleRoleManageButton(interaction) {
   // Navegação (flt, pg, hold, back, det): o botão já carrega o estado de destino
   if (["flt", "pg", "hold", "back", "det"].includes(action)) {
     await interaction.deferUpdate();
-    console.log("[GROLES] resposta adiada (deferUpdate ok)");
     return show(interaction, state);
   }
 
@@ -426,7 +429,6 @@ async function handleRoleManageConfigModal(interaction) {
 const safe = (kind, fn) => async (interaction) => {
   const parts = String(interaction.customId).split(":");
   const action = kind === "modal" ? "buscar" : parts[1];
-  console.log(`[GROLES] ${kind}:${action} por ${interaction.user.id}`);
   try {
     return await fn(interaction);
   } catch (err) {
