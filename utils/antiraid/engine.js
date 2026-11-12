@@ -1,36 +1,24 @@
-const { AuditLogEvent, PermissionFlagsBits } = require("discord.js");
+const { AuditLogEvent } = require("discord.js");
 const { sendModuleAlert, code } = require("./alert");
 const { getAntiRaidConfig } = require("./store");
 const { CORE_ACTIONS, PUNISHMENTS } = require("./defaults");
 
 // Núcleo do Anti-Raid: conta ações em massa feitas por uma mesma pessoa/bot
-// (lidas no registro de auditoria) e responde conforme o painel.
+// (lidas em tempo real do registro de auditoria, via hub) e responde conforme o painel.
 
-const AUDIT = {
-  channelDelete: AuditLogEvent.ChannelDelete,
-  channelCreate: AuditLogEvent.ChannelCreate,
-  roleDelete: AuditLogEvent.RoleDelete,
-  roleCreate: AuditLogEvent.RoleCreate,
-  ban: AuditLogEvent.MemberBanAdd,
-  kick: AuditLogEvent.MemberKick,
+// Tipo de entrada do registro de auditoria -> chave usada no painel (CORE_ACTIONS)
+const ENTRY_ACTION = {
+  [AuditLogEvent.ChannelDelete]: "channelDelete",
+  [AuditLogEvent.ChannelCreate]: "channelCreate",
+  [AuditLogEvent.RoleDelete]: "roleDelete",
+  [AuditLogEvent.RoleCreate]: "roleCreate",
+  [AuditLogEvent.MemberBanAdd]: "ban",
+  [AuditLogEvent.MemberKick]: "kick",
 };
 
 const hits = new Map(); // "guild:autor:acao" -> [timestamps]
 const cooldown = new Map(); // "guild:autor" -> timestamp do último disparo
 const COOLDOWN_MS = 30_000;
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// O evento chega antes da entrada no registro de auditoria, então espera um pouco
-async function findExecutorId(guild, action, targetId) {
-  if (!guild.members.me?.permissions.has(PermissionFlagsBits.ViewAuditLog)) return null;
-  await sleep(700);
-  const logs = await guild.fetchAuditLogs({ type: AUDIT[action], limit: 8 }).catch(() => null);
-  const entry = logs?.entries.find(
-    (e) => Date.now() - e.createdTimestamp < 10_000 && (!targetId || e.targetId === targetId)
-  );
-  return entry?.executorId ?? null;
-}
 
 async function isExempt(guild, cfg, executorId) {
   if (executorId === guild.client.user.id || executorId === guild.ownerId) return true;
@@ -75,13 +63,16 @@ async function punish(guild, executorId, punishment) {
   return removable.size ? "Não consegui remover os cargos." : "Não havia cargos que eu pudesse remover.";
 }
 
-// Chamado pelos eventos (events/antiRaid.js)
-async function track(guild, action, targetId = null) {
+// Chamado pelo hub (events/antiRaidAudit.js) para cada entrada que bater com ENTRY_ACTION
+async function trackEntry(entry, guild) {
+  const action = ENTRY_ACTION[entry.action];
+  if (!action) return;
+
   const cfg = await getAntiRaidConfig(guild.id);
   const { core } = cfg;
   if (!core.enabled || !core.actions.includes(action)) return;
 
-  const executorId = await findExecutorId(guild, action, targetId);
+  const executorId = entry.executorId;
   if (!executorId || (await isExempt(guild, cfg, executorId))) return;
 
   const key = `${guild.id}:${executorId}:${action}`;
@@ -114,4 +105,4 @@ async function track(guild, action, targetId = null) {
   });
 }
 
-module.exports = { track, punish };
+module.exports = { trackEntry, ENTRY_ACTION, punish };
