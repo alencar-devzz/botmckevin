@@ -87,8 +87,8 @@ async function show(interaction, state, results = null) {
     state,
     results,
   });
-  // Só components, igual aos outros painéis do bot (mandar flags/allowedMentions aqui travava a edição)
-  return interaction.editReply({ components });
+  // Sem "flags" na edição (era isso que travava); allowedMentions continua para as menções não pingarem
+  return interaction.editReply({ components, allowedMentions: noMentions });
 }
 
 async function applyChange(interaction, state, kind) {
