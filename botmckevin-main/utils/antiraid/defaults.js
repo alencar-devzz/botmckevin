@@ -55,6 +55,7 @@ const DEFAULTS = {
     allowOwnInvites: true, // convites do próprio servidor passam
     allowedGuilds: [], // [{ id, name }] servidores parceiros: os convites deles passam
     bareDomains: true, // também pega "site.com" escrito sem https://
+    wrappers: [], // pares de símbolos configurados no painel, ex.: ["<>", "[]"]: apaga qualquer texto escrito entre eles
     ignoreStaff: true, // ignora quem tem Gerenciar Mensagens
     exemptRoles: [],
     exemptChannels: [],
@@ -122,6 +123,13 @@ const DEFAULTS = {
     alertChannelId: null, // vazio = usa o canal do núcleo
     snapshot: null, // referência salva: { name, description, icon, banner, splash, discoverySplash, savedAt }
   },
+  panic: {
+    actions: ["invites", "dms", "verification"], // chaves de PANIC_ACTIONS que o botão de pânico aplica
+    level: "veryHigh", // nível de verificação do pânico (chaves de MJ_LEVELS)
+    durationMin: 60, // o pânico desfaz sozinho depois disso
+    alertChannelId: null, // vazio = usa o canal do núcleo
+    active: null, // { since, until, by, invites, dms, verification, lock } enquanto o pânico estiver ligado
+  },
   native: {
     alertChannelId: null, // canal de alertas das regras de AutoMod criadas pelo painel
     mentionLimit: 5, // limite da regra de spam de menções
@@ -148,6 +156,17 @@ const PUNISHMENTS = {
   kick: { label: "Remover cargos e expulsar", desc: "Tira os cargos e expulsa do servidor." },
   ban: { label: "Banir", desc: "Bane o autor do servidor." },
 };
+
+// ---- Pânico ----
+const PANIC_ACTIONS = {
+  invites: { label: "Pausar convites", desc: "Ninguém entra por convite enquanto durar." },
+  dms: { label: "Pausar mensagens diretas", desc: "Pausa as DMs entre membros pelo servidor." },
+  verification: { label: "Subir a verificação", desc: "Eleva o nível de verificação do servidor." },
+  lock: { label: "Trancar o chat para @everyone", desc: "Tira envio de mensagens e reações de @everyone." },
+};
+const PANIC_DURATIONS = [15, 30, 60, 180, 360, 720, 1440];
+// Permissões que o pânico tira de @everyone quando "Trancar o chat" está marcado
+const PANIC_LOCK_PERMS = ["SendMessages", "SendMessagesInThreads", "CreatePublicThreads", "CreatePrivateThreads", "AddReactions"];
 
 // Lista usada no menu geral. "active" diz se o módulo está ligado.
 const MODULES = [
@@ -330,7 +349,10 @@ const NV_AUTOMOD = {
   profanity: { name: `${NV_RULE_PREFIX}palavras ofensivas`, label: "Palavras ofensivas" },
 };
 
+const AL_MAX_WRAPPERS = 10;
+
 module.exports = {
+  AL_MAX_WRAPPERS,
   AL_MODES,
   AL_TYPES,
   AL_PUNISH,
@@ -373,4 +395,7 @@ module.exports = {
   SPAM_WARN_SEC,
   SPAM_TIMEOUT_MIN,
   SPAM_SIGNALS,
+  PANIC_ACTIONS,
+  PANIC_DURATIONS,
+  PANIC_LOCK_PERMS,
   DEFAULTS, CORE_ACTIONS, CORE_LIMITS, CORE_WINDOWS, PUNISHMENTS, MODULES };

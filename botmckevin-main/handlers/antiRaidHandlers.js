@@ -7,6 +7,9 @@ const { buildAntiRaidHome, buildAntiRaidHub, buildCorePanel, buildNotice } = req
 const { buildMassJoinPanel, buildSpamPanel, buildSpamResponsePanel } = require("../ui/antiraidModules");
 const { buildAntiBotPanel, buildAntiAltPanel } = require("../ui/antiraidAccess");
 const { buildDangerPermsPanel, buildProtectedRolesPanel, buildMovCallPanel } = require("../ui/antiraidSensitive");
+const { activatePanic, deactivatePanic } = require("../utils/antiraid/panic");
+const { getIncidentStats, listIncidents, listSystems } = require("../utils/antiraid/incidents");
+const { buildQuickPanel, buildPanicPanel, buildHistoryPanel } = require("../ui/antiraidQuick");
 const server = require("./antiRaidServerHandlers");
 const antiLink = require("./antiLinkHandlers");
 
@@ -24,6 +27,7 @@ const PANELS = {
   dangerPerms: buildDangerPermsPanel,
   protectedRoles: buildProtectedRolesPanel,
   movCall: buildMovCallPanel,
+  panic: buildPanicPanel,
   // Parte 5: visual, native, nativeChannels e autoMod
   ...server.PANELS,
   // Anti-link: antiLink e antiLinkResp
@@ -55,6 +59,79 @@ async function showPanel(interaction, key) {
   return interaction.update({ components });
 }
 
+// Tela inicial do painel (informações + pânico). notice mostra o resultado da última ação do pânico.
+async function quickComponents(guild, notice = null) {
+  const cfg = await getAntiRaidConfig(guild.id);
+  const stats = await getIncidentStats(guild.id).catch(() => ({}));
+  return buildQuickPanel(guild, cfg, stats, notice);
+}
+
+// ======================= Histórico de incidentes =======================
+
+const HISTORY_PAGE_SIZE = 5;
+
+// system chega codificado (encodeURIComponent) ou "all"
+async function showHistory(interaction, page = 1, systemKey = "all") {
+  let system = null;
+  if (systemKey !== "all") {
+    try {
+      system = decodeURIComponent(systemKey);
+    } catch {
+      system = null;
+    }
+  }
+  const [data, systems] = await Promise.all([
+    listIncidents(interaction.guild.id, { system, page, size: HISTORY_PAGE_SIZE }),
+    listSystems(interaction.guild.id),
+  ]);
+  return interaction.update({ components: buildHistoryPanel(interaction.guild, data, systems, system) });
+}
+
+// ======================= Pânico =======================
+
+async function handlePanicButton(interaction) {
+  const { customId, guild } = interaction;
+
+  if (customId === "ar:pn:cfg") return showPanel(interaction, "panic");
+
+  if (customId === "ar:pn:on" || customId === "ar:pn:off") {
+    // As ações no Discord podem passar de 3s: confirma o clique e edita a mensagem depois
+    await interaction.deferUpdate();
+    const result =
+      customId === "ar:pn:on" ? await activatePanic(guild, interaction.user) : await deactivatePanic(guild, interaction.user);
+    return interaction.editReply({ components: await quickComponents(guild, result) });
+  }
+}
+
+async function handlePanicSelect(interaction) {
+  const values = interaction.values ?? [];
+  let patch = null;
+
+  switch (interaction.customId) {
+    case "ar:pn:actions":
+      patch = { "panic.actions": pickKeys(values, D.PANIC_ACTIONS) };
+      break;
+    case "ar:pn:level": {
+      const key = pickKey(values, D.MJ_LEVELS);
+      if (key) patch = { "panic.level": key };
+      break;
+    }
+    case "ar:pn:dur": {
+      const n = pickNum(values, D.PANIC_DURATIONS);
+      if (n) patch = { "panic.durationMin": n };
+      break;
+    }
+    case "ar:pn:alert":
+      patch = { "panic.alertChannelId": values[0] ?? null };
+      break;
+    default:
+      return;
+  }
+
+  if (patch) await updateAntiRaidConfig(interaction.guild.id, patch);
+  return showPanel(interaction, "panic");
+}
+
 // ======================= Botões =======================
 
 async function handleAntiRaidButton(interaction) {
@@ -64,11 +141,24 @@ async function handleAntiRaidButton(interaction) {
 
   const { customId, guild } = interaction;
 
-  // Botão da mensagem pública: abre o menu geral só para quem clicou
+  // Botão da mensagem pública: abre a central (informações + pânico) só para quem clicou
   if (customId === "ar:open") {
-    const cfg = await getAntiRaidConfig(guild.id);
-    return interaction.reply({ components: buildAntiRaidHub(guild, cfg), flags: V2 | EPHEMERAL });
+    return interaction.reply({ components: await quickComponents(guild), flags: V2 | EPHEMERAL });
   }
+
+  // Volta para a central
+  if (customId === "ar:quick") {
+    return interaction.update({ components: await quickComponents(guild) });
+  }
+
+  if (customId === "ar:hist") return showHistory(interaction, 1, "all");
+
+  if (customId.startsWith("ar:hi:go:")) {
+    const [, , , page, system] = customId.split(":");
+    return showHistory(interaction, Number(page), system ?? "all");
+  }
+
+  if (customId.startsWith("ar:pn:")) return handlePanicButton(interaction);
 
   if (customId === "ar:home:refresh") {
     const cfg = await getAntiRaidConfig(guild.id);
@@ -122,6 +212,14 @@ async function handleAntiRaidSelect(interaction) {
   if (!canManage(interaction.member)) {
     return deny(interaction, "Só o dono ou quem tem Administrador pode configurar o Anti-Raid.");
   }
+  // Menu do hub: escolhe a proteção do grupo e abre o painel dela
+  if (interaction.customId.startsWith("ar:pick:")) {
+    const key = interaction.values?.[0];
+    if (!key || !PANELS[key]) return deny(interaction, "Esse módulo ainda não está disponível.");
+    return showPanel(interaction, key);
+  }
+  if (interaction.customId === "ar:hi:sys") return showHistory(interaction, 1, interaction.values?.[0] ?? "all");
+  if (interaction.customId.startsWith("ar:pn:")) return handlePanicSelect(interaction);
   if (interaction.customId.startsWith("ar:core:")) return handleCoreSelect(interaction);
   if (interaction.customId.startsWith("ar:mj:")) return handleMassJoinSelect(interaction);
   if (interaction.customId.startsWith("ar:sp:")) return handleSpamSelect(interaction);

@@ -93,7 +93,7 @@ function buildAntiRaidHome(guild, cfg) {
     )
   );
 
-  return [head, nucleo, modulos, row(btn("ar:open", "Abrir configurações", ButtonStyle.Primary), btn("ar:home:refresh", "Atualizar"))];
+  return [head, nucleo, modulos, row(btn("ar:open", "Abrir configurações", ButtonStyle.Primary), new ButtonBuilder().setCustomId("ar:home:refresh").setStyle(ButtonStyle.Secondary).setEmoji({ name: "update", id: "1569724363954065498", animated: true }))];
 }
 
 // ---------- Menu geral (módulos agrupados) ----------
@@ -129,7 +129,7 @@ function buildAntiRaidHub(guild, cfg) {
     );
   });
 
-  containers.push(row(btn("ar:close", "Fechar")));
+  containers.push(row(btn("ar:quick", "Voltar ao início"), btn("ar:hist", "Histórico de incidentes"), btn("ar:close", "Fechar")));
   return containers;
 }
 
