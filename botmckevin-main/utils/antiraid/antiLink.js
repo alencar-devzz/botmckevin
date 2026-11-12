@@ -2,7 +2,9 @@ const { PermissionFlagsBits, MessageFlags, ContainerBuilder, TextDisplayBuilder 
 const { getAntiRaidConfig } = require("./store");
 const { sendModuleAlert } = require("./alert");
 const { AL_TYPES, AL_PUNISH } = require("./defaults");
-const { extractLinks, matchesAny, isResolvableInvite } = require("./linkTools");
+const { extractLinks, matchesAny, isResolvableInvite, findWrapped } = require("./linkTools");
+const { suppressMessage } = require("../logs/suppress");
+const { userBlock, channelBlock, codeBlock, code } = require("../logs/format");
 
 // Anti-link: apaga mensagens com links proibidos conforme o painel.
 // Padrão: só convites de outros servidores. Ordem de decisão para cada link:
@@ -83,7 +85,7 @@ const NOTICE_GAP = 4_000;
 const PERM_GAP = 10 * 60_000;
 
 function joinNouns(types) {
-  const nouns = [...new Set(types.map((t) => AL_TYPES[t]?.noun ?? "links"))];
+  const nouns = [...new Set(types.map((t) => (t === "wrapped" ? "textos entre símbolos proibidos" : AL_TYPES[t]?.noun ?? "links")))];
   if (nouns.length <= 1) return nouns[0] ?? "links";
   return `${nouns.slice(0, -1).join(", ")} e ${nouns.at(-1)}`;
 }
@@ -105,14 +107,17 @@ async function sendNotice(message, a, types) {
     .send({
       components: [
         new ContainerBuilder()
-          .setAccentColor(0xed4245)
+          .setAccentColor(0xff0000)
           .addTextDisplayComponents(new TextDisplayBuilder().setContent(renderMessage(a.message, message.author.id, types))),
       ],
       flags: MessageFlags.IsComponentsV2,
       allowedMentions: { users: [message.author.id] },
     })
     .catch(() => null);
-  if (notice) setTimeout(() => notice.delete().catch(() => {}), (a.noticeSec || 8) * 1000);
+  if (notice) {
+    suppressMessage(notice.id); // o aviso some sozinho e não vira "Mensagem apagada" nos logs
+    setTimeout(() => notice.delete().catch(() => {}), (a.noticeSec || 8) * 1000);
+  }
 }
 
 async function punish(member, a) {
@@ -165,7 +170,8 @@ async function onMessage(message) {
   if (!a.enabled) return;
 
   const links = extractLinks(message.content, { bare: a.bareDomains });
-  if (!links.length) return;
+  const angles = a.wrappers?.length ? findWrapped(message.content, a.wrappers) : [];
+  if (!links.length && !angles.length) return;
 
   const member = message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null));
   if (!member) return;
@@ -176,12 +182,16 @@ async function onMessage(message) {
     const why = await judge(link, a, message.guild);
     if (why) blocked.push({ link, why });
   }
+  for (const raw of angles.slice(0, 5)) {
+    blocked.push({ link: { raw, type: "wrapped" }, why: "texto entre símbolos" });
+  }
   if (!blocked.length) return;
 
   const types = [...new Set(blocked.map((b) => b.link.type))];
 
   // 1) apaga
   let deleted = true;
+  suppressMessage(message.id); // quem avisa é só o log do Anti-link, o log geral de mensagens fica quieto
   try {
     await message.delete();
   } catch (err) {
@@ -191,13 +201,12 @@ async function onMessage(message) {
     if (Date.now() - last > PERM_GAP) {
       permWarned.set(message.guild.id, Date.now());
       await sendModuleAlert(message.guild, cfg, a.alertChannelId, {
-        title: "Anti-link · não consegui apagar",
-        lines: [
-          `**Canal**  <#${message.channelId}>`,
-          `**Autor**  <@${message.author.id}>`,
-          "O bot precisa de **Gerenciar mensagens** e **Ver canal** neste canal.",
-        ],
-        color: 0xed4245,
+        system: "Anti-link",
+        action: "Não consegui apagar",
+        author: message.author,
+        channel: message.channel,
+        fields: [["Mensagem ID", code(message.id)], "O bot precisa de **Gerenciar mensagens** e **Ver canal** neste canal."],
+        color: 0xff0000,
       });
     }
   }
@@ -219,17 +228,19 @@ async function onMessage(message) {
     const shown = blocked.slice(0, 4).map((b) => `${inline(b.link.raw)} · ${b.why}`);
     if (blocked.length > 4) shown.push(`e mais ${blocked.length - 4} link(s)`);
     await sendModuleAlert(message.guild, cfg, a.alertChannelId, {
-      title: "Anti-link · mensagem apagada",
-      lines: [
-        `**Autor**  <@${message.author.id}> (\`${message.author.id}\`)`,
-        `**Canal**  <#${message.channelId}>`,
-        `**Links**  ${shown.join("\n")}`,
+      system: "Anti-link",
+      action: "Mensagem apagada",
+      author: message.author,
+      channel: message.channel,
+      fields: [
+        ["Mensagem ID", code(message.id)],
+        ["Motivo", shown.join("\n")],
         ...(a.punishment !== "none"
-          ? [`**Infrações**  ${count} de ${a.strikeLimit} (${AL_PUNISH[a.punishment].label.toLowerCase()})`]
+          ? [["Infrações", `${code(`${count} de ${a.strikeLimit}`)} (${AL_PUNISH[a.punishment].label.toLowerCase()})`]]
           : []),
-        ...(punishment ? [`**Punição**  ${punishment}`] : []),
+        ...(punishment ? [["Punição", punishment]] : []),
       ],
-      color: punishment ? 0xed4245 : 0xfaa61a,
+      content: message.content,
     });
   }
 }

@@ -75,6 +75,11 @@ function normalize(content) {
   text = text.replace(/\b(discord|dsc|invite)\s*(?:\.|\s+dot\s+)\s*(gg|me|io|link|new)\s*([\/\\])\s*/gi, "$1.$2$3");
   text = text.replace(/\b(discord)\s+gg\s*([\/\\])\s*/gi, "$1.gg$2");
   text = text.replace(/\b(discord(?:app)?)\s*(?:\.|\s+dot\s+)\s*com\s*([\/\\])\s*(invite|template|gifts)\s*([\/\\])\s*/gi, "$1.com$2$3$4");
+  // links do app: discord://app/invite/codigo, discord://-/invite/codigo, discord://.../gifts/codigo
+  text = text.replace(/\bdiscord(?:app)?:\/\/[^\/\s<>]*\/(invite|template|gifts)\//gi, (_, kind) =>
+    /^invite$/i.test(kind) ? "https://discord.gg/" : `https://discord.com/${kind.toLowerCase()}/`
+  );
+  text = text.replace(/\bdiscord(?:app)?:\/\//gi, "https://discord.com/");
   return text;
 }
 
@@ -241,7 +246,58 @@ const matchesAny = (rules, link) => (rules ?? []).some((rule) => ruleMatches(rul
 // Hosts cujo código de convite pode ser consultado no Discord
 const isResolvableInvite = (link) => link.type === "invite" && !!link.code;
 
+// ---------- Texto entre símbolos ----------
+// Pares configurados no painel (ex.: "<>" ou "[]"). Dentro de < > a sintaxe do Discord passa:
+// <@id>, <@&id>, <#id>, <:emoji:id>, <a:emoji:id>, <t:123:R>, </comando:id>, <id:customize>.
+const DISCORD_SYNTAX = /^(?:@!?\d+|@&\d+|#\d+|a?:\w{2,32}:\d+|t:-?\d+(?::[tTdDfFR])?|\/[^:\s]+(?: [^:\s]+){0,2}:\d+|id:\w+)$/;
+const wrapLabel = (pair) => String(pair);
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\\/-]/g, "\\$&");
+
+// "< >", "[ ]", "<>" ou "{{ }}" -> ["<>", "[]", ...]. O primeiro símbolo abre e o último fecha.
+function parseWrappers(input, max = 10) {
+  const list = [];
+  const invalid = [];
+  for (const line of String(input ?? "").split(/\r?\n/)) {
+    const text = line.trim();
+    if (!text) continue;
+    const parts = text.split(/\s+/);
+    let open;
+    let close;
+    if (parts.length === 2) [open, close] = parts;
+    else if (parts.length === 1 && text.length >= 2 && text.length % 2 === 0) [open, close] = [text.slice(0, text.length / 2), text.slice(text.length / 2)];
+    if (!open || !close || open.length > 3 || close.length > 3 || /[\p{L}\p{N}]/u.test(open + close)) {
+      invalid.push(text.slice(0, 20));
+      continue;
+    }
+    const key = `${open} ${close}`;
+    if (!list.includes(key)) list.push(key);
+  }
+  return { list: list.slice(0, max), invalid, truncated: list.length > max };
+}
+
+// Procura texto escrito entre os pares (salvos como "abre fecha").
+function findWrapped(content, wrappers) {
+  const found = [];
+  for (const pair of wrappers ?? []) {
+    const [open, close] = String(pair).split(" ");
+    if (!open || !close) continue;
+    const o = escapeRe(open);
+    const c = escapeRe(close);
+    const re = new RegExp(`${o}((?:(?!${o}|${c})[^\\n]){1,200})${c}`, "g");
+    for (const match of String(content ?? "").matchAll(re)) {
+      const inner = match[1].trim();
+      if (!inner) continue;
+      if (open === "<" && close === ">" && DISCORD_SYNTAX.test(inner)) continue;
+      found.push(match[0]);
+    }
+  }
+  return found;
+}
+
 module.exports = {
+  parseWrappers,
+  findWrapped,
+  wrapLabel,
   normalize,
   classify,
   extractLinks,

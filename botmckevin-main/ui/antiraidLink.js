@@ -1,17 +1,19 @@
-const { ContainerBuilder, ActionRowBuilder, ButtonStyle, TextInputStyle, RoleSelectMenuBuilder } = require("discord.js");
+const { ButtonStyle, TextInputStyle, RoleSelectMenuBuilder } = require("discord.js");
 const { ui } = require("./antiraid");
 const { helpers } = require("./antiraidModules");
 const access = require("./antiraidAccess");
 const { textLabel, modal } = require("./modalHelpers");
 const D = require("../utils/antiraid/defaults");
 
-// Painel do Anti-link (ar:al:*) e os modais de listas.
-const { COLOR, text, divider, btn, row } = ui;
-const { pickOne, pickMany, nums, toggleSection, flagSection, alertPick, channelPick } = helpers;
+// Painel do Anti-link (ar:al:*) e os modais das listas.
+const { text, btn, row, tag, box, header, toggleBtn, flagBtn } = ui;
+const { pickOne, pickMany, nums, alertPick, channelPick } = helpers;
 const { userPick } = access.helpers;
 
 const typeLabels = Object.fromEntries(Object.entries(D.AL_TYPES).map(([key, info]) => [key, info.label]));
 const typeNames = (keys) => keys.map((k) => D.AL_TYPES[k]?.label).filter(Boolean);
+const { wrapLabel } = require("../utils/antiraid/linkTools");
+const yesNo = (on) => `\`${on ? "Sim" : "Não"}\``;
 
 // Resume uma lista numa linha: "a, b, c e mais 4"
 function brief(list, max = 5) {
@@ -35,65 +37,70 @@ function modeSummary(a) {
 function buildAntiLinkPanel(guild, cfg) {
   const a = cfg.antiLink;
 
-  const container = new ContainerBuilder()
-    .setAccentColor(a.enabled ? COLOR.on : COLOR.off)
+  const estado = box()
     .addTextDisplayComponents(
-      text("### Anti-link"),
-      text("-# Apaga mensagens com links proibidos, também quando a pessoa edita a mensagem para colocar o link depois.")
+      text(
+        [
+          "### Proteção",
+          "-# Apaga mensagens com links proibidos, também quando a pessoa edita a mensagem para colocar o link depois.",
+          `**Anti-link**  ${tag(a.enabled)}`,
+          `**Liberar convites do próprio servidor**  ${yesNo(a.allowOwnInvites)}  ·  o bot confere de qual servidor é o convite`,
+          `**Pegar domínios sem https://**  ${yesNo(a.bareDomains)}  ·  detecta \`site.com\` e \`discord.gg/abc\` escritos soltos`,
+        ].join("\n")
+      )
     )
-    .addSeparatorComponents(divider());
+    .addActionRowComponents(
+      row(
+        toggleBtn("ar:al:toggle", a.enabled),
+        flagBtn("ar:al:own", "Convites próprios", a.allowOwnInvites),
+        flagBtn("ar:al:bare", "Sem https://", a.bareDomains)
+      )
+    );
 
-  container.addSectionComponents(toggleSection("ar:al:toggle", "Anti-link", "Liga ou desliga a análise de links.", a.enabled));
-
-  container.addTextDisplayComponents(text(`**O que apagar**\n-# ${modeSummary(a)}`));
-  container.addActionRowComponents(
-    pickOne(
-      "ar:al:mode",
-      "Escolha o modo",
-      Object.entries(D.AL_MODES).map(([value, i]) => ({ label: i.label, description: i.desc, value })),
-      a.mode
+  const modo = box()
+    .addTextDisplayComponents(
+      text(`### O que apagar\n-# ${modeSummary(a)}\n-# Os tipos só valem no modo "Só os tipos que eu escolher".`)
     )
-  );
+    .addActionRowComponents(
+      pickOne(
+        "ar:al:mode",
+        "Escolha o modo",
+        Object.entries(D.AL_MODES).map(([value, i]) => ({ label: i.label, description: i.desc, value })),
+        a.mode
+      ),
+      pickMany("ar:al:types", "Tipos que apaga", typeLabels, a.blockTypes)
+    );
 
-  container.addTextDisplayComponents(text("**Tipos que apaga**\n-# Só vale no modo \"Só os tipos que eu escolher\"."));
-  container.addActionRowComponents(pickMany("ar:al:types", "Quais tipos apagar", typeLabels, a.blockTypes));
-
-  container.addSeparatorComponents(divider());
-  container.addTextDisplayComponents(
-    text(
-      "**Liberações**\n-# Nunca apagam. A ordem é: domínio liberado, domínio bloqueado, tipo liberado e, por último, o modo."
+  const liberacoes = box()
+    .addTextDisplayComponents(
+      text(
+        [
+          "### Liberações",
+          "-# Nunca apagam. A ordem é: domínio liberado, domínio bloqueado, tipo liberado e, por último, o modo.",
+          `**Domínios liberados**  ${brief(a.allowedDomains)}`,
+          `**Domínios bloqueados**  ${brief(a.blockedDomains)}`,
+          `**Servidores parceiros**  ${brief(a.allowedGuilds.map((g) => g.name || g.id))}`,
+          `**Texto entre símbolos**  ${brief(a.wrappers.map(wrapLabel))}  ·  apaga qualquer palavra escrita dentro desses pares`,
+        ].join("\n")
+      )
     )
-  );
-  container.addActionRowComponents(pickMany("ar:al:allowtypes", "Tipos sempre liberados", typeLabels, a.allowedTypes));
-  container.addActionRowComponents(
-    new ActionRowBuilder().addComponents(
-      btn("ar:al:domAllow", `Domínios liberados (${a.allowedDomains.length})`),
-      btn("ar:al:domBlock", `Domínios bloqueados (${a.blockedDomains.length})`),
-      btn("ar:al:guilds", `Servidores parceiros (${a.allowedGuilds.length})`)
-    )
-  );
-  container.addTextDisplayComponents(
-    text(
-      [
-        `**Liberados**  ${brief(a.allowedDomains)}`,
-        `**Bloqueados**  ${brief(a.blockedDomains)}`,
-        `**Parceiros**  ${brief(a.allowedGuilds.map((g) => g.name || g.id))}`,
-      ].join("\n")
-    )
-  );
+    .addActionRowComponents(
+      pickMany("ar:al:allowtypes", "Tipos sempre liberados", typeLabels, a.allowedTypes),
+      row(
+        btn("ar:al:domAllow", `Domínios liberados (${a.allowedDomains.length})`),
+        btn("ar:al:domBlock", `Domínios bloqueados (${a.blockedDomains.length})`),
+        btn("ar:al:guilds", `Servidores parceiros (${a.allowedGuilds.length})`),
+        btn("ar:al:wrap", `Texto entre símbolos (${a.wrappers.length})`)
+      )
+    );
 
-  container.addSectionComponents(
-    flagSection("ar:al:own", "Liberar convites do próprio servidor", "O bot confere de qual servidor é o convite.", a.allowOwnInvites)
-  );
-  container.addSectionComponents(
-    flagSection("ar:al:bare", "Pegar domínios sem https://", "Detecta também \"site.com\" e \"discord.gg/abc\" escritos soltos.", a.bareDomains)
-  );
-
-  container.addSeparatorComponents(divider());
-  container.addActionRowComponents(
-    new ActionRowBuilder().addComponents(btn("ar:mod:antiLinkResp", "Resposta e exceções", ButtonStyle.Primary), btn("ar:hub", "Voltar"))
-  );
-  return [container];
+  return [
+    header("Anti-link", "Anti-link"),
+    estado,
+    modo,
+    liberacoes,
+    row(btn("ar:mod:antiLinkResp", "Resposta e exceções", ButtonStyle.Primary), btn("ar:hub", "Voltar")),
+  ];
 }
 
 // ======================= Resposta e exceções =======================
@@ -102,70 +109,82 @@ function buildAntiLinkResponsePanel(guild, cfg) {
   const a = cfg.antiLink;
   const punishing = a.punishment !== "none";
 
-  const container = new ContainerBuilder()
-    .setAccentColor(a.enabled ? COLOR.on : COLOR.off)
+  const aviso = box()
     .addTextDisplayComponents(
-      text("### Anti-link · resposta e exceções"),
-      text("-# O que acontece depois que a mensagem é apagada e quem fica de fora da análise.")
+      text(
+        [
+          "### Aviso e registro",
+          "-# O que aparece depois que a mensagem é apagada.",
+          `**Avisar no canal**  ${yesNo(a.notify)}  ·  o aviso some sozinho em ${a.noticeSec}s`,
+          `**Registrar no canal de alertas**  ${yesNo(a.logEnabled)}  ·  quem enviou, onde e quais links`,
+          `**Ignorar equipe**  ${yesNo(a.ignoreStaff)}  ·  quem tem Gerenciar Mensagens nunca é analisado`,
+        ].join("\n")
+      )
     )
-    .addSeparatorComponents(divider());
+    .addActionRowComponents(
+      row(
+        flagBtn("ar:al:notify", "Avisar", a.notify),
+        flagBtn("ar:al:log", "Registrar", a.logEnabled),
+        flagBtn("ar:al:staff", "Ignorar equipe", a.ignoreStaff)
+      )
+    );
 
-  container.addSectionComponents(
-    flagSection("ar:al:notify", "Avisar no canal", `O aviso some sozinho em ${a.noticeSec}s.`, a.notify)
-  );
-  container.addSectionComponents(
-    flagSection("ar:al:log", "Registrar no canal de alertas", "Mostra quem enviou, onde e quais links.", a.logEnabled)
-  );
-
-  container.addTextDisplayComponents(
-    text(
-      `**Punição por repetição**\n-# ${
-        punishing
-          ? `Quando a pessoa tiver **${a.strikeLimit}** mensagem(ns) apagada(s) em **${a.strikeWindowMin} min**.`
-          : "Desligada: a mensagem é apagada e mais nada."
-      }`
+  const punicao = box()
+    .addTextDisplayComponents(
+      text(
+        `### Punição por repetição\n-# ${
+          punishing
+            ? `Quando a pessoa tiver **${a.strikeLimit}** mensagem(ns) apagada(s) em **${a.strikeWindowMin} min**.`
+            : "Desligada: a mensagem é apagada e mais nada."
+        }`
+      )
     )
-  );
-  container.addActionRowComponents(
-    pickOne(
-      "ar:al:punish",
-      "Punição",
-      Object.entries(D.AL_PUNISH).map(([value, i]) => ({ label: i.label, description: i.desc, value })),
-      a.punishment
-    ),
-    pickOne("ar:al:strikes", "Mensagens apagadas até punir", nums(D.AL_STRIKES, (n) => `${n} mensagem(ns) apagada(s)`), a.strikeLimit),
-    pickOne("ar:al:window", "Dentro de quanto tempo", nums(D.AL_STRIKE_WINDOW, (n) => (n >= 60 ? `em ${n / 60} hora(s)` : `em ${n} minutos`)), a.strikeWindowMin),
-    pickOne(
-      "ar:al:timeout",
-      "Duração do timeout",
-      nums(D.AL_TIMEOUT_MIN, (n) => (n >= 1440 ? "1 dia" : n >= 60 ? `${n / 60} hora(s)` : `${n} minuto(s)`)),
-      a.timeoutMin
-    )
-  );
-
-  container.addSeparatorComponents(divider());
-  container.addSectionComponents(
-    flagSection("ar:al:staff", "Ignorar equipe", "Quem tem Gerenciar Mensagens nunca é analisado.", a.ignoreStaff)
-  );
+    .addActionRowComponents(
+      pickOne(
+        "ar:al:punish",
+        "Punição",
+        Object.entries(D.AL_PUNISH).map(([value, i]) => ({ label: i.label, description: i.desc, value })),
+        a.punishment
+      ),
+      pickOne("ar:al:strikes", "Mensagens apagadas até punir", nums(D.AL_STRIKES, (n) => `${n} mensagem(ns) apagada(s)`), a.strikeLimit),
+      pickOne(
+        "ar:al:window",
+        "Dentro de quanto tempo",
+        nums(D.AL_STRIKE_WINDOW, (n) => (n >= 60 ? `em ${n / 60} hora(s)` : `em ${n} minutos`)),
+        a.strikeWindowMin
+      ),
+      pickOne(
+        "ar:al:timeout",
+        "Duração do timeout",
+        nums(D.AL_TIMEOUT_MIN, (n) => (n >= 1440 ? "1 dia" : n >= 60 ? `${n / 60} hora(s)` : `${n} minuto(s)`)),
+        a.timeoutMin
+      )
+    );
 
   const roles = new RoleSelectMenuBuilder().setCustomId("ar:al:xroles").setPlaceholder("Cargos isentos").setMinValues(0).setMaxValues(25);
   const validRoles = a.exemptRoles.filter((id) => guild.roles.cache.has(id)).slice(0, 25);
   if (validRoles.length) roles.setDefaultRoles(...validRoles);
 
-  container.addActionRowComponents(
-    row(roles),
-    channelPick("ar:al:xchannels", "Canais isentos (ou categorias)", guild, a.exemptChannels, 25),
-    userPick("ar:al:xusers", "Pessoas isentas", a.exemptUsers)
-  );
+  const isentos = box()
+    .addTextDisplayComponents(text("### Exceções\n-# Cargos, canais (ou categorias) e pessoas que o Anti-link ignora. O dono do servidor já é isento."))
+    .addActionRowComponents(
+      row(roles),
+      channelPick("ar:al:xchannels", "Canais isentos (ou categorias)", guild, a.exemptChannels, 25),
+      userPick("ar:al:xusers", "Pessoas isentas", a.exemptUsers)
+    );
 
-  container.addTextDisplayComponents(text("**Canal de alertas**\n-# Vazio usa o canal do núcleo."));
-  container.addActionRowComponents(alertPick("ar:al:alert", guild, a.alertChannelId));
+  const alertas = box()
+    .addTextDisplayComponents(text("### Canal de alertas\n-# Vazio usa o canal do núcleo."))
+    .addActionRowComponents(alertPick("ar:al:alert", guild, a.alertChannelId));
 
-  container.addSeparatorComponents(divider());
-  container.addActionRowComponents(
-    new ActionRowBuilder().addComponents(btn("ar:al:msg", "Editar mensagem do aviso", ButtonStyle.Primary), btn("ar:mod:antiLink", "Voltar"))
-  );
-  return [container];
+  return [
+    header("Anti-link · resposta e exceções", "Anti-link › Resposta"),
+    aviso,
+    punicao,
+    isentos,
+    alertas,
+    row(btn("ar:al:msg", "Editar mensagem do aviso", ButtonStyle.Primary), btn("ar:mod:antiLink", "Voltar")),
+  ];
 }
 
 // ======================= Modais =======================
@@ -176,14 +195,12 @@ const DOMAIN_MODALS = {
     label: "Domínios que nunca apagam",
     description: "Um por linha. Ex.: youtube.com ou discord.gg/meuservidor",
     placeholder: "youtube.com\nmeusite.com.br\ndiscord.gg/meuservidor",
-    field: "allowedDomains",
   },
   block: {
     title: "Domínios bloqueados",
     label: "Domínios que sempre apagam",
     description: "Um por linha. Apaga mesmo fora do modo escolhido.",
     placeholder: "site-ruim.com\nencurtador.xyz",
-    field: "blockedDomains",
   },
 };
 
@@ -224,6 +241,23 @@ function buildGuildsModal(current) {
   );
 }
 
+function buildWrapModal(current) {
+  return modal(
+    "ar:al:modal:wrap",
+    "Texto entre símbolos",
+    textLabel({
+      id: "list",
+      label: "Pares de símbolos que apagam",
+      description: "Um par por linha, abrir e fechar separados por espaço. Esvazie para desligar.",
+      style: TextInputStyle.Paragraph,
+      max: 400,
+      required: false,
+      value: current.map(wrapLabel).join("\n"),
+      placeholder: "< >\n[ ]\n{ }",
+    })
+  );
+}
+
 function buildMessageModal(current) {
   return modal(
     "ar:al:modal:msg",
@@ -246,5 +280,6 @@ module.exports = {
   buildAntiLinkResponsePanel,
   buildDomainModal,
   buildGuildsModal,
+  buildWrapModal,
   buildMessageModal,
 };

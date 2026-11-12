@@ -26,10 +26,10 @@ const { recordIncident } = require("./incidents");
 //     channel: canal | "id",          canal onde aconteceu (opcional)
 //     fields: [["Campo", "valor"], "linha solta"],
 //     content: "texto",               mostrado num bloco de código (opcional)
-//     color: 0xe50000,                vermelho por padrão
+//     color: 0xff0000,                vermelho por padrão
 //   })
 // channelId vazio = usa o canal de alertas do núcleo.
-const RED = 0xe50000;
+const RED = 0xff0000;
 
 async function resolveUser(guild, author) {
   if (!author) return null;

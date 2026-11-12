@@ -1,4 +1,14 @@
-const { EmbedBuilder } = require("discord.js");
+const {
+  EmbedBuilder,
+  MessageFlags,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  SectionBuilder,
+  ThumbnailBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+} = require("discord.js");
 const { DEFAULT_COLOR, MESSAGE_DEFAULTS } = require("./defaults");
 
 // "2 hrs", "1 hr 30 min", "45 min", "1 dia"
@@ -66,6 +76,7 @@ function buildBumpMessage(kind, cfg, ctx) {
   // Campos de texto que podem ter variáveis
   const raw = {
     text: msg.text,
+    containerText: msg.containerText,
     embedTitle: msg.embedTitle,
     embedDescription: msg.embedDescription,
     embedFooter: msg.embedFooter,
@@ -74,7 +85,8 @@ function buildBumpMessage(kind, cfg, ctx) {
   const used = (name) =>
     Object.entries(raw).some(
       ([key, value]) =>
-        (msg.mode === "text" ? key === "text" : key !== "text") && String(value).includes(`{${name}}`)
+        (msg.mode === "text" ? key === "text" : msg.mode === "container" ? key === "containerText" : !["text", "containerText"].includes(key)) &&
+        String(value).includes(`{${name}}`)
     );
 
   // Marcações automáticas ficam numa linha no topo (fora da embed, para notificar de verdade)
@@ -83,6 +95,10 @@ function buildBumpMessage(kind, cfg, ctx) {
   if (ctx.pingUser && ctx.user && !used("user")) pings.push(`<@${ctx.user.id}>`);
 
   const f = (value) => fill(value, vars);
+
+  // Imagem de canto: ícone do servidor (se ligado e o servidor tiver ícone) ou o link configurado
+  const serverIcon = ctx.guild?.iconURL?.({ extension: "png", size: 512 }) ?? null;
+  const corner = (link) => (msg.thumbnailServer && serverIcon ? serverIcon : isUrl(link) ? link : null);
   const payload = {
     allowedMentions: {
       parse: [],
@@ -91,7 +107,44 @@ function buildBumpMessage(kind, cfg, ctx) {
     },
   };
 
-  if (msg.mode === "embed") {
+  if (msg.mode === "container") {
+    // Mensagem em Components V2 não aceita "content": as marcações vão num texto acima do container
+    const body = f(msg.containerText).trim() || fill(defaults.containerText, vars);
+    const parts = body
+      .slice(0, 3500)
+      .split(/\n[ \t]*\[separador\][ \t]*\n/i)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const container = new ContainerBuilder();
+    const accent = parseColor(msg.containerColor);
+    if (accent !== null) container.setAccentColor(accent);
+
+    const display = (value) => new TextDisplayBuilder().setContent(value);
+    parts.forEach((part, i) => {
+      if (i > 0) container.addSeparatorComponents(new SeparatorBuilder());
+      const thumb = corner(msg.containerThumbnail);
+      if (i === 0 && thumb) {
+        container.addSectionComponents(
+          new SectionBuilder()
+            .addTextDisplayComponents(display(part))
+            .setThumbnailAccessory(new ThumbnailBuilder().setURL(thumb))
+        );
+      } else {
+        container.addTextDisplayComponents(display(part));
+      }
+    });
+    if (isUrl(msg.containerImage)) {
+      container.addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(msg.containerImage))
+      );
+    }
+
+    payload.components = [];
+    if (pings.length) payload.components.push(display(pings.join(" ")));
+    payload.components.push(container);
+    payload.flags = MessageFlags.IsComponentsV2;
+  } else if (msg.mode === "embed") {
     const embed = new EmbedBuilder().setColor(parseColor(msg.embedColor) ?? parseColor(DEFAULT_COLOR));
 
     const title = f(msg.embedTitle).slice(0, 256);
@@ -116,7 +169,8 @@ function buildBumpMessage(kind, cfg, ctx) {
       });
     }
 
-    if (isUrl(msg.embedThumbnail)) embed.setThumbnail(msg.embedThumbnail);
+    const embedThumb = corner(msg.embedThumbnail);
+    if (embedThumb) embed.setThumbnail(embedThumb);
     if (isUrl(msg.embedImage)) embed.setImage(msg.embedImage);
     if (msg.embedTimestamp) embed.setTimestamp(ctx.now);
 

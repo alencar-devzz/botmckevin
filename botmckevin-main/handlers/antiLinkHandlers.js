@@ -1,13 +1,14 @@
 const { MessageFlags, PermissionFlagsBits } = require("discord.js");
 const { getAntiRaidConfig, updateAntiRaidConfig } = require("../utils/antiraid/store");
 const D = require("../utils/antiraid/defaults");
-const { parseDomainList, extractLinks } = require("../utils/antiraid/linkTools");
+const { parseDomainList, parseWrappers, extractLinks } = require("../utils/antiraid/linkTools");
 const { buildNotice } = require("../ui/antiraid");
 const {
   buildAntiLinkPanel,
   buildAntiLinkResponsePanel,
   buildDomainModal,
   buildGuildsModal,
+  buildWrapModal,
   buildMessageModal,
 } = require("../ui/antiraidLink");
 
@@ -78,6 +79,8 @@ async function handleAntiLinkButton(interaction) {
       return interaction.showModal(buildDomainModal("allow", antiLink.allowedDomains));
     case "ar:al:domBlock":
       return interaction.showModal(buildDomainModal("block", antiLink.blockedDomains));
+    case "ar:al:wrap":
+      return interaction.showModal(buildWrapModal(antiLink.wrappers));
     case "ar:al:guilds":
       return interaction.showModal(buildGuildsModal(antiLink.allowedGuilds));
     case "ar:al:msg":
@@ -222,6 +225,12 @@ async function handleAntiLinkModal(interaction) {
     if (invalid.length) {
       notes.push(`Não consegui identificar o servidor de: ${invalid.map((v) => `\`${v}\``).join(", ")}. Use o ID ou um convite que ainda funcione.`);
     }
+    await redraw(interaction, "antiLink");
+  } else if (kind === "wrap") {
+    const { list, invalid, truncated } = parseWrappers(raw, D.AL_MAX_WRAPPERS);
+    await updateAntiRaidConfig(guild.id, { "antiLink.wrappers": list });
+    if (invalid.length) notes.push(`Ignorei o que não é um par de símbolos: ${invalid.map((v) => `\`${v}\``).join(", ")}. Use algo como \`< >\` ou \`[ ]\`.`);
+    if (truncated) notes.push(`O limite é de ${D.AL_MAX_WRAPPERS} pares; o excedente ficou de fora.`);
     await redraw(interaction, "antiLink");
   } else if (kind === "msg") {
     const message = raw.trim() || D.DEFAULTS.antiLink.message;

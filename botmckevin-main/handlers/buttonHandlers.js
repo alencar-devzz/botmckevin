@@ -19,7 +19,6 @@ const { handleRoleManageButton, handleRoleManageConfigButton } = require("./role
 const { handleBumpButton } = require("./bumpHandlers");
 const { handleAntiRaidButton } = require("./antiRaidHandlers");
 const { handleMessageButton } = require("./mensagemHandlers");
-const { attachAckSafetyNet } = require("../utils/interactionAckSafetyNet");
 
 const {
   handleCallHubConfigButton,
@@ -28,11 +27,6 @@ const {
 
 async function handleButton(interaction) {
   const { customId } = interaction;
-
-  // Rede de segurança: dá tempo extra (bem mais que 3s) para o botão
-  // responder antes de falhar. Botões que abrem modal ficam de fora disso
-  // automaticamente — veja utils/interactionAckSafetyNet.js.
-  attachAckSafetyNet(interaction);
 
   // Central de ajuda (comando /help)
   if (customId.startsWith("help:")) {

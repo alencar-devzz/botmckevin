@@ -20,8 +20,12 @@ const str = (value, fallback) => (typeof value === "string" ? value : fallback);
 function toMessage(doc, kind) {
   const d = MESSAGE_DEFAULTS[kind];
   return {
-    mode: doc?.mode === "embed" ? "embed" : "text",
+    mode: ["text", "embed", "container"].includes(doc?.mode) ? doc.mode : d.mode,
     text: str(doc?.text, d.text),
+    containerText: str(doc?.containerText, d.containerText),
+    containerColor: str(doc?.containerColor, d.containerColor),
+    containerThumbnail: str(doc?.containerThumbnail, d.containerThumbnail),
+    containerImage: str(doc?.containerImage, d.containerImage),
     embedTitle: str(doc?.embedTitle, d.embedTitle),
     embedUrl: str(doc?.embedUrl, d.embedUrl),
     embedDescription: str(doc?.embedDescription, d.embedDescription),
@@ -32,6 +36,7 @@ function toMessage(doc, kind) {
     embedAuthorIcon: str(doc?.embedAuthorIcon, d.embedAuthorIcon),
     embedThumbnail: str(doc?.embedThumbnail, d.embedThumbnail),
     embedImage: str(doc?.embedImage, d.embedImage),
+    thumbnailServer: doc?.thumbnailServer ?? false,
     embedTimestamp: doc?.embedTimestamp ?? d.embedTimestamp,
   };
 }
