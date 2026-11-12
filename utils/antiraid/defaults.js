@@ -6,9 +6,8 @@ const DEFAULTS = {
     enabled: false,
     mode: "test", // "test" = só registra e avisa | "live" = pune de verdade
     punishment: "strip", // none | strip | kick | ban
-    actions: ["channelDelete", "roleDelete", "ban", "kick", "webhookCreate"],
-    limit: 3, // ações do MESMO tipo dentro da janela
-    totalLimit: 0, // ações de tipos diferentes somadas (0 = automático: 1,5x o limite)
+    actions: ["channelDelete", "roleDelete", "ban", "kick"],
+    limit: 3,
     windowSec: 10,
     alertChannelId: null,
     exemptUsers: [],
@@ -24,11 +23,7 @@ const DEFAULTS = {
     newAccountDays: 7,
     lockdownLevel: "high", // nível de verificação durante o lockdown
     lockdownMin: 10,
-    suspectAction: "timeout", // none | timeout | kick
-    volumeLockdown: true, // volume MUITO acima do gatilho já aciona o lockdown, mesmo sem contas suspeitas
-    volumeFactor: 2, // "muito acima" = gatilho x este fator
-    pauseInvites: true, // durante o lockdown, pausa a criação de convites (incident actions do Discord)
-    pauseDms: true, // durante o lockdown, pausa as DMs entre membros do servidor
+    suspectAction: "none", // none | timeout | kick
     pausedUntil: 0, // modo evento: timestamp até quando a análise fica pausada
     alertChannelId: null, // vazio = usa o canal do núcleo
     lockdown: null, // { until, prev, level } enquanto estiver em lockdown
@@ -36,9 +31,7 @@ const DEFAULTS = {
   spam: {
     enabled: false,
     ignoreStaff: true, // ignora quem tem Gerenciar Mensagens
-    requireSignal: true, // volume sozinho não pune até chegar ao limite x volumeFactor: antes disso exige um sinal de spam
-    volumeFactor: 2, // com "exigir sinal" ligado, volume puro pune a partir de limite x este fator
-    includeWebhooks: true, // também analisa mensagens enviadas por webhooks (e apaga o webhook que fizer spam)
+    requireSignal: true, // volume sozinho não pune: exige um sinal de spam
     limit: 6,
     windowSec: 5,
     signals: ["duplicates", "mentions", "invites", "links"],
@@ -64,7 +57,6 @@ const DEFAULTS = {
     bareDomains: true, // também pega "site.com" escrito sem https://
     wrappers: [], // pares de símbolos configurados no painel, ex.: ["<>", "[]"]: apaga qualquer texto escrito entre eles
     ignoreStaff: true, // ignora quem tem Gerenciar Mensagens
-    includeWebhooks: true, // também confere mensagens enviadas por webhooks
     exemptRoles: [],
     exemptChannels: [],
     exemptUsers: [],
@@ -100,7 +92,6 @@ const DEFAULTS = {
     enabled: false,
     monitored: ["administrator", "manageGuild", "manageRoles", "manageChannels", "manageWebhooks", "banMembers", "kickMembers"],
     response: "revert",
-    guardGrants: true, // também vigia a ENTREGA de cargos que têm permissão monitorada (não só a edição do cargo)
     authorizedUsers: [],
     authorizedRoles: [],
     alertChannelId: null,
@@ -132,6 +123,13 @@ const DEFAULTS = {
     alertChannelId: null, // vazio = usa o canal do núcleo
     snapshot: null, // referência salva: { name, description, icon, banner, splash, discoverySplash, savedAt }
   },
+  panic: {
+    actions: ["invites", "dms", "verification"], // chaves de PANIC_ACTIONS que o botão de pânico aplica
+    level: "veryHigh", // nível de verificação do pânico (chaves de MJ_LEVELS)
+    durationMin: 60, // o pânico desfaz sozinho depois disso
+    alertChannelId: null, // vazio = usa o canal do núcleo
+    active: null, // { since, until, by, invites, dms, verification, lock } enquanto o pânico estiver ligado
+  },
   native: {
     alertChannelId: null, // canal de alertas das regras de AutoMod criadas pelo painel
     mentionLimit: 5, // limite da regra de spam de menções
@@ -147,11 +145,6 @@ const CORE_ACTIONS = {
   roleCreate: "Criar cargos",
   ban: "Banir membros",
   kick: "Expulsar membros",
-  webhookCreate: "Criar webhooks",
-  emojiDelete: "Excluir emojis e figurinhas",
-  channelPerms: "Alterar permissões de canais",
-  inviteCreate: "Criar convites",
-  timeout: "Silenciar membros (timeout)",
 };
 
 const CORE_LIMITS = [2, 3, 4, 5, 6, 8, 10, 15];
@@ -163,6 +156,17 @@ const PUNISHMENTS = {
   kick: { label: "Remover cargos e expulsar", desc: "Tira os cargos e expulsa do servidor." },
   ban: { label: "Banir", desc: "Bane o autor do servidor." },
 };
+
+// ---- Pânico ----
+const PANIC_ACTIONS = {
+  invites: { label: "Pausar convites", desc: "Ninguém entra por convite enquanto durar." },
+  dms: { label: "Pausar mensagens diretas", desc: "Pausa as DMs entre membros pelo servidor." },
+  verification: { label: "Subir a verificação", desc: "Eleva o nível de verificação do servidor." },
+  lock: { label: "Trancar o chat para @everyone", desc: "Tira envio de mensagens e reações de @everyone." },
+};
+const PANIC_DURATIONS = [15, 30, 60, 180, 360, 720, 1440];
+// Permissões que o pânico tira de @everyone quando "Trancar o chat" está marcado
+const PANIC_LOCK_PERMS = ["SendMessages", "SendMessagesInThreads", "CreatePublicThreads", "CreatePrivateThreads", "AddReactions"];
 
 // Lista usada no menu geral. "active" diz se o módulo está ligado.
 const MODULES = [
@@ -302,9 +306,6 @@ const VS_FIELDS = {
   splash: "Plano de fundo do convite",
   discoverySplash: "Plano de fundo da descoberta",
   description: "Descrição",
-  verification: "Nível de verificação",
-  contentFilter: "Filtro de conteúdo explícito",
-  vanity: "URL personalizada (vanity)",
 };
 const VS_RESPONSES = {
   warn: { label: "Somente avisar · não reverter", desc: "Não desfaz nada e não pune.", revert: false, punish: "none" },
@@ -394,4 +395,7 @@ module.exports = {
   SPAM_WARN_SEC,
   SPAM_TIMEOUT_MIN,
   SPAM_SIGNALS,
+  PANIC_ACTIONS,
+  PANIC_DURATIONS,
+  PANIC_LOCK_PERMS,
   DEFAULTS, CORE_ACTIONS, CORE_LIMITS, CORE_WINDOWS, PUNISHMENTS, MODULES };

@@ -1,6 +1,7 @@
 const { MessageFlags } = require("discord.js");
 const { buildLogComponents } = require("../logs/render");
 const { userBlock, channelBlock, codeBlock, code } = require("../logs/format");
+const { recordIncident } = require("./incidents");
 
 // Log padrão de TODOS os módulos de proteção do Anti-Raid, no mesmo estilo do log do Anti-link:
 //
@@ -48,6 +49,9 @@ const fieldLine = (f) => (Array.isArray(f) ? `**${f[0]}:** ${f[1]}` : String(f))
 const toField = (line) => String(line).replace(/^\*\*(.+?)\*\*\s{2,}/, "**$1:** ");
 
 async function sendModuleAlert(guild, cfg, channelId, spec) {
+  // Todo alerta entra no histórico de incidentes, mesmo sem canal de alertas definido
+  recordIncident(guild, spec);
+
   const id = channelId || cfg.core.alertChannelId;
   const target = id ? guild.channels.cache.get(id) : null;
   if (!target?.isTextBased()) return;

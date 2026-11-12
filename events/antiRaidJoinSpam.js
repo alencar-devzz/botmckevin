@@ -1,5 +1,6 @@
 const { onMemberAdd, resumeLockdowns } = require("../utils/antiraid/massJoin");
 const { onMessage } = require("../utils/antiraid/spam");
+const { resumePanics } = require("../utils/antiraid/panic");
 
 // Entrada em massa e Anti-spam. Erros nunca derrubam o bot nem os outros eventos.
 const wrap = (event) => ({
@@ -16,5 +17,12 @@ const wrap = (event) => ({
 module.exports = [
   { name: "guildMemberAdd", execute: onMemberAdd },
   { name: "messageCreate", execute: onMessage },
-  { name: "clientReady", once: true, execute: (client) => resumeLockdowns(client) },
+  {
+    name: "clientReady",
+    once: true,
+    execute: async (client) => {
+      await resumeLockdowns(client);
+      await resumePanics(client);
+    },
+  },
 ].map(wrap);

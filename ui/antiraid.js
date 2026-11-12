@@ -129,7 +129,7 @@ function buildAntiRaidHub(guild, cfg) {
     );
   });
 
-  containers.push(row(btn("ar:close", "Fechar")));
+  containers.push(row(btn("ar:quick", "Voltar ao início"), btn("ar:hist", "Histórico de incidentes"), btn("ar:close", "Fechar")));
   return containers;
 }
 
