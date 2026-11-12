@@ -39,6 +39,10 @@ async function deny(interaction, content) {
   return interaction.reply(payload).catch(() => {});
 }
 
+// Painel antigo (de antes de uma atualização) ou com botão inválido: antes saía em silêncio
+const staleNotice = (interaction) =>
+  deny(interaction, "Esse painel é de uma versão antiga ou está inválido. Use o comando de novo para abrir um painel novo.");
+
 // ======================= Painel do comando groles =======================
 
 // Monta os componentes do painel para um estado (usado pelo comando e pelas interações)
@@ -142,7 +146,7 @@ async function applyChange(interaction, state, kind) {
 async function handleRoleManageButton(interaction) {
   const [, action, raw] = interaction.customId.split(":");
   const state = decodeState(raw);
-  if (!state) return;
+  if (!state) return staleNotice(interaction);
 
   const cfg = await guardPanel(interaction, state);
   if (!cfg) return;
@@ -160,12 +164,14 @@ async function handleRoleManageButton(interaction) {
     await interaction.deferUpdate();
     return show(interaction, state);
   }
+
+  return staleNotice(interaction);
 }
 
 async function handleRoleManageSelect(interaction) {
   const [, action, raw] = interaction.customId.split(":");
   const state = decodeState(raw);
-  if (!state) return;
+  if (!state) return staleNotice(interaction);
 
   const cfg = await guardPanel(interaction, state);
   if (!cfg) return;
@@ -199,7 +205,7 @@ function readSelectedRole(fields, id) {
 async function handleRoleManageModal(interaction) {
   const [, raw] = interaction.customId.split(":");
   const state = decodeState(raw);
-  if (!state) return;
+  if (!state) return staleNotice(interaction);
 
   const cfg = await guardPanel(interaction, state);
   if (!cfg) return;
@@ -415,11 +421,25 @@ async function handleRoleManageConfigModal(interaction) {
   return interaction.reply({ components, flags: V2 | EPHEMERAL });
 }
 
+// Todo clique do painel passa por aqui: aparece no log da Render e, se algo falhar, a pessoa recebe um aviso
+// (antes o erro era engolido e o botão parecia não fazer nada)
+const safe = (kind, fn) => async (interaction) => {
+  const parts = String(interaction.customId).split(":");
+  const action = kind === "modal" ? "buscar" : parts[1];
+  console.log(`[GROLES] ${kind}:${action} por ${interaction.user.id}`);
+  try {
+    return await fn(interaction);
+  } catch (err) {
+    console.error(`[GROLES] Erro em ${kind}:${action}:`, err);
+    return deny(interaction, "Não consegui atualizar o painel. Abra um novo com o comando e tente de novo.");
+  }
+};
+
 module.exports = {
   renderRolePanel,
-  handleRoleManageButton,
-  handleRoleManageSelect,
-  handleRoleManageModal,
+  handleRoleManageButton: safe("botao", handleRoleManageButton),
+  handleRoleManageSelect: safe("select", handleRoleManageSelect),
+  handleRoleManageModal: safe("modal", handleRoleManageModal),
   openRoleManagePanel,
   handleRoleManageConfigSelect,
   handleRoleManageConfigButton,
