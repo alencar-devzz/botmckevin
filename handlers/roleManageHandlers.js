@@ -14,8 +14,6 @@ const {
 } = require("../utils/roleManage");
 const { TEXT_KEYS, DEFAULT_TEXTS } = require("../utils/roleManageDefaults");
 const { getPrefix } = require("../utils/getPrefix");
-const { suppressRoleChange, unsuppressRoleChange } = require("../utils/logs/suppress");
-const { logPanelRoleChange } = require("../utils/logs/panelRoles");
 const { buildRolePanel, buildSearchModal, buildNotice } = require("../ui/grolesPanel");
 const {
   buildRoleManageHome,
@@ -48,7 +46,9 @@ const staleNotice = (interaction) =>
 // Monta os componentes do painel para um estado (usado pelo comando e pelas interações)
 async function renderRolePanel({ guild, executor, state, results = null }) {
   const cfg = await getRoleManageConfig(guild.id);
-  await ensureMembers(guild);
+  // Carregar todos os membros pode levar até 20s; o painel não espera por isso (só uns instantes).
+  // A contagem de membros por cargo se completa assim que o carregamento termina em segundo plano.
+  await Promise.race([ensureMembers(guild), new Promise((resolve) => setTimeout(resolve, 2000))]);
 
   const target = state.t ? await guild.members.fetch(state.t).catch(() => null) : null;
   const role = state.r ? guild.roles.cache.get(state.r) ?? null : null;
@@ -79,13 +79,15 @@ async function guardPanel(interaction, state) {
 }
 
 async function show(interaction, state, results = null) {
+  const started = Date.now();
   const components = await renderRolePanel({
     guild: interaction.guild,
     executor: interaction.member,
     state,
     results,
   });
-  return interaction.editReply({ components, flags: V2, allowedMentions: noMentions });
+  await interaction.editReply({ components, flags: V2, allowedMentions: noMentions });
+  console.log(`[GROLES] painel atualizado em ${Date.now() - started}ms`);
 }
 
 async function applyChange(interaction, state, kind) {
@@ -118,22 +120,12 @@ async function applyChange(interaction, state, kind) {
       await deny(interaction, "Essa pessoa já tem esse cargo.");
     } else {
       const reason = `Gerenciamento de cargos por ${interaction.user.username} (${interaction.user.id})`;
-      // Marca antes de alterar: o log genérico de cargos ignora essa mudança e o painel envia o log próprio
-      suppressRoleChange(guild.id, target.id, role.id, kind);
-      let changed = false;
       try {
         if (kind === "add") await target.roles.add(role, reason);
         else await target.roles.remove(role, reason);
-        changed = true;
       } catch (err) {
-        unsuppressRoleChange(guild.id, target.id, role.id, kind);
         console.error("[GROLES] Erro ao alterar cargo:", err);
         await deny(interaction, "Não consegui alterar o cargo dessa pessoa.");
-      }
-      if (changed) {
-        logPanelRoleChange({ guild, executor: interaction.user, target, role, kind }).catch((err) =>
-          console.error("[GROLES] Erro ao registrar log:", err)
-        );
       }
       // O cache do membro só atualiza quando o evento do gateway chega; força a leitura para o painel já sair certo
       await guild.members.fetch({ user: target.id, force: true }).catch(() => {});
