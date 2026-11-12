@@ -84,6 +84,7 @@ const LOG_CATEGORIES = {
       "Cargos criados e excluídos",
       "Cargos editados (nome, cor, permissões)",
       "Cargos adicionados ou removidos de membros (juntos numa embed)",
+      "Cargos dados ou removidos pelo painel n!groles (uma embed por pessoa, juntando tudo o que o staff fez)",
       "Ações em massa (vários cargos de uma vez) saem numa embed única",
     ],
   },

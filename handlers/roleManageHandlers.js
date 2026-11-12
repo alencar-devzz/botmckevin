@@ -14,6 +14,8 @@ const {
 } = require("../utils/roleManage");
 const { TEXT_KEYS, DEFAULT_TEXTS } = require("../utils/roleManageDefaults");
 const { getPrefix } = require("../utils/getPrefix");
+const { suppressRoleChange, unsuppressRoleChange } = require("../utils/logs/suppress");
+const { logPanelRoleChange } = require("../utils/logs/panelRoles");
 const { buildRolePanel, buildSearchModal, buildNotice } = require("../ui/grolesPanel");
 const {
   buildRoleManageHome,
@@ -112,12 +114,22 @@ async function applyChange(interaction, state, kind) {
       await deny(interaction, "Essa pessoa já tem esse cargo.");
     } else {
       const reason = `Gerenciamento de cargos por ${interaction.user.username} (${interaction.user.id})`;
+      // Marca antes de alterar: o log genérico de cargos ignora essa mudança e o painel envia o log próprio
+      suppressRoleChange(guild.id, target.id, role.id, kind);
+      let changed = false;
       try {
         if (kind === "add") await target.roles.add(role, reason);
         else await target.roles.remove(role, reason);
+        changed = true;
       } catch (err) {
+        unsuppressRoleChange(guild.id, target.id, role.id, kind);
         console.error("[GROLES] Erro ao alterar cargo:", err);
         await deny(interaction, "Não consegui alterar o cargo dessa pessoa.");
+      }
+      if (changed) {
+        logPanelRoleChange({ guild, executor: interaction.user, target, role, kind }).catch((err) =>
+          console.error("[GROLES] Erro ao registrar log:", err)
+        );
       }
       // O cache do membro só atualiza quando o evento do gateway chega; força a leitura para o painel já sair certo
       await guild.members.fetch({ user: target.id, force: true }).catch(() => {});

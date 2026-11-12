@@ -2,6 +2,7 @@ const { AuditLogEvent } = require("discord.js");
 const { activeCategory, deliver } = require("./send");
 const { findAudit, executorText, originLabel } = require("./audit");
 const { COLORS, userBrief, unix, code } = require("./format");
+const { consumeRoleChange } = require("./suppress");
 
 module.exports = [
   // Banimento
@@ -87,8 +88,13 @@ module.exports = [
 
       // ----- cargos adicionados / removidos -----
       if (oldMember.partial) return;
-      const added = newMember.roles.cache.filter((r) => !oldMember.roles.cache.has(r.id));
-      const removed = oldMember.roles.cache.filter((r) => !newMember.roles.cache.has(r.id));
+      // Mudanças feitas pelo painel n!groles têm log próprio (utils/logs/panelRoles.js), então saem daqui
+      const added = newMember.roles.cache.filter(
+        (r) => !oldMember.roles.cache.has(r.id) && !consumeRoleChange(guild.id, user.id, r.id, "add")
+      );
+      const removed = oldMember.roles.cache.filter(
+        (r) => !newMember.roles.cache.has(r.id) && !consumeRoleChange(guild.id, user.id, r.id, "rem")
+      );
       if (!added.size && !removed.size) return;
 
       const cfg = await activeCategory(guild, "cargos");

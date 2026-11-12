@@ -22,4 +22,34 @@ function clearSuppressed(list) {
   setTimeout(() => list.forEach((id) => ids.delete(id)), 15_000);
 }
 
-module.exports = { suppressMessage, isSuppressed, clearSuppressed };
+// Cargos dados/removidos pelo painel n!groles: o log genérico de cargos (guildMemberUpdate) ignora essas mudanças,
+// porque o painel já envia o próprio log com o staff que realmente clicou (utils/logs/panelRoles.js).
+const roleChanges = new Map(); // guildId:userId:roleId:tipo -> expira em (ms)
+const ROLE_TTL = 30_000;
+const roleKey = (guildId, userId, roleId, kind) => `${guildId}:${userId}:${roleId}:${kind}`;
+
+function suppressRoleChange(guildId, userId, roleId, kind) {
+  roleChanges.set(roleKey(guildId, userId, roleId, kind), Date.now() + ROLE_TTL);
+}
+
+function unsuppressRoleChange(guildId, userId, roleId, kind) {
+  roleChanges.delete(roleKey(guildId, userId, roleId, kind));
+}
+
+// Retorna true (e consome a marca) se essa mudança veio do painel
+function consumeRoleChange(guildId, userId, roleId, kind) {
+  const key = roleKey(guildId, userId, roleId, kind);
+  const exp = roleChanges.get(key);
+  if (!exp) return false;
+  roleChanges.delete(key);
+  return exp >= Date.now();
+}
+
+module.exports = {
+  suppressMessage,
+  isSuppressed,
+  clearSuppressed,
+  suppressRoleChange,
+  unsuppressRoleChange,
+  consumeRoleChange,
+};
