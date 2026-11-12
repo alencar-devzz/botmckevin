@@ -5,7 +5,6 @@ const { AA_RESPONSES } = require("./defaults");
 
 const DAY = 86_400_000;
 const MAX_TIMEOUT = 28 * DAY;
-const BAN_REASON_PREFIX = "Anti-Raid:";
 const timers = new Map(); // "guild:user" -> timeout do desbanimento
 
 // ---------- Banimento temporário (sobrevive a reinícios) ----------
@@ -19,12 +18,7 @@ function scheduleUnban(guild, userId, at) {
   clearTimeout(timers.get(key));
   const t = setTimeout(async () => {
     timers.delete(key);
-    // Só desbane se o banimento ainda é o do Anti-Raid: se um moderador baniu essa pessoa depois,
-    // o banimento dele não pode ser desfeito por aqui.
-    const ban = await guild.bans.fetch({ user: userId, force: true }).catch(() => null);
-    if (ban && String(ban.reason ?? "").startsWith(BAN_REASON_PREFIX)) {
-      await guild.members.unban(userId, "Anti-Raid: fim do banimento temporário").catch(() => {});
-    }
+    await guild.members.unban(userId, "Anti-Raid: fim do banimento temporário").catch(() => {});
     const cfg = await getAntiRaidConfig(guild.id);
     await savePending(guild.id, cfg.antiAlt.pendingUnbans.filter((p) => p.id !== userId));
   }, Math.max(1000, at - Date.now()));
@@ -50,7 +44,7 @@ async function notify(member, minDays, response, banMin) {
     .send({
       components: [
         new ContainerBuilder()
-          .setAccentColor(0xed4245)
+          .setAccentColor(0xff0000)
           .addTextDisplayComponents(
             new TextDisplayBuilder().setContent("### Entrada não permitida"),
             new TextDisplayBuilder().setContent(
@@ -63,32 +57,30 @@ async function notify(member, minDays, response, banMin) {
     .catch(() => {});
 }
 
-// Devolve true se a conta foi removida do servidor (expulsa ou banida)
 async function onAltJoin(member) {
-  if (member.user.bot) return false;
+  if (member.user.bot) return;
   const { guild } = member;
   const cfg = await getAntiRaidConfig(guild.id);
   const a = cfg.antiAlt;
-  if (!a.minAgeDays || a.exemptUsers.includes(member.id)) return false;
+  if (!a.minAgeDays || a.exemptUsers.includes(member.id)) return;
 
   const age = Date.now() - member.user.createdTimestamp;
   const required = a.minAgeDays * DAY;
-  if (age >= required) return false;
+  if (age >= required) return;
 
   if (a.notifyDm) await notify(member, a.minAgeDays, a.response, a.banMin);
 
-  const reason = `${BAN_REASON_PREFIX} conta com menos de ${a.minAgeDays} dia(s)`;
+  const reason = `Anti-Raid: conta com menos de ${a.minAgeDays} dia(s)`;
   let ok = false;
 
   if (a.response === "tempban") {
-    // Guarda o desbanimento ANTES de banir: se o bot cair no meio, o banimento não vira permanente
-    const at = Date.now() + a.banMin * 60_000;
-    const fresh = await getAntiRaidConfig(guild.id);
-    const others = fresh.antiAlt.pendingUnbans.filter((p) => p.id !== member.id);
-    await savePending(guild.id, [...others, { id: member.id, at }]);
     ok = await member.ban({ reason }).then(() => true).catch(() => false);
-    if (ok) scheduleUnban(guild, member.id, at);
-    else await savePending(guild.id, others);
+    if (ok) {
+      const at = Date.now() + a.banMin * 60_000;
+      const fresh = await getAntiRaidConfig(guild.id);
+      await savePending(guild.id, [...fresh.antiAlt.pendingUnbans.filter((p) => p.id !== member.id), { id: member.id, at }]);
+      scheduleUnban(guild, member.id, at);
+    }
   } else if (a.response === "timeout") {
     ok = await member.timeout(Math.min(required - age, MAX_TIMEOUT), reason).then(() => true).catch(() => false);
   } else {
@@ -106,7 +98,6 @@ async function onAltJoin(member) {
       ["Resultado", ok ? "aplicado" : "não consegui aplicar (permissão ou hierarquia)"],
     ],
   });
-  return ok && a.response !== "timeout";
 }
 
 module.exports = { onAltJoin, resumeUnbans };

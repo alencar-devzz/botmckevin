@@ -1,4 +1,4 @@
-const { PermissionFlagsBits, PermissionsBitField, GuildVerificationLevel } = require("discord.js");
+const { PermissionFlagsBits, PermissionsBitField, GuildVerificationLevel, ChannelType } = require("discord.js");
 const { getAntiRaidConfig, updateAntiRaidConfig } = require("./store");
 const { sendModuleAlert } = require("./alert");
 const { PANIC_LOCK_PERMS } = require("./defaults");
@@ -34,6 +34,88 @@ function missingPerms(guild, actions) {
   if (actions.some((a) => ["invites", "dms", "verification"].includes(a))) need.add(["Gerenciar servidor", PermissionFlagsBits.ManageGuild]);
   if (actions.includes("lock")) need.add(["Gerenciar cargos", PermissionFlagsBits.ManageRoles]);
   return [...need].filter(([, bit]) => !me?.permissions.has(bit)).map(([label]) => label);
+}
+
+// ---- Trava do chat ----
+// Só mexer no cargo @everyone não basta: canais com permissão própria para @everyone (o verde de
+// "Enviar mensagens") ignoram o cargo. Por isso o pânico também nega o envio no @everyone de cada canal
+// e guarda como estava, para devolver igual depois.
+const LOCK_TYPES = [
+  ChannelType.GuildText,
+  ChannelType.GuildAnnouncement,
+  ChannelType.GuildForum,
+  ChannelType.GuildMedia,
+  ChannelType.GuildVoice,
+  ChannelType.GuildStageVoice,
+];
+
+// Opções do permissionOverwrites.edit só para as permissões do pânico (true = permite, false = nega, null = neutro)
+function editFrom(allow, deny) {
+  const out = {};
+  for (const name of PANIC_LOCK_PERMS) {
+    const bit = PermissionFlagsBits[name];
+    out[name] = allow & bit ? true : deny & bit ? false : null;
+  }
+  return out;
+}
+
+async function inBatches(list, size, fn) {
+  for (let i = 0; i < list.length; i += size) await Promise.all(list.slice(i, i + size).map(fn));
+}
+
+const overwriteBits = (channel, id) => {
+  const cur = channel.permissionOverwrites?.cache.get(id);
+  return { cur, allow: cur ? BigInt(cur.allow.bitfield) : 0n, deny: cur ? BigInt(cur.deny.bitfield) : 0n };
+};
+
+// Nega o envio para @everyone em cada canal. Devolve { saved, done, failed }
+async function lockChannels(guild, why) {
+  const mask = lockMask();
+  const everyoneId = guild.roles.everyone.id;
+  const saved = {}; // canal -> [allow, deny] de antes (só as permissões do pânico) ou null se não havia regra
+  let done = 0;
+  let failed = 0;
+  const targets = [...guild.channels.cache.values()].filter((c) => LOCK_TYPES.includes(c.type) && c.permissionOverwrites);
+
+  await inBatches(targets, 5, async (channel) => {
+    const { cur, allow, deny } = overwriteBits(channel, everyoneId);
+    if ((deny & mask) === mask) return; // já estava negado
+    try {
+      await channel.permissionOverwrites.edit(guild.roles.everyone, editFrom(0n, mask), { reason: why });
+      saved[channel.id] = cur ? [(allow & mask).toString(), (deny & mask).toString()] : null;
+      done++;
+    } catch {
+      failed++;
+    }
+  });
+  return { saved, done, failed };
+}
+
+// Devolve cada canal ao que era. Se não havia regra de @everyone e ela ficou vazia, apaga a regra.
+async function unlockChannels(guild, saved, why) {
+  const mask = lockMask();
+  const everyoneId = guild.roles.everyone.id;
+  let done = 0;
+  let failed = 0;
+
+  await inBatches(Object.entries(saved), 5, async ([id, prev]) => {
+    const channel = guild.channels.cache.get(id);
+    if (!channel) return; // canal apagado durante o pânico
+    const { cur, allow, deny } = overwriteBits(channel, everyoneId);
+    const prevAllow = prev ? BigInt(prev[0]) : 0n;
+    const prevDeny = prev ? BigInt(prev[1]) : 0n;
+    try {
+      if (((allow & ~mask) | prevAllow) === 0n && ((deny & ~mask) | prevDeny) === 0n) {
+        if (cur) await cur.delete(why);
+      } else {
+        await channel.permissionOverwrites.edit(guild.roles.everyone, editFrom(prevAllow, prevDeny), { reason: why });
+      }
+      done++;
+    } catch {
+      failed++;
+    }
+  });
+  return { done, failed };
 }
 
 // ---- Pausa de convites e DMs (ações de incidente do Discord) ----
@@ -105,21 +187,31 @@ async function activatePanic(guild, user) {
       }
     }
 
-    // Trancar o chat: tira permissões de @everyone (só as que ele tinha) e guarda quais foram
+    // Trancar o chat: tira o envio do cargo @everyone e nega nos canais (guardando como estava)
     if (p.actions.includes("lock")) {
       const everyone = guild.roles.everyone;
       const had = new PermissionsBitField(everyone.permissions).bitfield & lockMask();
-      if (!had) {
-        note(true, "@everyone já não tinha permissão de escrever");
-      } else {
+      let roleBits = null;
+      let roleError = null;
+      if (had) {
         try {
           await everyone.setPermissions(new PermissionsBitField(everyone.permissions).remove(had), why);
-          state.lock = had.toString();
-          note(true, "chat trancado para @everyone");
+          roleBits = had.toString();
         } catch (err) {
-          note(false, `trancar o chat: ${explain(err)}`);
+          roleError = explain(err);
         }
       }
+
+      const chans = await lockChannels(guild, why);
+      if (roleBits || chans.done) state.lock = { role: roleBits, channels: chans.saved };
+
+      const parts = [];
+      if (roleBits) parts.push("cargo @everyone");
+      if (chans.done) parts.push(`${chans.done} canal(is)`);
+      if (parts.length) note(true, `chat trancado em: ${parts.join(" e ")}`);
+      else if (!roleError && !chans.failed) note(true, "o chat já estava trancado para @everyone");
+      if (roleError) note(false, `trancar o cargo @everyone: ${roleError}`);
+      if (chans.failed) note(false, `${chans.failed} canal(is) não puderam ser trancados (o bot precisa de Gerenciar permissões e ver o canal)`);
     }
 
     const applied = state.invites || state.dms || state.verification || state.lock;
@@ -135,7 +227,7 @@ async function activatePanic(guild, user) {
       action: "Pânico ativado",
       author: user,
       authorLabel: "Acionado por",
-      color: 0xed4245,
+      color: 0xff0000,
       fields: [["Resultado", lines.map((l) => `\n- ${l}`).join("")], ["Fim previsto", `<t:${Math.floor(until / 1000)}:R>`]],
     });
 
@@ -190,16 +282,27 @@ async function deactivatePanic(guild, user = null, motivo = "Desfeito pelo paine
     }
 
     if (state.lock) {
-      const bits = BigInt(state.lock);
-      const everyone = guild.roles.everyone;
-      try {
-        // Só devolve o que o pânico tirou, sem desfazer mudanças feitas depois
-        await everyone.setPermissions(new PermissionsBitField(everyone.permissions).add(bits), why);
-        note(true, "chat destrancado para @everyone");
-      } catch (err) {
-        const names = PANIC_LOCK_PERMS.filter((n) => bits & PermissionFlagsBits[n]).join(", ");
-        note(false, `destrancar o chat: ${explain(err)}. Devolva em @everyone: ${names}`);
+      // Formato antigo guardava só os bits do cargo, em texto
+      const lock = typeof state.lock === "string" ? { role: state.lock, channels: {} } : state.lock;
+      const failures = [];
+
+      if (lock.role) {
+        const bits = BigInt(lock.role);
+        const everyone = guild.roles.everyone;
+        try {
+          // Só devolve o que o pânico tirou, sem desfazer mudanças feitas depois
+          await everyone.setPermissions(new PermissionsBitField(everyone.permissions).add(bits), why);
+        } catch (err) {
+          const names = PANIC_LOCK_PERMS.filter((n) => bits & PermissionFlagsBits[n]).join(", ");
+          failures.push(`cargo @everyone: ${explain(err)}. Devolva em @everyone: ${names}`);
+        }
       }
+
+      const chans = await unlockChannels(guild, lock.channels ?? {}, why);
+      if (chans.failed) failures.push(`${chans.failed} canal(is) não voltaram ao normal; confira a permissão de @everyone neles`);
+
+      if (failures.length) failures.forEach((f) => note(false, `destrancar o chat: ${f}`));
+      else note(true, "chat destrancado para @everyone");
     }
 
     // O estado é limpo mesmo se algo falhou; o que ficou pendente aparece como "falhou" acima
@@ -210,7 +313,7 @@ async function deactivatePanic(guild, user = null, motivo = "Desfeito pelo paine
       action: "Pânico desativado",
       author: user ?? undefined,
       authorLabel: "Desfeito por",
-      color: 0x3ba55d,
+      color: 0x00e600,
       fields: [["Motivo", motivo], ["Resultado", lines.map((l) => `\n- ${l}`).join("")]],
     });
 

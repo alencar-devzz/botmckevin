@@ -12,14 +12,6 @@ const KIND = { [AuditLogEvent.MemberMove]: "move", [AuditLogEvent.MemberDisconne
 const counts = new Map(); // "guild:autor" -> [{ t, n }]
 const cooldown = new Map();
 
-// Limpa os registros antigos para não crescerem sem fim
-const cleaner = setInterval(() => {
-  const now = Date.now();
-  for (const [key, list] of counts) if (!list.length || now - list.at(-1).t > 5 * 60_000) counts.delete(key);
-  for (const [key, at] of cooldown) if (now - at > 10 * 60_000) cooldown.delete(key);
-}, 5 * 60_000);
-cleaner.unref?.();
-
 async function onAuditEntry(entry, guild) {
   const kind = KIND[entry.action];
   if (!kind || !entry.executorId) return;
@@ -47,7 +39,7 @@ async function onAuditEntry(entry, guild) {
     system: "Mov call",
     action: "Movimentação em massa",
     author: entry.executorId,
-    color: result ? 0xed4245 : 0xfaa61a,
+    color: result ? 0xff0000 : 0xffffff,
     fields: [
       ["Última ação", MV_ACTIONS[kind]],
       ["Total", `${code(`${total} membros em ${m.windowSec}s`)} (limite ${m.limit})`],
