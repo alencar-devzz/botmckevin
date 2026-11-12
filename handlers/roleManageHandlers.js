@@ -44,13 +44,15 @@ const staleNotice = (interaction) =>
 // ======================= Painel do comando groles =======================
 
 // Monta os componentes do painel para um estado (usado pelo comando e pelas interações)
-async function renderRolePanel({ guild, executor, state, results = null }) {
+async function renderRolePanel({ guild, executor, state, results = null, mark = () => {} }) {
   const cfg = await getRoleManageConfig(guild.id);
+  mark("config carregada");
   // Carregar todos os membros pode levar até 20s; o painel não espera por isso (só uns instantes).
-  // A contagem de membros por cargo se completa assim que o carregamento termina em segundo plano.
   await Promise.race([ensureMembers(guild), new Promise((resolve) => setTimeout(resolve, 2000))]);
+  mark("membros ok");
 
   const target = state.t ? await guild.members.fetch(state.t).catch(() => null) : null;
+  mark("pessoa carregada");
   const role = state.r ? guild.roles.cache.get(state.r) ?? null : null;
 
   const items = state.v === "l" ? collectRoles(guild, cfg, executor, target, state.f) : [];
@@ -61,7 +63,9 @@ async function renderRolePanel({ guild, executor, state, results = null }) {
         )
       : [];
 
-  return buildRolePanel({ cfg, guild, executor, target, role, state, results, items, holders });
+  const built = buildRolePanel({ cfg, guild, executor, target, role, state, results, items, holders });
+  mark("painel montado");
+  return built;
 }
 
 // Só quem abriu o painel mexe nele, e só enquanto ainda tiver permissão
@@ -80,14 +84,17 @@ async function guardPanel(interaction, state) {
 
 async function show(interaction, state, results = null) {
   const started = Date.now();
+  const mark = (label) => console.log(`[GROLES] ${label} (+${Date.now() - started}ms)`);
   const components = await renderRolePanel({
     guild: interaction.guild,
     executor: interaction.member,
     state,
     results,
+    mark,
   });
+  mark("enviando edição");
   await interaction.editReply({ components, flags: V2, allowedMentions: noMentions });
-  console.log(`[GROLES] painel atualizado em ${Date.now() - started}ms`);
+  mark("painel atualizado");
 }
 
 async function applyChange(interaction, state, kind) {
@@ -154,6 +161,7 @@ async function handleRoleManageButton(interaction) {
   // Navegação (flt, pg, hold, back, det): o botão já carrega o estado de destino
   if (["flt", "pg", "hold", "back", "det"].includes(action)) {
     await interaction.deferUpdate();
+    console.log("[GROLES] resposta adiada (deferUpdate ok)");
     return show(interaction, state);
   }
 
