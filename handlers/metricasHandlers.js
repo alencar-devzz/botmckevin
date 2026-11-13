@@ -11,9 +11,16 @@ const deny = (interaction) =>
     flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
   });
 
-// Botão Atualizar ("met:refresh:<tela>"). O botão do MongoDB é um link e não passa por aqui.
+// Botões "met:refresh:<tela>" (atualizar) e "met:db:<main|logs>" (troca de banco). O botão do MongoDB é um link e não passa por aqui.
 async function handleMetricsButton(interaction) {
   if (!isStaff(interaction)) return deny(interaction);
+
+  if (interaction.customId.startsWith("met:db:")) {
+    const view = interaction.customId === "met:db:logs" ? "banco2" : "banco";
+    await interaction.deferUpdate();
+    const data = await collectMetrics(interaction.client, interaction.guild);
+    return interaction.editReply({ components: buildMetricsPanel(data, view) });
+  }
 
   if (interaction.customId.startsWith("met:refresh")) {
     const view = interaction.customId.split(":")[2] ?? "saude";

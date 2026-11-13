@@ -3,6 +3,7 @@ const v8 = require("node:v8");
 const { performance, monitorEventLoopDelay } = require("node:perf_hooks");
 const mongoose = require("mongoose");
 const discord = require("discord.js");
+const { logsConnection, isSeparate: logsSeparate } = require("../database/logsConnection");
 
 // Coleta tudo o que o comando metricas mostra: Discord, memória (RAM), processo, banco de dados e saúde geral.
 // Nada aqui altera o bot: só lê números do Node, do discord.js e do MongoDB.
@@ -133,13 +134,14 @@ function discordInfo(client, guild) {
 // ---------- Banco de dados ----------
 const DB_STATES = { 0: "Desconectado", 1: "Conectado", 2: "Conectando", 3: "Desconectando" };
 const HEAVY_CACHE_MS = 30_000; // estatísticas pesadas ficam guardadas para não sobrecarregar o banco
-let heavyCache = null;
+const heavyCaches = new WeakMap(); // uma cache por conexão (banco principal e banco de mensagens)
 
 const withTimeout = (promise, ms, label) =>
   Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} sem resposta`)), ms))]);
 
-async function loadHeavy(db) {
-  if (heavyCache && Date.now() - heavyCache.at < HEAVY_CACHE_MS) return heavyCache.value;
+async function loadHeavy(db, cacheKey) {
+  const cached = heavyCaches.get(cacheKey);
+  if (cached && Date.now() - cached.at < HEAVY_CACHE_MS) return cached.value;
 
   const value = { stats: null, version: null, collections: [], collectionCount: null };
 
@@ -180,12 +182,12 @@ async function loadHeavy(db) {
     })(),
   ]);
 
-  heavyCache = { at: Date.now(), value };
+  heavyCaches.set(cacheKey, { at: Date.now(), value });
   return value;
 }
 
-async function databaseInfo() {
-  const conn = mongoose.connection;
+// Lê o estado de uma conexão do MongoDB (padrão: o banco principal)
+async function databaseInfo(conn = mongoose.connection) {
   const info = {
     state: conn.readyState,
     stateName: DB_STATES[conn.readyState] ?? "Desconhecido",
@@ -209,7 +211,7 @@ async function databaseInfo() {
     return info;
   }
 
-  const heavy = await loadHeavy(conn.db);
+  const heavy = await loadHeavy(conn.db, conn);
   return { ...info, ...heavy };
 }
 
@@ -253,7 +255,12 @@ async function collectMetrics(client, guild) {
   const memory = memoryInfo();
   const proc = processInfo();
   const d = discordInfo(client, guild);
-  const db = await databaseInfo();
+  const [db, dbLogsInfo] = await Promise.all([
+    databaseInfo(),
+    logsSeparate ? databaseInfo(logsConnection) : Promise.resolve(null),
+  ]);
+  // Banco de mensagens (logs): só existe como segundo banco se MONGO_URI_LOGS estiver definida
+  const dbLogs = { separate: logsSeparate, ...(dbLogsInfo ?? db) };
 
   return {
     at: Date.now(),
@@ -262,6 +269,7 @@ async function collectMetrics(client, guild) {
     memory,
     proc,
     db,
+    dbLogs,
     counters: { ...counters },
     health: judge({ discord: d, db, memory, proc }),
   };

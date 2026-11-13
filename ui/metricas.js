@@ -13,7 +13,7 @@ const {
 
 // Painel do comando metricas. Components V2, sem cor de destaque e no mesmo estilo do painel do painelps:
 // título, um container com "### Seção" e linhas "**Nome**  `valor`", dropdown para escolher o que ver e botões numa linha embaixo.
-// IDs dos componentes: "met:view" (dropdown) e "met:refresh:<tela>" (botão atualizar)
+// IDs dos componentes: "met:view" (dropdown), "met:refresh:<tela>" (botão atualizar) e "met:db:<main|logs>" (alterna entre os dois bancos)
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content));
 const box = () => new ContainerBuilder();
@@ -61,6 +61,12 @@ const MONGODB_PROJECT_ID = "6ae250477b53ad3a06e6fc6f";
 function mongoUrl() {
   const custom = (process.env.MONGODB_URL ?? "").trim();
   return /^https?:\/\//i.test(custom) ? custom : `https://cloud.mongodb.com/v2/${MONGODB_PROJECT_ID}#/clusters`;
+}
+
+// Link do Atlas do banco de mensagens (outro cluster/projeto). Defina MONGODB_LOGS_URL na Render para abrir direto nele.
+function mongoLogsUrl() {
+  const custom = (process.env.MONGODB_LOGS_URL ?? "").trim();
+  return /^https?:\/\//i.test(custom) ? custom : "https://cloud.mongodb.com/";
 }
 
 // ---------- Seções ----------
@@ -138,9 +144,15 @@ function activitySection(data) {
   ].join("\n");
 }
 
-function databaseSection(data, withCollections) {
-  const db = data.db;
-  const lines = ["### Banco de dados (MongoDB)", `**Estado**  ${tag(db.stateName)}${db.name ? `  ·  **Banco**  ${tag(db.name)}` : ""}`];
+// which: "main" (banco principal) ou "logs" (segundo banco, só com as mensagens do sistema de logs)
+function databaseSection(data, withCollections, which = "main") {
+  const logs = which === "logs";
+  const db = logs ? data.dbLogs : data.db;
+  const lines = [
+    logs ? "### Banco de mensagens (MongoDB)" : "### Banco de dados (MongoDB)",
+    ...(logs ? ["-# Segundo banco: guarda só as mensagens usadas nos logs de editadas e excluídas."] : []),
+    `**Estado**  ${tag(db.stateName)}${db.name ? `  ·  **Banco**  ${tag(db.name)}` : ""}`,
+  ];
 
   if (!db.ready) {
     lines.push("-# Sem conexão com o MongoDB agora. Use o botão abaixo para ver o estado do cluster.");
@@ -181,6 +193,8 @@ const VIEWS = [
   { key: "discord", label: "Discord", description: "Conexão, latência, cache e comandos", build: discordSection },
   { key: "atividade", label: "Atividade", description: "Comandos, interações e erros desde que ligou", build: activitySection },
   { key: "banco", label: "Banco de dados", description: "MongoDB: latência, tamanho e coleções", build: (data) => databaseSection(data, true) },
+  // Tela escondida do dropdown: abre pelo botão da aba "Banco de dados" (o dropdown continua marcando "Banco de dados")
+  { key: "banco2", label: "Banco de mensagens", hidden: true, parent: "banco", build: (data) => databaseSection(data, true, "logs") },
 ];
 
 const findView = (key) => VIEWS.find((v) => v.key === key) ?? VIEWS[0];
@@ -206,13 +220,33 @@ function buildMetricsPanel(data, viewKey = "saude") {
           .setCustomId("met:view")
           .setPlaceholder("Escolha o que ver")
           .addOptions(
-            VIEWS.map((v) => ({ label: v.label, description: v.description, value: v.key, default: v.key === view.key }))
+            VIEWS.filter((v) => !v.hidden).map((v) => ({
+              label: v.label,
+              description: v.description,
+              value: v.key,
+              default: v.key === (view.parent ?? view.key),
+            }))
           )
       )
     );
 
+  const onLogsDb = view.key === "banco2";
   const buttons = row(
-    new ButtonBuilder().setLabel("Abrir MongoDB").setStyle(ButtonStyle.Link).setURL(mongoUrl()),
+    new ButtonBuilder()
+      .setLabel(onLogsDb ? "Abrir MongoDB (mensagens)" : "Abrir MongoDB")
+      .setStyle(ButtonStyle.Link)
+      .setURL(onLogsDb ? mongoLogsUrl() : mongoUrl())
+  );
+  // Aba do banco de dados: botão que troca entre o banco principal e o banco de mensagens (só se existir o segundo)
+  if ((view.key === "banco" || onLogsDb) && data.dbLogs?.separate) {
+    buttons.addComponents(
+      new ButtonBuilder()
+        .setCustomId(onLogsDb ? "met:db:main" : "met:db:logs")
+        .setLabel(onLogsDb ? "Ver banco principal" : "Ver banco de mensagens")
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
+  buttons.addComponents(
     new ButtonBuilder()
       .setCustomId(`met:refresh:${view.key}`)
       .setStyle(ButtonStyle.Secondary)
