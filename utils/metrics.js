@@ -120,6 +120,7 @@ function discordInfo(client, guild) {
     prefix: [...commands].filter((c) => typeof c.execute === "function").length,
     guild: guild
       ? {
+          name: guild.name,
           members: guild.members.cache.size,
           memberCount: guild.memberCount,
           roles: guild.roles.cache.size,
@@ -142,41 +143,42 @@ async function loadHeavy(db) {
 
   const value = { stats: null, version: null, collections: [], collectionCount: null };
 
-  try {
-    const s = await withTimeout(db.command({ dbStats: 1, scale: 1 }), 4000, "dbStats");
-    value.stats = {
-      collections: s.collections ?? null,
-      objects: s.objects ?? null,
-      dataSize: s.dataSize ?? null,
-      storageSize: s.storageSize ?? null,
-      indexes: s.indexes ?? null,
-      indexSize: s.indexSize ?? null,
-    };
-  } catch {
-    // sem permissão ou banco lento: o painel mostra só o que conseguiu
-  }
-
-  try {
-    const info = await withTimeout(db.admin().command({ buildInfo: 1 }), 4000, "buildInfo");
-    value.version = info.version ?? null;
-  } catch {
-    // alguns planos não liberam esse comando
-  }
-
-  try {
-    const list = await withTimeout(db.listCollections({}, { nameOnly: true }).toArray(), 4000, "listCollections");
-    value.collectionCount = list.length;
-    const counted = await withTimeout(
-      Promise.allSettled(list.map((c) => db.collection(c.name).estimatedDocumentCount())),
-      5000,
-      "contagem"
-    );
-    value.collections = list
-      .map((c, i) => ({ name: c.name, docs: counted[i].status === "fulfilled" ? counted[i].value : 0 }))
-      .sort((a, b) => b.docs - a.docs);
-  } catch {
-    // segue sem a lista de coleções
-  }
+  // As três consultas rodam juntas; se alguma falhar (sem permissão ou banco lento), o painel mostra só o que conseguiu
+  await Promise.all([
+    (async () => {
+      try {
+        const s = await withTimeout(db.command({ dbStats: 1, scale: 1 }), 4000, "dbStats");
+        value.stats = {
+          collections: s.collections ?? null,
+          objects: s.objects ?? null,
+          dataSize: s.dataSize ?? null,
+          storageSize: s.storageSize ?? null,
+          indexes: s.indexes ?? null,
+          indexSize: s.indexSize ?? null,
+        };
+      } catch {}
+    })(),
+    (async () => {
+      try {
+        const info = await withTimeout(db.admin().command({ buildInfo: 1 }), 4000, "buildInfo");
+        value.version = info.version ?? null;
+      } catch {}
+    })(),
+    (async () => {
+      try {
+        const list = await withTimeout(db.listCollections({}, { nameOnly: true }).toArray(), 4000, "listCollections");
+        value.collectionCount = list.length;
+        const counted = await withTimeout(
+          Promise.allSettled(list.map((c) => db.collection(c.name).estimatedDocumentCount())),
+          5000,
+          "contagem"
+        );
+        value.collections = list
+          .map((c, i) => ({ name: c.name, docs: counted[i].status === "fulfilled" ? counted[i].value : 0 }))
+          .sort((a, b) => b.docs - a.docs);
+      } catch {}
+    })(),
+  ]);
 
   heavyCache = { at: Date.now(), value };
   return value;

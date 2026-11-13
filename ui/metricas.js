@@ -8,20 +8,18 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  StringSelectMenuBuilder,
 } = require("discord.js");
 
 // Painel do comando metricas. Components V2, sem cor de destaque e no mesmo estilo do painel do painelps:
-// título, containers com "### Seção" e linhas "**Nome**  `valor`", botões numa linha embaixo.
-// IDs dos componentes: "met:<ação>"
+// título, um container com "### Seção" e linhas "**Nome**  `valor`", dropdown para escolher o que ver e botões numa linha embaixo.
+// IDs dos componentes: "met:view" (dropdown) e "met:refresh:<tela>" (botão atualizar)
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content));
 const box = () => new ContainerBuilder();
 const row = (...components) => new ActionRowBuilder().addComponents(...components);
 const tag = (value) => `\`${value}\``;
 const unix = (ms) => Math.floor(ms / 1000);
-
-// O Discord limita o texto total de uma mensagem em Components V2 (4000 caracteres)
-const TEXT_LIMIT = 3900;
 
 // ---------- Formatação ----------
 const num = (n) => Number(n ?? 0).toLocaleString("pt-BR");
@@ -115,7 +113,7 @@ function discordSection(data) {
     "### Discord",
     `**Conexão**  ${tag(d.statusName)}  ·  **Latência**  ${tag(d.ping >= 0 ? `${d.ping} ms` : "medindo")}`,
     `**Conectado há**  ${tag(span(d.uptime))}`,
-    `**Shards**  ${tag(d.shards)}  ·  **Servidores**  ${tag(num(d.guilds))}`,
+    `**Shards**  ${tag(d.shards)}${d.guild ? `  ·  **Servidor**  ${tag(d.guild.name)}` : ""}`,
     `**Em cache**  ${tag(`${num(d.users)} usuários`)}  ·  ${tag(`${num(d.channels)} canais`)}`,
   ];
   if (d.guild) {
@@ -172,39 +170,53 @@ function databaseSection(data, withCollections) {
 }
 
 // ---------- Painel ----------
-function buildMetricsPanel(data) {
+// Uma tela por vez: o dropdown troca entre elas
+const VIEWS = [
+  { key: "saude", label: "Saúde", description: "Estado geral e alertas", build: healthSection },
+  { key: "memoria", label: "Memória (RAM)", description: "Uso de memória do bot e da máquina", build: memorySection },
+  { key: "processo", label: "Processo", description: "CPU, event loop, versões e hospedagem", build: processSection },
+  { key: "discord", label: "Discord", description: "Conexão, latência, cache e comandos", build: discordSection },
+  { key: "atividade", label: "Atividade", description: "Comandos, interações e erros desde que ligou", build: activitySection },
+  { key: "banco", label: "Banco de dados", description: "MongoDB: latência, tamanho e coleções", build: (data) => databaseSection(data, true) },
+];
+
+const findView = (key) => VIEWS.find((v) => v.key === key) ?? VIEWS[0];
+
+function buildMetricsPanel(data, viewKey = "saude") {
+  const view = findView(viewKey);
+
   const head = box().addSectionComponents(
     new SectionBuilder()
       .addTextDisplayComponents(
         text("## Métricas"),
-        text(`Painel de **${data.bot.name}**\n-# Atualizado <t:${unix(data.at)}:T> · visão geral do bot, da memória, do processo e do banco de dados.`)
+        text(`Painel de **${data.bot.name}**\n-# Atualizado <t:${unix(data.at)}:T> · escolha no menu o que você quer ver.`)
       )
       .setThumbnailAccessory(new ThumbnailBuilder().setURL(data.bot.avatar))
   );
 
-  // Se passar do limite de texto do Discord, a lista de coleções sai primeiro
-  let sections = [
-    healthSection(data),
-    memorySection(data),
-    processSection(data),
-    discordSection(data),
-    activitySection(data),
-    databaseSection(data, true),
-  ];
-  const size = () => sections.reduce((sum, s) => sum + s.length, 0) + 400;
-  if (size() > TEXT_LIMIT) sections[5] = databaseSection(data, false);
-
-  const containers = sections.map((content) => box().addTextDisplayComponents(text(content)));
+  const body = box()
+    .addTextDisplayComponents(text(view.build(data)))
+    .addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small))
+    .addActionRowComponents(
+      row(
+        new StringSelectMenuBuilder()
+          .setCustomId("met:view")
+          .setPlaceholder("Escolha o que ver")
+          .addOptions(
+            VIEWS.map((v) => ({ label: v.label, description: v.description, value: v.key, default: v.key === view.key }))
+          )
+      )
+    );
 
   const buttons = row(
     new ButtonBuilder().setLabel("Abrir MongoDB").setStyle(ButtonStyle.Link).setURL(mongoUrl()),
     new ButtonBuilder()
-      .setCustomId("met:refresh")
+      .setCustomId(`met:refresh:${view.key}`)
       .setStyle(ButtonStyle.Secondary)
       .setEmoji({ name: "update", id: "1569724363954065498", animated: true })
   );
 
-  return [head, ...containers, buttons];
+  return [head, body, buttons];
 }
 
 function buildNotice(content) {

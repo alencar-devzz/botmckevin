@@ -10,6 +10,7 @@ const { handleHelpSelect } = require("./helpHandlers");
 const { openBumpPanel, handleBumpSelect } = require("./bumpHandlers");
 const { handleAntiRaidSelect } = require("./antiRaidHandlers");
 const { handleMessageSelect } = require("./mensagemHandlers");
+const { handleMetricsSelect } = require("./metricasHandlers");
 const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHandlers");
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
@@ -32,6 +33,11 @@ async function handleSelect(interaction) {
   // Central de ajuda (comando /help)
   if (customId.startsWith("help:")) {
     return handleHelpSelect(interaction);
+  }
+
+  // Painel do comando metricas
+  if (customId.startsWith("met:")) {
+    return handleMetricsSelect(interaction);
   }
 
   // Painel do Anti-Raid (comando painelps)
