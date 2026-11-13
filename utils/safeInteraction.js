@@ -24,6 +24,7 @@ const MODAL_BUTTONS = [
   /^chcfg_edit(:|$)/, // calls (configuração)
   /^cpn_limit$/, // painel da call: limite de pessoas
   /^clcfg_edit(:|$)/, // comando cl
+  /^nukecfg_(edit|text|color|media)(:|$)/, // comando nnuke
   /^msg:(txt:edit|med:(main|thumb)|look:hex|aud:set)$/, // criador de mensagens
   /^msg:btn:(add|edit)(:|$)/,
   /^msg:rsp:(txt|img|thumb|hex)(:|$)/,

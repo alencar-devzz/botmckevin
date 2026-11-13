@@ -42,6 +42,11 @@ function buildModeracaoPanel() {
         value: "cl",
       },
       {
+        label: "Comando nnuke",
+        description: "Recria o canal do zero. Mensagem, cores, quem usa e canais.",
+        value: "nuke",
+      },
+      {
         label: "Bump reminder",
         description: "Lembrete de bump, agradecimento, cargos, tempos e embeds.",
         value: "bump",

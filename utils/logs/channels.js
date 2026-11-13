@@ -3,6 +3,7 @@ const { activeCategory, deliver } = require("./send");
 const { findAudit, executorText } = require("./audit");
 const { add, listLimited } = require("./batch");
 const { COLORS, code, channelBlock, channelTypeName, diffOverwrites } = require("./format");
+const { consumeChannelCreate, consumeChannelDelete } = require("./suppress");
 
 const categoryName = (channel) => channel.parent?.name ?? "Nenhuma";
 
@@ -142,6 +143,7 @@ module.exports = [
     async execute(channel) {
       const guild = channel.guild;
       if (!guild) return;
+      if (consumeChannelCreate(channel)) return; // recriado pelo nnuke: o comando envia o próprio log
       const cfg = await activeCategory(guild, "canais");
       if (!cfg) return;
 
@@ -164,6 +166,7 @@ module.exports = [
     async execute(channel) {
       const guild = channel.guild;
       if (!guild) return;
+      if (consumeChannelDelete(channel.id)) return; // recriado pelo nnuke: o comando envia o próprio log
       const cfg = await activeCategory(guild, "canais");
       if (!cfg) return;
 

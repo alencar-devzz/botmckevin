@@ -71,7 +71,43 @@ function clearCommandExit(guildId, userId) {
   commandExits.delete(exitKey(guildId, userId));
 }
 
+// Canais recriados pelo comando nnuke: os logs automáticos de "canal criado" e "canal excluído" ficam de fora,
+// porque o próprio comando envia um único log (utils/nuke/engine.js).
+const nukedChannels = new Map(); // channelId -> expira em (ms)
+const nukeCreates = new Map(); // guildId:categoria:nome -> expira em (ms)
+const NUKE_TTL = 30_000;
+const createKey = (guildId, name, parentId) => `${guildId}:${parentId ?? ""}:${name}`;
+
+function suppressChannelDelete(channelId) {
+  nukedChannels.set(channelId, Date.now() + NUKE_TTL);
+}
+
+// Retorna true (e consome a marca) se esse canal foi apagado pelo nnuke
+function consumeChannelDelete(channelId) {
+  const exp = nukedChannels.get(channelId);
+  if (!exp) return false;
+  nukedChannels.delete(channelId);
+  return exp >= Date.now();
+}
+
+// O ID do canal novo ainda não existe: a marca usa servidor + categoria + nome
+function suppressChannelCreate(guildId, name, parentId) {
+  nukeCreates.set(createKey(guildId, name, parentId), Date.now() + NUKE_TTL);
+}
+
+function consumeChannelCreate(channel) {
+  const key = createKey(channel.guild?.id, channel.name, channel.parentId);
+  const exp = nukeCreates.get(key);
+  if (!exp) return false;
+  nukeCreates.delete(key);
+  return exp >= Date.now();
+}
+
 module.exports = {
+  suppressChannelDelete,
+  consumeChannelDelete,
+  suppressChannelCreate,
+  consumeChannelCreate,
   markCommandExit,
   getCommandExit,
   clearCommandExit,

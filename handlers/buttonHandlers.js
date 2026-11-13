@@ -15,6 +15,7 @@ const { handleBotcallButton } = require("./botcallHandlers");
 const { handleHelpButton } = require("./helpHandlers");
 const { handleTicketConfigButton } = require("./ticketConfigHandlers");
 const { handleClConfigButton } = require("./clHandlers");
+const { handleNukeConfigButton } = require("./nukeHandlers");
 const { handleRoleManageButton, handleRoleManageConfigButton } = require("./roleManageHandlers");
 const { handleBumpButton } = require("./bumpHandlers");
 const { handleAntiRaidButton } = require("./antiRaidHandlers");
@@ -75,6 +76,11 @@ async function handleButton(interaction) {
   // Configuração do comando cl no n!menu
   if (customId.startsWith("clcfg_")) {
     return handleClConfigButton(interaction);
+  }
+
+  // Configuração do comando nnuke no n!menu
+  if (customId.startsWith("nukecfg_")) {
+    return handleNukeConfigButton(interaction);
   }
 
   if (customId.startsWith("ticket_")) {

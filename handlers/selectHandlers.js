@@ -16,6 +16,7 @@ const { buildModeracaoPanel } = require("../ui/moderacao");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
 const { openPostsPanel, handlePostsConfigSelect } = require("./postsHandlers");
 const { openClPanel, handleClConfigSelect } = require("./clHandlers");
+const { openNukePanel, handleNukeConfigSelect } = require("./nukeHandlers");
 const {
   openCallHubPanel,
   handleCallHubConfigSelect,
@@ -76,6 +77,11 @@ async function handleSelect(interaction) {
   // Configuração do comando cl no n!menu
   if (customId.startsWith("clcfg_")) {
     return handleClConfigSelect(interaction);
+  }
+
+  // Configuração do comando nnuke no n!menu
+  if (customId.startsWith("nukecfg_")) {
+    return handleNukeConfigSelect(interaction);
   }
 
   if (customId.startsWith("botcall_")) {
@@ -141,6 +147,9 @@ async function handleSelect(interaction) {
       }
       if (value === "cl") {
         return openClPanel(interaction);
+      }
+      if (value === "nuke") {
+        return openNukePanel(interaction);
       }
       if (value === "bump") {
         return openBumpPanel(interaction);
