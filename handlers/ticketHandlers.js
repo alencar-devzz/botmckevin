@@ -168,9 +168,15 @@ async function handleTicketModal(interaction) {
 async function createTicket(interaction, panel, option, reason) {
   const { guild, user } = interaction;
 
+  // Logs de diagnóstico: mostram em qual etapa a abertura do ticket para, se parar
+  const t0 = Date.now();
+  const step = (name) => console.log(`[TICKET] ${name} (+${Date.now() - t0}ms)`);
+  step("abrindo ticket");
+
   try {
     // Mídia (imagens enviadas ficam no MongoDB e são anexadas na mensagem)
     const media = await loadTicketMedia(panel, { withData: true });
+    step("imagens carregadas");
 
     // Número do ticket (contador por servidor)
     const config = await GuildConfig.findOneAndUpdate(
@@ -179,6 +185,7 @@ async function createTicket(interaction, panel, option, reason) {
       { new: true, upsert: true, setDefaultsOnInsert: true, strict: false }
     ).lean();
     const number = config.ticketCounter;
+    step(`número ${number}`);
 
     const threadName =
       applyVars(panel.threadName, {
@@ -205,7 +212,9 @@ async function createTicket(interaction, panel, option, reason) {
       reason: `Ticket aberto por ${user.tag} (${panel.name})`,
     });
 
+    step("tópico criado");
     await thread.members.add(user.id);
+    step("pessoa adicionada");
 
     // Fileira de menção (fora do container). Marcar os cargos adiciona a equipe no tópico privado.
     const mentionRoles = option.staffRoles?.length ? option.staffRoles : panel.mentionRoles;
@@ -215,6 +224,7 @@ async function createTicket(interaction, panel, option, reason) {
       allowedMentions: { users: [user.id], roles: mentionRoles },
     });
 
+    step("menções enviadas");
     const record = { number, reason, createdAt: new Date() };
     await thread.send({
       components: [
@@ -225,6 +235,7 @@ async function createTicket(interaction, panel, option, reason) {
       allowedMentions: { parse: [] }, // o painel interno cita pessoas, mas nunca pinga
     });
 
+    step("painel do ticket enviado");
     await createRecord({
       guildId: guild.id,
       panelId: panel.id,
@@ -244,10 +255,13 @@ async function createTicket(interaction, panel, option, reason) {
       number,
       panel: panel.name,
     };
-    return interaction.editReply({
+    step("registro salvo, respondendo");
+    const done = await interaction.editReply({
       components: buildTicketCreatedEphemeral(panel, url, successVars),
       flags: V2,
     });
+    step("resposta final enviada");
+    return done;
   } catch (err) {
     console.error("[TICKET] Erro ao criar ticket:", err);
     return interaction.editReply({
