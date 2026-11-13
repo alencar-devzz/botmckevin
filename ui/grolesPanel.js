@@ -17,7 +17,7 @@ const {
 } = require("discord.js");
 const { canManageRole, formatPermissions, listableRoles, encodeState } = require("../utils/roleManage");
 
-// Painel do comando groles (Components V2, sem cor por padrão, sem emojis).
+// Painel do comando groles (Components V2, sem cor por padrão; emojis note e member nas informações do cargo).
 // Telas: l = lista de cargos da pessoa · d = detalhe de um cargo · h = quem tem o cargo · s = resultados da busca
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 1500));
@@ -111,7 +111,7 @@ function addFooter(container, ctx) {
 }
 
 function roleEntryText(role) {
-  return [`<@&${role.id}>`, `${role.members.size} membro(s)`, `**Permissões:** ${formatPermissions(role)}`].join("\n");
+  return [`<@&${role.id}>`, `<:member:1570579495746937002> ${role.members.size} membro(s)`, `<:note:1569386865587392602> **Permissões:** ${formatPermissions(role)}`].join("\n");
 }
 
 // Botão Remover/Adicionar. "enabledByState" = false quando a ação não faz sentido (já tem / não tem o cargo)
@@ -239,7 +239,7 @@ function buildHoldersView(ctx) {
     container.addTextDisplayComponents(text("Esse cargo não existe mais."));
     container.addSeparatorComponents(new SeparatorBuilder());
   } else {
-    container.addTextDisplayComponents(text(`**Cargo:** <@&${role.id}> · ${holders.length} membro(s)`));
+    container.addTextDisplayComponents(text(`**Cargo:** <@&${role.id}> · <:member:1570579495746937002> ${holders.length} membro(s)`));
     container.addSeparatorComponents(new SeparatorBuilder());
     if (!slice.length) {
       container.addTextDisplayComponents(text("Ninguém possui este cargo."));

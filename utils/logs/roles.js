@@ -3,6 +3,7 @@ const { activeCategory, deliver } = require("./send");
 const { findAudit, executorText } = require("./audit");
 const { add, listLimited } = require("./batch");
 const { COLORS, code, permName } = require("./format");
+const { aboveBot } = require("./botRole");
 
 const skipByBot = (cfg, entry) => Boolean(cfg.ignoreBots && entry?.executor?.bot);
 
@@ -108,6 +109,7 @@ module.exports = [
     name: "roleCreate",
     async execute(role) {
       const { guild } = role;
+      if (aboveBot(guild, role)) return;
       const cfg = await activeCategory(guild, "cargos");
       if (!cfg) return;
       add(`rcreate:${guild.id}`, { id: role.id, name: role.name }, (items) =>
@@ -120,6 +122,7 @@ module.exports = [
     name: "roleDelete",
     async execute(role) {
       const { guild } = role;
+      if (aboveBot(guild, role)) return;
       const cfg = await activeCategory(guild, "cargos");
       if (!cfg) return;
       add(`rdelete:${guild.id}`, { id: role.id, name: role.name }, (items) =>
@@ -132,6 +135,7 @@ module.exports = [
     name: "roleUpdate",
     async execute(oldRole, newRole) {
       const { guild } = newRole;
+      if (aboveBot(guild, newRole)) return;
 
       const changes = [];
       const push = (label, a, b) => {
