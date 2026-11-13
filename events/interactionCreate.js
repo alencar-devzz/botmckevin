@@ -3,6 +3,7 @@ const { handleButton } = require("../handlers/buttonHandlers");
 const { handleSelect } = require("../handlers/selectHandlers");
 const { handleModal } = require("../handlers/modalHandlers");
 const { touchMenu } = require("../utils/menuSession");
+const { runProtected, opensModal } = require("../utils/safeInteraction");
 
 module.exports = {
   name: "interactionCreate",
@@ -23,8 +24,14 @@ module.exports = {
         touchMenu(interaction);
       }
 
+      // Os botões confirmam logo no clique (igual ao painel groles) e avisam se algo falhar.
+      // Botões que abrem modal ficam de fora. Para desligar tudo sem mexer no código:
+      // defina BOTAO_PROTECAO=off nas variáveis de ambiente da Render.
       if (interaction.isButton()) {
-        return await handleButton(interaction);
+        if (process.env.BOTAO_PROTECAO === "off" || opensModal(interaction.customId)) {
+          return await handleButton(interaction);
+        }
+        return await runProtected(interaction, handleButton);
       }
 
       if (

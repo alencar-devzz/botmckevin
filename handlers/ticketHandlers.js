@@ -284,13 +284,21 @@ async function handleTicketButton(interaction) {
   const isClaim = action === "ticket_claim";
 
   if (!isStaff(interaction.member, panel, option)) {
+    console.log(`[TICKET] ${action}: ${interaction.user.id} sem cargo de atendimento no painel`);
     return replyNoPermission(interaction, isClaim ? "assumir" : "finalizar");
   }
 
   if (isClaim) {
+    // Logs de diagnóstico do botão Assumir (mostram em qual etapa ele para, se parar)
+    const t0 = Date.now();
+    const step = (name) => console.log(`[CLAIM] ${name} (+${Date.now() - t0}ms)`);
+    step("início");
     const author = await interaction.client.users.fetch(authorId);
+    step("autor carregado");
     const record = await findRecord(interaction.channelId);
-    const media = await loadTicketMedia(panel, { withData: true });
+    step(`registro ${record ? "encontrado" : "NÃO encontrado"}`);
+    const media = await loadTicketMedia(panel, { withData: true, onlyInternal: true });
+    step("imagens carregadas");
 
     // Atualiza o painel do ticket (botão vira "Assumido" cinza e desativado)
     await interaction.update({
@@ -309,6 +317,7 @@ async function handleTicketButton(interaction) {
       attachments: [],
       allowedMentions: { parse: [] },
     });
+    step("painel atualizado");
     await setClaimed(interaction.channelId, interaction.user.id).catch(() => {});
 
     // Uma mensagem só: menção do autor em cima (fora do container) + container. Só o autor é pingado.
@@ -323,6 +332,7 @@ async function handleTicketButton(interaction) {
       flags: V2,
       allowedMentions: { users: [authorId] },
     });
+    step("mensagem de assumido enviada");
     return;
   }
 

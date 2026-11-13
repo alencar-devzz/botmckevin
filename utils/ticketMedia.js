@@ -44,8 +44,9 @@ async function loadMedia(sources, prefix, { withData = false } = {}) {
 
 // Imagens do painel externo e do ticket interno de uma vez
 async function loadTicketMedia(settings, options = {}) {
+  // onlyInternal: o botão Assumir só usa as imagens do ticket; pular as do painel evita ler MBs do MongoDB à toa
   const [panel, internal] = await Promise.all([
-    loadMedia(settings.panelImages, "painel", options),
+    options.onlyInternal ? { items: [], files: [] } : loadMedia(settings.panelImages, "painel", options),
     loadMedia(settings.internalImages, "ticket", options),
   ]);
   return { panel, internal };
