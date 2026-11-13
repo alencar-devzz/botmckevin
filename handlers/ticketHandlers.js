@@ -256,12 +256,23 @@ async function createTicket(interaction, panel, option, reason) {
       panel: panel.name,
     };
     step("registro salvo, respondendo");
-    const done = await interaction.editReply({
-      components: buildTicketCreatedEphemeral(panel, url, successVars),
-      flags: V2,
-    });
-    step("resposta final enviada");
-    return done;
+    const successComponents = buildTicketCreatedEphemeral(panel, url, successVars);
+    // Se o Discord não responder em 10s (ou recusar), registra o motivo e entrega a mensagem por outro caminho
+    try {
+      const done = await Promise.race([
+        interaction.editReply({ components: successComponents, flags: V2 }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("editReply sem resposta em 10s")), 10000)),
+      ]);
+      step("resposta final enviada");
+      return done;
+    } catch (err) {
+      console.error("[TICKET] A resposta final falhou:", err?.code ?? "", err?.message ?? err, err?.rawError ?? "");
+      const fallback = await interaction
+        .followUp({ components: successComponents, flags: V2 | EPHEMERAL })
+        .catch((e) => console.error("[TICKET] O envio alternativo também falhou:", e?.code ?? "", e?.message ?? e));
+      if (fallback) step("resposta enviada pelo caminho alternativo");
+      return fallback;
+    }
   } catch (err) {
     console.error("[TICKET] Erro ao criar ticket:", err);
     return interaction.editReply({
