@@ -8,6 +8,17 @@ const { runProtected, opensModal } = require("../utils/safeInteraction");
 module.exports = {
   name: "interactionCreate",
   async execute(interaction) {
+    // Autocomplete (ex.: lista de banidos do /unban). Cada comando pode exportar "autocomplete".
+    if (interaction.isAutocomplete()) {
+      try {
+        await interaction.client.commands.get(interaction.commandName)?.autocomplete?.(interaction);
+      } catch (err) {
+        console.error("[AUTOCOMPLETE] Erro:", err.message);
+        interaction.respond([]).catch(() => {});
+      }
+      return;
+    }
+
     try {
       // Slash commands (ex.: /ban, /kick, /mute). Cada comando exporta "executeSlash".
       if (interaction.isChatInputCommand()) {

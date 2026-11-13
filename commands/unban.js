@@ -9,24 +9,72 @@ const { buildConfirmPanel } = require("../ui/moderation");
 const { setPendingModeration } = require("../utils/pendingModeration");
 const { replyEphemeral, requirePermission, sendConfirm } = require("../utils/slashModeration");
 
+// Lista de banidos guardada por poucos segundos: o autocomplete é chamado a cada letra digitada
+const BAN_CACHE_MS = 15_000;
+const banCache = new Map(); // guildId -> { at, list }
+
+async function listBans(guild) {
+  const cached = banCache.get(guild.id);
+  if (cached && Date.now() - cached.at < BAN_CACHE_MS) return cached.list;
+  const bans = await guild.bans.fetch({ limit: 1000, cache: false });
+  const list = [...bans.values()].map((b) => b.user);
+  banCache.set(guild.id, { at: Date.now(), list });
+  return list;
+}
+
+const idFrom = (text) => String(text ?? "").match(/\d{17,20}/)?.[0] ?? null;
+
 module.exports = {
   name: "unban",
 
-  // /unban usuario:@pessoa (ou o ID de quem está banido) motivo:texto
+  // /unban usuario:(lista de banidos do servidor, ou o ID) motivo:texto
   data: new SlashCommandBuilder()
     .setName("unban")
     .setDescription("Remove o banimento de um usuário.")
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
     .setContexts(InteractionContextType.Guild)
-    .addUserOption((o) =>
+    .addStringOption((o) =>
       o
         .setName("usuario")
-        .setDescription("Quem será desbanido (cole o ID se a pessoa não aparecer).")
+        .setDescription("Escolha na lista de banidos (ou cole o ID).")
+        .setAutocomplete(true)
         .setRequired(true)
     )
     .addStringOption((o) =>
       o.setName("motivo").setDescription("Motivo do desbanimento.").setMaxLength(512)
     ),
+
+  // Menu nativo do Discord (autocomplete) com os usuários banidos do servidor
+  async autocomplete(interaction) {
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.BanMembers)) {
+      return interaction.respond([]);
+    }
+
+    const focused = String(interaction.options.getFocused() ?? "").trim().toLowerCase();
+    let users;
+    try {
+      users = await listBans(interaction.guild);
+    } catch {
+      return interaction.respond([]); // bot sem permissão de ver os banimentos
+    }
+
+    const found = users
+      .filter(
+        (u) =>
+          !focused ||
+          u.username.toLowerCase().includes(focused) ||
+          u.globalName?.toLowerCase().includes(focused) ||
+          u.id.includes(focused)
+      )
+      .sort((a, b) => a.username.localeCompare(b.username))
+      .slice(0, 25)
+      .map((u) => ({
+        name: `${u.globalName && u.globalName !== u.username ? `${u.globalName} · ` : ""}${u.username} (${u.id})`.slice(0, 100),
+        value: u.id,
+      }));
+
+    return interaction.respond(found);
+  },
 
   async executeSlash(interaction) {
     const permitido = await requirePermission(
@@ -36,13 +84,17 @@ module.exports = {
     );
     if (!permitido) return;
 
-    const user = interaction.options.getUser("usuario", true);
+    const userId = idFrom(interaction.options.getString("usuario", true));
     const reason = interaction.options.getString("motivo")?.trim() || null;
+    if (!userId) {
+      return replyEphemeral(interaction, "Escolha alguém na lista de banidos ou cole o ID.");
+    }
 
-    const banEntry = await interaction.guild.bans.fetch(user.id).catch(() => null);
+    const banEntry = await interaction.guild.bans.fetch({ user: userId, force: true }).catch(() => null);
     if (!banEntry) {
       return replyEphemeral(interaction, "Esse usuário não está banido.");
     }
+    const user = banEntry.user;
 
     return sendConfirm(interaction, {
       action: "unban",
