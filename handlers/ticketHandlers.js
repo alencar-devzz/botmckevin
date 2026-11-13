@@ -124,7 +124,6 @@ async function handleTicketOpen(interaction) {
   // Pergunta o motivo antes de criar
   if (panel.askReason) return interaction.showModal(buildReasonModal(panel.id, option.key));
 
-  await interaction.deferReply({ flags: EPHEMERAL });
   return createTicket(interaction, panel, option, null);
 }
 
@@ -147,15 +146,13 @@ async function handleTicketModal(interaction) {
     return interaction.reply({ content: "Essa opção não está mais disponível.", flags: EPHEMERAL });
   }
 
-  await interaction.deferReply({ flags: EPHEMERAL });
-
   // Confere o limite de novo (o modal pode ter ficado aberto por um tempo)
   if (panel.maxPerUser > 0) {
     const open = await getOpenTickets(interaction.client, interaction.guild.id, panel.id, interaction.user.id);
     if (open.length >= panel.maxPerUser) {
-      return interaction.editReply({
+      return interaction.reply({
         components: buildLimitReached(panel, open),
-        flags: V2,
+        flags: V2 | EPHEMERAL,
       });
     }
   }
@@ -164,20 +161,19 @@ async function handleTicketModal(interaction) {
   return createTicket(interaction, panel, option, reason);
 }
 
-// Cria o tópico privado do ticket
+// Cria o tópico privado do ticket.
+// Neste servidor as respostas pelo webhook da interação (editReply/followUp) travam sem erro, então a resposta
+// ao usuário sai por interaction.reply (o mesmo caminho que funciona), logo depois de criar o tópico e antes
+// dos 3s do Discord. O resto (mensagens e registro) é feito em seguida.
 async function createTicket(interaction, panel, option, reason) {
   const { guild, user } = interaction;
 
-  // Logs de diagnóstico: mostram em qual etapa a abertura do ticket para, se parar
   const t0 = Date.now();
   const step = (name) => console.log(`[TICKET] ${name} (+${Date.now() - t0}ms)`);
   step("abrindo ticket");
 
+  let answered = false;
   try {
-    // Mídia (imagens enviadas ficam no MongoDB e são anexadas na mensagem)
-    const media = await loadTicketMedia(panel, { withData: true });
-    step("imagens carregadas");
-
     // Número do ticket (contador por servidor)
     const config = await GuildConfig.findOneAndUpdate(
       { guildId: guild.id },
@@ -185,7 +181,6 @@ async function createTicket(interaction, panel, option, reason) {
       { new: true, upsert: true, setDefaultsOnInsert: true, strict: false }
     ).lean();
     const number = config.ticketCounter;
-    step(`número ${number}`);
 
     const threadName =
       applyVars(panel.threadName, {
@@ -211,10 +206,31 @@ async function createTicket(interaction, panel, option, reason) {
       autoArchiveDuration: panel.archiveMinutes,
       reason: `Ticket aberto por ${user.tag} (${panel.name})`,
     });
-
     step("tópico criado");
-    await thread.members.add(user.id);
+
+    // Responde já (confirmação com o botão para o ticket) e adiciona a pessoa ao tópico ao mesmo tempo
+    const url = `https://discord.com/channels/${guild.id}/${thread.id}`;
+    const successVars = {
+      user: `<@${user.id}>`,
+      username: user.username,
+      option: option.label,
+      server: guild.name,
+      number,
+      panel: panel.name,
+    };
+    answered = true;
+    const replied = interaction
+      .reply({
+        components: buildTicketCreatedEphemeral(panel, url, successVars),
+        flags: V2 | EPHEMERAL,
+      })
+      .then(() => step("resposta enviada"))
+      .catch((err) => console.error("[TICKET] Não consegui responder ao clique:", err?.message ?? err));
+    await Promise.all([replied, thread.members.add(user.id)]);
     step("pessoa adicionada");
+
+    // Mídia (imagens enviadas ficam no MongoDB e são anexadas na mensagem)
+    const media = await loadTicketMedia(panel, { withData: true });
 
     // Fileira de menção (fora do container). Marcar os cargos adiciona a equipe no tópico privado.
     const mentionRoles = option.staffRoles?.length ? option.staffRoles : panel.mentionRoles;
@@ -224,7 +240,6 @@ async function createTicket(interaction, panel, option, reason) {
       allowedMentions: { users: [user.id], roles: mentionRoles },
     });
 
-    step("menções enviadas");
     const record = { number, reason, createdAt: new Date() };
     await thread.send({
       components: [
@@ -235,7 +250,6 @@ async function createTicket(interaction, panel, option, reason) {
       allowedMentions: { parse: [] }, // o painel interno cita pessoas, mas nunca pinga
     });
 
-    step("painel do ticket enviado");
     await createRecord({
       guildId: guild.id,
       panelId: panel.id,
@@ -245,40 +259,18 @@ async function createTicket(interaction, panel, option, reason) {
       number,
       reason,
     });
-
-    const url = `https://discord.com/channels/${guild.id}/${thread.id}`;
-    const successVars = {
-      user: `<@${user.id}>`,
-      username: user.username,
-      option: option.label,
-      server: guild.name,
-      number,
-      panel: panel.name,
-    };
-    step("registro salvo, respondendo");
-    const successComponents = buildTicketCreatedEphemeral(panel, url, successVars);
-    // Se o Discord não responder em 10s (ou recusar), registra o motivo e entrega a mensagem por outro caminho
-    try {
-      const done = await Promise.race([
-        interaction.editReply({ components: successComponents, flags: V2 }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("editReply sem resposta em 10s")), 10000)),
-      ]);
-      step("resposta final enviada");
-      return done;
-    } catch (err) {
-      console.error("[TICKET] A resposta final falhou:", err?.code ?? "", err?.message ?? err, err?.rawError ?? "");
-      const fallback = await interaction
-        .followUp({ components: successComponents, flags: V2 | EPHEMERAL })
-        .catch((e) => console.error("[TICKET] O envio alternativo também falhou:", e?.code ?? "", e?.message ?? e));
-      if (fallback) step("resposta enviada pelo caminho alternativo");
-      return fallback;
-    }
+    step("ticket pronto");
   } catch (err) {
     console.error("[TICKET] Erro ao criar ticket:", err);
-    return interaction.editReply({
-      content:
-        "Não consegui abrir o ticket. Verifique se eu tenho as permissões de criar tópicos privados, enviar mensagens em tópicos e gerenciar tópicos neste canal.",
-    });
+    if (!answered) {
+      await interaction
+        .reply({
+          content:
+            "Não consegui abrir o ticket. Verifique se eu tenho as permissões de criar tópicos privados, enviar mensagens em tópicos e gerenciar tópicos neste canal.",
+          flags: EPHEMERAL,
+        })
+        .catch(() => {});
+    }
   }
 }
 
