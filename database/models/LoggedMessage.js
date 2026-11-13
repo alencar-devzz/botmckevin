@@ -1,4 +1,5 @@
-const { Schema, model, models } = require("mongoose");
+const { Schema } = require("mongoose");
+const { logsConnection } = require("../logsConnection");
 
 // Cópia das mensagens do servidor, usada só pelo sistema de logs.
 // Existe porque o cache do discord.js some quando o bot reinicia: sem isso, ao apagar/editar uma mensagem
@@ -16,4 +17,5 @@ const loggedMessageSchema = new Schema({
   expireAt: { type: Date, required: true, index: { expireAfterSeconds: 0 } },
 });
 
-module.exports = models.LoggedMessage || model("LoggedMessage", loggedMessageSchema);
+// Registrado na conexão do banco de logs (segundo MongoDB), não na conexão principal.
+module.exports = logsConnection.models.LoggedMessage || logsConnection.model("LoggedMessage", loggedMessageSchema);
