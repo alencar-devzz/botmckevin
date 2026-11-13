@@ -4,12 +4,13 @@ const { ContainerBuilder, TextDisplayBuilder } = require("discord.js");
 // O Discord só dá 3 segundos para a primeira resposta de uma interação. Depois de confirmada
 // (deferUpdate/deferReply), o token vale 15 minutos. O painel do groles já funcionava assim; este
 // arquivo dá o mesmo comportamento a TODOS os botões do bot:
-//   1. Se o botão ainda não respondeu em AUTO_DEFER_MS, o bot confirma sozinho (deferUpdate),
+//   1. Se o botão ainda não respondeu logo no clique, o bot confirma sozinho (deferUpdate),
 //      ganhando até 15 minutos para terminar o trabalho (banco lento, API do Discord, etc.).
 //   2. Depois disso, update/reply/editReply/followUp do próprio handler continuam funcionando
 //      (são convertidos para o que o Discord aceita), então nenhum handler precisa mudar.
 //   3. Se o handler falhar, a pessoa recebe um aviso em vez de "Esta interação falhou".
-const AUTO_DEFER_MS = 2000;
+// 0 = confirma logo no clique (igual ao painel groles). Só handlers que respondem de imediato escapam disso.
+const AUTO_DEFER_MS = Number(process.env.BOTAO_CONFIRMA_MS ?? 0);
 const EPHEMERAL = MessageFlags.Ephemeral;
 
 // Botões que abrem modal ficam FORA da proteção: o Discord só aceita o modal como primeira resposta,
@@ -141,6 +142,7 @@ function instrument(interaction) {
     if (state !== "none") return;
     state = "update";
     auto = true;
+    console.log(`[BOTAO] Confirmação automática (${AUTO_DEFER_MS}ms): ${interaction.customId}`);
     ack = native.deferUpdate().catch((err) => {
       console.error("[INTERACTION] Não consegui confirmar a interação:", err?.message ?? err);
     });
@@ -153,6 +155,10 @@ function instrument(interaction) {
 async function runProtected(interaction, handler) {
   const stop = instrument(interaction);
   try {
+    // Só para testar: defina TESTE_ATRASO_BOTOES=5000 (ms) nas variáveis de ambiente e todo botão protegido
+    // passa a demorar esse tempo antes de responder. Remova a variável depois do teste.
+    const atraso = Number(process.env.TESTE_ATRASO_BOTOES) || 0;
+    if (atraso > 0) await new Promise((resolve) => setTimeout(resolve, atraso));
     return await handler(interaction);
   } catch (err) {
     console.error(`[BOTAO] Erro em ${interaction.customId}:`, err);
