@@ -4,6 +4,7 @@ const { findAudit, executorText, originLabel } = require("./audit");
 const { COLORS, userBrief, unix, code } = require("./format");
 const { consumeRoleChange } = require("./suppress");
 const { aboveBot } = require("./botRole");
+const { getCommandExit } = require("./suppress");
 
 module.exports = [
   // Banimento
@@ -54,6 +55,9 @@ module.exports = [
     async execute(oldMember, newMember) {
       const { guild } = newMember;
       const user = newMember.user;
+
+      // Kick/ban feito pelo comando: nenhum log de cargo ou castigo desse membro
+      if (getCommandExit(guild.id, user.id)) return;
 
       // ----- castigo aplicado / removido -----
       const before = oldMember.communicationDisabledUntilTimestamp ?? null;

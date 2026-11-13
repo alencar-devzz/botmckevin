@@ -45,7 +45,36 @@ function consumeRoleChange(guildId, userId, roleId, kind) {
   return exp >= Date.now();
 }
 
+// Kick e ban feitos pelos comandos do bot (/kick, /ban, n!kick, n!ban): só o log da própria ação
+// (Expulsão ou Banimento) é enviado. Saída, cargos removidos e castigos desse membro ficam de fora.
+const commandExits = new Map(); // guildId:userId -> { action, exp }
+const EXIT_TTL = 60_000;
+const exitKey = (guildId, userId) => `${guildId}:${userId}`;
+
+function markCommandExit(guildId, userId, action) {
+  commandExits.set(exitKey(guildId, userId), { action, exp: Date.now() + EXIT_TTL });
+}
+
+// Retorna "kick" | "ban" enquanto a marca estiver válida; senão null
+function getCommandExit(guildId, userId) {
+  const key = exitKey(guildId, userId);
+  const entry = commandExits.get(key);
+  if (!entry) return null;
+  if (entry.exp < Date.now()) {
+    commandExits.delete(key);
+    return null;
+  }
+  return entry.action;
+}
+
+function clearCommandExit(guildId, userId) {
+  commandExits.delete(exitKey(guildId, userId));
+}
+
 module.exports = {
+  markCommandExit,
+  getCommandExit,
+  clearCommandExit,
   suppressMessage,
   isSuppressed,
   clearSuppressed,

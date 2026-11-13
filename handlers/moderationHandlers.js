@@ -2,6 +2,7 @@ const { MessageFlags } = require("discord.js");
 const { clearPendingModeration } = require("../utils/pendingModeration");
 const { buildResultPanel } = require("../ui/moderation");
 const { formatDuration } = require("../utils/formatDuration");
+const { markCommandExit, clearCommandExit } = require("../utils/logs/suppress");
 
 function scheduleSelfDelete(interaction, ms) {
   setTimeout(() => {
@@ -52,6 +53,9 @@ async function handleModerationButton(interaction) {
 
   const { action, targetId, targetTag, reason, guild, member, duration, avatarUrl } = pending;
 
+  // Kick e ban pelo comando: só o log de Expulsão/Banimento é enviado (ver utils/logs/suppress.js)
+  if (action === "ban" || action === "kick") markCommandExit(guild.id, targetId, action);
+
   try {
     switch (action) {
       case "ban":
@@ -71,6 +75,7 @@ async function handleModerationButton(interaction) {
         break;
     }
   } catch (err) {
+    if (action === "ban" || action === "kick") clearCommandExit(guild.id, targetId);
     console.error(`[MODERACAO] Erro ao executar ${action}:`, err);
     await interaction.update({
       components: buildResultPanel(

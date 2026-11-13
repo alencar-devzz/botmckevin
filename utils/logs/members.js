@@ -2,6 +2,7 @@ const { AuditLogEvent } = require("discord.js");
 const { activeCategory, deliver } = require("./send");
 const { findAudit, executorText, originLabel } = require("./audit");
 const { COLORS, code, userBrief, formatSpan, unix } = require("./format");
+const { getCommandExit } = require("./suppress");
 
 module.exports = [
   // Entrada
@@ -38,7 +39,11 @@ module.exports = [
       const user = member.user;
       if (!user) return;
 
-      const leaveCfg = await activeCategory(guild, "entradas", user.bot);
+      // Kick/ban feito pelo comando: sem log de saída (e sem lista de cargos); só Expulsão ou Banimento
+      const byCommand = getCommandExit(guild.id, user.id);
+      if (byCommand === "ban") return; // o log de Banimento sai em guildBanAdd
+
+      const leaveCfg = byCommand ? null : await activeCategory(guild, "entradas", user.bot);
       if (leaveCfg) {
         const roles = member.roles?.cache
           ? [...member.roles.cache.values()].filter((r) => r.id !== guild.id).slice(0, 15)
