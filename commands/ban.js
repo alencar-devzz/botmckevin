@@ -91,6 +91,13 @@ module.exports = {
       return;
     }
 
+    const jaBanido = await message.guild.bans.fetch(user.id).catch(() => null);
+    if (jaBanido) {
+      const aviso = await message.channel.send("Esse usuário já está banido.");
+      setTimeout(() => aviso.delete().catch(() => {}), 5000);
+      return;
+    }
+
     const mention = `<@${user.id}>`;
     const panelMsg = await message.channel.send({
       components: buildConfirmPanel({

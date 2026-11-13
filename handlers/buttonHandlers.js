@@ -19,6 +19,7 @@ const { handleRoleManageButton, handleRoleManageConfigButton } = require("./role
 const { handleBumpButton } = require("./bumpHandlers");
 const { handleAntiRaidButton } = require("./antiRaidHandlers");
 const { handleMessageButton } = require("./mensagemHandlers");
+const { handleMetricsButton } = require("./metricasHandlers");
 
 const {
   handleCallHubConfigButton,
@@ -31,6 +32,11 @@ async function handleButton(interaction) {
   // Central de ajuda (comando /help)
   if (customId.startsWith("help:")) {
     return handleHelpButton(interaction);
+  }
+
+  // Painel do comando metricas
+  if (customId.startsWith("met:")) {
+    return handleMetricsButton(interaction);
   }
 
   // Painel do Anti-Raid (comando painelps)

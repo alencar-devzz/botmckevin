@@ -1,5 +1,6 @@
 const { getPrefix } = require("../utils/getPrefix");
 const { suppressMessage, clearSuppressed } = require("../utils/logs/suppress");
+const { track } = require("../utils/metrics");
 
 module.exports = {
   name: "messageCreate",
@@ -10,9 +11,11 @@ module.exports = {
     if (message.content.trim().toLowerCase() === "cl") {
       const cl = message.client.commands.get("cl");
       if (!cl) return;
+      track("prefixo");
       try {
         return await cl.execute(message, []);
       } catch (err) {
+        track("erros");
         console.error('[COMANDO] Erro ao executar "cl":', err);
         return;
       }
@@ -30,6 +33,7 @@ module.exports = {
 
     // Apaga a mensagem do comando assim que ele é reconhecido.
     // Marca como "suprimida" para o sistema de logs não registrar como mensagem apagada.
+    track("prefixo");
     suppressMessage(message.id);
     clearSuppressed([message.id]);
     message.delete().catch(() => {});
@@ -37,6 +41,7 @@ module.exports = {
     try {
       await command.execute(message, args);
     } catch (err) {
+      track("erros");
       console.error(`[COMANDO] Erro ao executar "${commandName}":`, err);
       message.channel.send("Ocorreu um erro ao executar este comando.").catch(() => {});
     }

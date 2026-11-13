@@ -4,10 +4,18 @@ const { handleSelect } = require("../handlers/selectHandlers");
 const { handleModal } = require("../handlers/modalHandlers");
 const { touchMenu } = require("../utils/menuSession");
 const { runProtected, opensModal } = require("../utils/safeInteraction");
+const { track } = require("../utils/metrics");
 
 module.exports = {
   name: "interactionCreate",
   async execute(interaction) {
+    // Contadores do comando metricas
+    if (interaction.isAutocomplete()) track("autocomplete");
+    else if (interaction.isChatInputCommand()) track("slash");
+    else if (interaction.isButton()) track("botoes");
+    else if (interaction.isAnySelectMenu()) track("menus");
+    else if (interaction.isModalSubmit()) track("modais");
+
     // Autocomplete (ex.: lista de banidos do /unban). Cada comando pode exportar "autocomplete".
     if (interaction.isAutocomplete()) {
       try {
@@ -58,6 +66,7 @@ module.exports = {
         return await handleModal(interaction);
       }
     } catch (err) {
+      track("erros");
       console.error("[INTERACTION] Erro:", err);
       const payload = {
         content: "Ocorreu um erro ao processar essa ação.",
