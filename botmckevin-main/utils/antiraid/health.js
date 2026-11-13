@@ -30,10 +30,16 @@ async function checkGuild(guild) {
 
   const missing = NEEDED.filter(([flag]) => !me.permissions.has(flag)).map(([, label]) => label);
 
-  // Cargos acima do meu: quem os tem não pode ser punido
+  // Cargos acima do meu só aparecem no console: avisar no canal a cada reinício virava spam
   const above = guild.roles.cache.filter((r) => r.id !== guild.id && !r.managed && r.position > me.roles.highest.position);
 
-  if (!missing.length && !above.size) return;
+  if (!missing.length) {
+    if (above.size && !warned.has(guild.id)) {
+      warned.add(guild.id);
+      console.warn(`[ANTIRAID] ${guild.name}: ${above.size} cargo(s) acima do meu`);
+    }
+    return;
+  }
   if (warned.has(guild.id)) return;
   warned.add(guild.id);
 
@@ -49,18 +55,6 @@ async function checkGuild(guild) {
     color: 0xfaa61a,
     fields: [
       ...(missing.length ? [["Permissões que faltam", missing.map((m) => `• ${m}`).join("\n")]] : []),
-      ...(above.size
-        ? [
-            [
-              "Cargos acima do meu",
-              `${above
-                .sort((a, b) => b.position - a.position)
-                .first(8)
-                .map((r) => `<@&${r.id}>`)
-                .join(" ")}${above.size > 8 ? ` e mais ${above.size - 8}` : ""}\nNão consigo punir quem tem esses cargos. Suba o cargo do bot.`,
-            ],
-          ]
-        : []),
     ],
   }).catch(() => {});
 }

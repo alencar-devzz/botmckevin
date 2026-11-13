@@ -111,7 +111,7 @@ function addFooter(container, ctx) {
 }
 
 function roleEntryText(role) {
-  return [`<@&${role.id}>`, `${role.members.size} membro(s)`, `**Permissões:** ${formatPermissions(role)}`].join("\n");
+  return [`<@&${role.id}>`, `<:member:1570579495746937002> ${role.members.size} membro(s)`, `<:note:1569386865587392602> **Permissões:** ${formatPermissions(role)}`].join("\n");
 }
 
 // Botão Remover/Adicionar. "enabledByState" = false quando a ação não faz sentido (já tem / não tem o cargo)
