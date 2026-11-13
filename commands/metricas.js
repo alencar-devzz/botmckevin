@@ -23,8 +23,9 @@ module.exports = {
       });
     }
 
+    // Resposta efêmera: só quem usou o comando vê o painel.
     // O banco pode demorar um pouco na primeira vez: confirma logo e envia o painel em seguida
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const data = await collectMetrics(interaction.client, interaction.guild);
     await interaction.editReply({
       components: buildMetricsPanel(data),
