@@ -54,10 +54,13 @@ const percent = (ratio) => `${Math.round(ratio * 100)}%`;
 const LEVEL = ["Saudável", "Atenção", "Crítico"];
 const level = (n) => tag(LEVEL[n] ?? "Desconhecido");
 
-// Botão que abre o MongoDB. Defina MONGODB_URL na Render com o link do seu cluster para ir direto nele.
+// Botão que abre o MongoDB Atlas, na página dos clusters do projeto (de lá é um toque em "Browse Collections").
+// Para outro link, defina MONGODB_URL nas variáveis da Render.
+const MONGODB_PROJECT_ID = "6ae250477b53ad3a06e6fc6f";
+
 function mongoUrl() {
   const custom = (process.env.MONGODB_URL ?? "").trim();
-  return /^https?:\/\//i.test(custom) ? custom : "https://cloud.mongodb.com";
+  return /^https?:\/\//i.test(custom) ? custom : `https://cloud.mongodb.com/v2/${MONGODB_PROJECT_ID}#/clusters`;
 }
 
 // ---------- Seções ----------
