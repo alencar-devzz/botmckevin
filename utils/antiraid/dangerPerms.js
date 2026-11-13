@@ -1,7 +1,7 @@
 const { AuditLogEvent, PermissionsBitField } = require("discord.js");
 const { getAntiRaidConfig } = require("./store");
 const { sendModuleAlert, code } = require("./alert");
-const { findAuditEntry, isAuthorized } = require("./audit");
+const { isAuthorized } = require("./audit");
 const { punish } = require("./engine");
 const { DP_PERMS, DP_RESPONSES } = require("./defaults");
 
@@ -11,13 +11,12 @@ const { DP_PERMS, DP_RESPONSES } = require("./defaults");
 const bitsOf = (monitored) =>
   monitored.filter((k) => DP_PERMS[k]).map((k) => ({ key: k, bit: PermissionsBitField.Flags[DP_PERMS[k].flag] }));
 
-async function handle(role, cfg, added, auditType) {
+async function handle(role, cfg, added, executorId) {
   const { guild } = role;
   const d = cfg.dangerPerms;
   if (role.managed || !added.length) return; // cargos de integração/bot são do Discord
 
-  const entry = await findAuditEntry(guild, auditType, (e) => e.targetId === role.id);
-  const executorId = entry?.executorId ?? null;
+  executorId = executorId ?? null;
   if (executorId && (await isAuthorized(guild, executorId, { users: d.authorizedUsers, roles: d.authorizedRoles }))) return;
 
   const response = DP_RESPONSES[d.response] ?? DP_RESPONSES.revert;
@@ -51,20 +50,34 @@ async function handle(role, cfg, added, auditType) {
   });
 }
 
-async function onRoleUpdate(oldRole, newRole) {
-  const cfg = await getAntiRaidConfig(newRole.guild.id);
-  if (!cfg.dangerPerms.enabled) return;
-  const added = bitsOf(cfg.dangerPerms.monitored).filter(
-    (p) => (newRole.permissions.bitfield & p.bit) === p.bit && (oldRole.permissions.bitfield & p.bit) !== p.bit
-  );
-  await handle(newRole, cfg, added, AuditLogEvent.RoleUpdate);
+// Converte o valor de "permissions" de uma entrada de auditoria (string, número ou PermissionsBitField) em BigInt
+function toBits(value) {
+  if (value == null) return 0n;
+  try {
+    return BigInt(typeof value === "object" && "bitfield" in value ? value.bitfield : value);
+  } catch {
+    return 0n;
+  }
 }
 
-async function onRoleCreate(role) {
-  const cfg = await getAntiRaidConfig(role.guild.id);
+// Chamado pelo hub (events/antiRaidAudit.js) quando um cargo é criado ou editado.
+// A entrada de auditoria já traz o autor e as permissões antes/depois da mudança.
+async function onRoleEntry(entry, guild) {
+  const change = entry.changes?.find((c) => c.key === "permissions");
+  if (!change) return;
+
+  const cfg = await getAntiRaidConfig(guild.id);
   if (!cfg.dangerPerms.enabled) return;
-  const added = bitsOf(cfg.dangerPerms.monitored).filter((p) => (role.permissions.bitfield & p.bit) === p.bit);
-  await handle(role, cfg, added, AuditLogEvent.RoleCreate);
+
+  const oldBits = entry.action === AuditLogEvent.RoleCreate ? 0n : toBits(change.old);
+  const newBits = toBits(change.new);
+  const added = bitsOf(cfg.dangerPerms.monitored).filter((p) => (newBits & p.bit) === p.bit && (oldBits & p.bit) !== p.bit);
+  if (!added.length) return;
+
+  const role = guild.roles.cache.get(entry.targetId) ?? (await guild.roles.fetch(entry.targetId).catch(() => null));
+  if (!role) return;
+
+  await handle(role, cfg, added, entry.executorId);
 }
 
-module.exports = { onRoleUpdate, onRoleCreate };
+module.exports = { onRoleEntry };

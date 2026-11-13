@@ -1,7 +1,7 @@
 const { AuditLogEvent } = require("discord.js");
 const hub = require("../utils/antiraid/auditHub");
 const { trackEntry, ENTRY_ACTION } = require("../utils/antiraid/engine");
-const { onRoleEntry, onGrantEntry: onDangerGrant } = require("../utils/antiraid/dangerPerms");
+const { onRoleEntry } = require("../utils/antiraid/dangerPerms");
 const { onGrantEntry: onProtectedGrant } = require("../utils/antiraid/protectedRoles");
 const { onAuditEntry: onMovCall } = require("../utils/antiraid/movCall");
 const { runHealthChecks } = require("../utils/antiraid/health");
@@ -15,7 +15,6 @@ const { runHealthChecks } = require("../utils/antiraid/health");
 
 hub.register(Object.keys(ENTRY_ACTION).map(Number), trackEntry);
 hub.register([AuditLogEvent.RoleUpdate, AuditLogEvent.RoleCreate], onRoleEntry);
-hub.register([AuditLogEvent.MemberRoleUpdate], onDangerGrant);
 hub.register([AuditLogEvent.MemberRoleUpdate], onProtectedGrant);
 hub.register([AuditLogEvent.MemberMove, AuditLogEvent.MemberDisconnect], onMovCall);
 

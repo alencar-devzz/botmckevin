@@ -1,7 +1,6 @@
-const { AuditLogEvent } = require("discord.js");
 const { getAntiRaidConfig } = require("./store");
 const { sendModuleAlert, code } = require("./alert");
-const { findAuditEntry, isAuthorized } = require("./audit");
+const { isAuthorized } = require("./audit");
 const { punish } = require("./engine");
 const { PUNISHMENTS } = require("./defaults");
 
@@ -9,27 +8,29 @@ const { PUNISHMENTS } = require("./defaults");
 // tirado de volta e o autor pode ser punido. Entregas feitas pela própria pessoa
 // (como o Onboarding) são ignoradas.
 
-async function onMemberUpdate(oldMember, newMember) {
-  if (oldMember.partial) return; // sem o estado anterior não dá para saber o que mudou
-  const { guild } = newMember;
+// Chamado pelo hub (events/antiRaidAudit.js) quando alguém recebe/perde cargos.
+// A entrada de auditoria já traz o autor e os cargos adicionados ("$add").
+async function onGrantEntry(entry, guild) {
+  const executorId = entry.executorId;
+  if (!executorId || executorId === entry.targetId) return; // Onboarding, autoatribuição ou sem auditoria
+
   const cfg = await getAntiRaidConfig(guild.id);
   const p = cfg.protectedRoles;
   if (!p.enabled || !p.roles.length) return;
 
-  const added = newMember.roles.cache.filter((r) => !oldMember.roles.cache.has(r.id) && p.roles.includes(r.id));
-  if (!added.size) return;
-
-  const entry = await findAuditEntry(
-    guild,
-    AuditLogEvent.MemberRoleUpdate,
-    (e) =>
-      e.targetId === newMember.id &&
-      e.changes?.some((c) => c.key === "$add" && c.new?.some((r) => added.has(r.id)))
-  );
-  const executorId = entry?.executorId;
-  if (!executorId || executorId === newMember.id) return; // Onboarding, autoatribuição ou sem auditoria
+  const addedIds = (entry.changes ?? [])
+    .filter((c) => c.key === "$add")
+    .flatMap((c) => (Array.isArray(c.new) ? c.new : []))
+    .map((r) => r.id)
+    .filter((id) => p.roles.includes(id));
+  if (!addedIds.length) return;
 
   if (await isAuthorized(guild, executorId, { users: p.authorizedUsers, roles: p.authorizedRoles })) return;
+
+  const newMember = guild.members.cache.get(entry.targetId) ?? (await guild.members.fetch(entry.targetId).catch(() => null));
+  if (!newMember) return;
+  const added = new Map(addedIds.filter((id) => newMember.roles.cache.has(id)).map((id) => [id, true]));
+  if (!added.size) return; // o cargo já foi tirado de volta
 
   const reverted = await newMember.roles
     .remove([...added.keys()], "Anti-Raid: cargo protegido entregue sem autorização")
@@ -52,4 +53,4 @@ async function onMemberUpdate(oldMember, newMember) {
   });
 }
 
-module.exports = { onMemberUpdate };
+module.exports = { onGrantEntry };
