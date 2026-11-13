@@ -3,7 +3,6 @@ const { handleButton } = require("../handlers/buttonHandlers");
 const { handleSelect } = require("../handlers/selectHandlers");
 const { handleModal } = require("../handlers/modalHandlers");
 const { touchMenu } = require("../utils/menuSession");
-const { runProtected, opensModal } = require("../utils/safeInteraction");
 
 module.exports = {
   name: "interactionCreate",
@@ -24,12 +23,8 @@ module.exports = {
         touchMenu(interaction);
       }
 
-      // Os botões respondem como os do painel groles: o bot confirma sozinho logo no clique
-      // (ganhando até 15 minutos) e, se algo falhar, a pessoa recebe um aviso.
-      // Exceção: botões que abrem modal respondem direto, sem essa proteção.
       if (interaction.isButton()) {
-        if (opensModal(interaction.customId)) return await handleButton(interaction);
-        return await runProtected(interaction, handleButton);
+        return await handleButton(interaction);
       }
 
       if (
