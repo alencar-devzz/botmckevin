@@ -42,6 +42,14 @@ const noticePayload = (content) => ({
   flags: MessageFlags.IsComponentsV2 | EPHEMERAL,
 });
 
+// Se o Discord não responder (o webhook da interação trava neste servidor), registra em vez de ficar parado
+function withTimeout(promise, label, ms = 10000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} sem resposta em ${ms / 1000}s`)), ms)),
+  ]);
+}
+
 function withFlag(flags, flag) {
   return new MessageFlagsBitField(flags ?? 0).add(flag).bitfield;
 }
@@ -98,7 +106,7 @@ function instrument(interaction) {
       state = "reply";
       return (ack = native.reply(options));
     }
-    return afterAck(() => native.followUp(options));
+    return afterAck(() => withTimeout(native.followUp(options), "followUp"));
   };
 
   interaction.update = (options) => {
@@ -106,8 +114,16 @@ function instrument(interaction) {
       state = "update";
       return (ack = native.update(options));
     }
-    // Já confirmada: editar a resposta original equivale ao update
-    return afterAck(() => native.editReply(options));
+    // Já confirmada: edita a mensagem do botão.
+    // Mensagem pública: edita direto (message.edit), igual ao painel groles. Neste servidor as edições pelo
+    // webhook da interação (editReply) travam sem erro, então só são usadas em mensagens efêmeras, que não
+    // têm outro jeito de serem editadas.
+    return afterAck(() => {
+      const payload = typeof options === "string" ? { content: options } : { ...options };
+      const message = interaction.message;
+      if (message?.edit && !message.flags?.has(EPHEMERAL)) return message.edit(payload);
+      return withTimeout(native.editReply(options), "editReply");
+    });
   };
 
   interaction.editReply = (options) =>
@@ -124,7 +140,7 @@ function instrument(interaction) {
       return native.editReply(options);
     });
 
-  interaction.followUp = (options) => afterAck(() => native.followUp(options));
+  interaction.followUp = (options) => afterAck(() => withTimeout(native.followUp(options), "followUp"));
 
   if (native.showModal) {
     interaction.showModal = (modal) => {
