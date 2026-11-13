@@ -9,8 +9,9 @@ const { ContainerBuilder, TextDisplayBuilder } = require("discord.js");
 //   2. Depois disso, update/reply/editReply/followUp do próprio handler continuam funcionando
 //      (são convertidos para o que o Discord aceita), então nenhum handler precisa mudar.
 //   3. Se o handler falhar, a pessoa recebe um aviso em vez de "Esta interação falhou".
-// 0 = confirma logo no clique (igual ao painel groles). Só handlers que respondem de imediato escapam disso.
-const AUTO_DEFER_MS = Number(process.env.BOTAO_CONFIRMA_MS ?? 0);
+// Botões que respondem rápido (menos de AUTO_DEFER_MS) se comportam EXATAMENTE como sem este arquivo.
+// Só um botão que passaria dos 3s (e falharia mesmo) é confirmado sozinho para ganhar os 15 minutos.
+const AUTO_DEFER_MS = Number(process.env.BOTAO_CONFIRMA_MS ?? 2000);
 const EPHEMERAL = MessageFlags.Ephemeral;
 
 // Botões que abrem modal ficam FORA da proteção: o Discord só aceita o modal como primeira resposta,

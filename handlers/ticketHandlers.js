@@ -293,6 +293,8 @@ async function handleTicketButton(interaction) {
     const t0 = Date.now();
     const step = (name) => console.log(`[CLAIM] ${name} (+${Date.now() - t0}ms)`);
     step("início");
+    // Confirma o clique já (ganha os 15 min) e edita depois a mensagem do ticket, igual ao painel groles
+    await interaction.deferUpdate();
     const author = await interaction.client.users.fetch(authorId);
     step("autor carregado");
     const record = await findRecord(interaction.channelId);
@@ -301,7 +303,7 @@ async function handleTicketButton(interaction) {
     step("imagens carregadas");
 
     // Atualiza o painel do ticket (botão vira "Assumido" cinza e desativado)
-    await interaction.update({
+    await interaction.message.edit({
       components: [
         buildTicketContainer({
           panel,
