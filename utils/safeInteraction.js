@@ -105,8 +105,20 @@ function instrument(interaction) {
       state = "update";
       return (ack = native.update(options));
     }
-    // Já confirmada: editar a resposta original equivale ao update
-    return afterAck(() => native.editReply(options));
+    // Já confirmada: editar a mensagem do botão equivale ao update.
+    // Mensagens em Components V2 precisam manter a flag ao serem editadas pelo webhook.
+    return afterAck(async () => {
+      const payload = typeof options === "string" ? { content: options } : { ...options };
+      const isV2 = interaction.message?.flags?.has?.(MessageFlags.IsComponentsV2);
+      if (isV2 && payload.components && payload.flags == null) payload.flags = MessageFlags.IsComponentsV2;
+      try {
+        return await native.editReply(payload);
+      } catch (err) {
+        console.error(`[BOTAO] editReply falhou em ${interaction.customId}, tentando message.edit:`, err?.message ?? err);
+        if (!interaction.message?.edit) throw err;
+        return interaction.message.edit(payload); // mesmo caminho do painel groles
+      }
+    });
   };
 
   interaction.editReply = (options) =>
