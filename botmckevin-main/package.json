@@ -1,0 +1,19 @@
+{
+  "name": "discord-bot-painel",
+  "version": "1.0.0",
+  "description": "Bot de Discord com painel de configurações em Components V2",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "discord.js": "^14.23.0",
+    "dotenv": "^16.4.5",
+    "mongoose": "^8.9.5"
+  }
+}
