@@ -355,13 +355,13 @@ function buildMediaModal(cfg) {
     "Miniatura e imagem",
     uploadLabel({
       id: "thumbFile",
-      label: "Enviar miniatura (abre as fotos do dispositivo)",
+      label: "Enviar miniatura (abre as fotos)",
       description: "Escolha uma imagem (png, jpg, gif ou webp) de até 4 MB. Tem prioridade sobre o campo abaixo.",
     }),
     textLabel({
       id: "thumbnail",
-      label: "Ou escreva: avatar, servidor, nenhuma ou um link",
-      description: "Só é usado se nenhuma imagem for enviada acima.",
+      label: "Ou escreva: avatar, servidor ou um link",
+      description: "Vazio ou \"nenhuma\" = sem miniatura. Só vale se nada for enviado acima.",
       max: 300,
       value: ["none", "upload"].includes(cfg.thumbnail) ? "" : cfg.thumbnail,
       placeholder: "avatar",
