@@ -12,7 +12,7 @@ const {
   TextInputStyle,
 } = require("discord.js");
 const { addBackButton } = require("./backButton");
-const { textLabel, modal } = require("./modalHelpers");
+const { textLabel, uploadLabel, modal } = require("./modalHelpers");
 const { MODE_LABEL, MODE_SHORT, VARIABLES, TOKENS, DEFAULTS } = require("../utils/nuke/defaults");
 const { parseColor, isUrl } = require("../utils/nuke/render");
 
@@ -43,6 +43,7 @@ const mentionChannels = (list) => (list.length ? list.map((id) => `<#${id}>`).jo
 function thumbLabel(value) {
   if (value === "avatar") return "foto de quem usou";
   if (value === "server") return "ícone do servidor";
+  if (value === "upload") return "imagem enviada";
   if (isUrl(value)) return "link personalizado";
   return "nenhuma";
 }
@@ -352,12 +353,17 @@ function buildMediaModal(cfg) {
   return modal(
     "nukecfg_modal:media",
     "Miniatura e imagem",
+    uploadLabel({
+      id: "thumbFile",
+      label: "Enviar miniatura (abre as fotos do dispositivo)",
+      description: "Escolha uma imagem (png, jpg, gif ou webp) de até 4 MB. Tem prioridade sobre o campo abaixo.",
+    }),
     textLabel({
       id: "thumbnail",
-      label: "Miniatura (canto da mensagem)",
-      description: "Escreva avatar (foto de quem usou), servidor (ícone), nenhuma ou um link https://.",
+      label: "Ou escreva: avatar, servidor, nenhuma ou um link",
+      description: "Só é usado se nenhuma imagem for enviada acima.",
       max: 300,
-      value: cfg.thumbnail === "none" ? "" : cfg.thumbnail,
+      value: ["none", "upload"].includes(cfg.thumbnail) ? "" : cfg.thumbnail,
       placeholder: "avatar",
     }),
     textLabel({

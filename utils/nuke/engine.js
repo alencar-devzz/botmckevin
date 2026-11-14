@@ -107,7 +107,7 @@ async function nukeChannel({ channel, member, cfg }) {
       return { ok: false, error: "Não consegui criar o canal novo. Verifique as minhas permissões." };
     }
 
-    const payload = buildNukeMessage(cfg, {
+    const payload = await buildNukeMessage(cfg, {
       guild,
       executor: member,
       channel: fresh,

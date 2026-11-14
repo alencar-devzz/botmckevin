@@ -9,8 +9,10 @@ const {
   ThumbnailBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
+  AttachmentBuilder,
 } = require("discord.js");
 const { DEFAULTS, DEFAULT_EMBED_COLOR } = require("./defaults");
+const { getNukeThumbnail } = require("./asset");
 
 const isUrl = (value) => /^https?:\/\/\S+$/i.test(String(value ?? "").trim());
 
@@ -68,18 +70,26 @@ const flatten = (raw) =>
 const unix = (date) => Math.floor(date.getTime() / 1000);
 const stamp = (date, style) => `<t:${unix(date)}:${style}>`;
 
-function thumbnailUrl(setting, ctx) {
-  if (isUrl(setting)) return String(setting).trim();
-  if (setting === "avatar") return ctx.executor?.displayAvatarURL?.({ extension: "png", size: 256 }) ?? null;
-  if (setting === "server") return ctx.guild?.iconURL?.({ extension: "png", size: 256 }) ?? null;
-  return null;
+// Devolve { url } (link ou "attachment://...") e, se for um arquivo enviado, também { file } para
+// entrar em payload.files. setting === "upload" busca a imagem guardada em utils/nuke/asset.js.
+async function resolveThumbnail(setting, ctx) {
+  if (isUrl(setting)) return { url: String(setting).trim() };
+  if (setting === "avatar") return { url: ctx.executor?.displayAvatarURL?.({ extension: "png", size: 256 }) ?? null };
+  if (setting === "server") return { url: ctx.guild?.iconURL?.({ extension: "png", size: 256 }) ?? null };
+  if (setting === "upload") {
+    const asset = await getNukeThumbnail(ctx.guild?.id);
+    if (!asset) return { url: null }; // configurado para "enviada" mas nada foi enviado ainda
+    const name = `nuke-thumb.${asset.ext}`;
+    return { url: `attachment://${name}`, file: new AttachmentBuilder(Buffer.from(asset.data), { name }) };
+  }
+  return { url: null };
 }
 
 /**
  * Monta a mensagem enviada no canal novo.
  * ctx = { guild, executor: GuildMember, channel (o novo), oldChannelId, categoryName, now: Date }
  */
-function buildNukeMessage(cfg, ctx) {
+async function buildNukeMessage(cfg, ctx) {
   const now = ctx.now ?? new Date();
   const executor = ctx.executor;
   const vars = {
@@ -103,7 +113,8 @@ function buildNukeMessage(cfg, ctx) {
     allowedMentions: { parse: [], users: cfg.pingExecutor ? [executor.id] : [] },
   };
   const accent = parseColor(cfg.color);
-  const thumb = thumbnailUrl(cfg.thumbnail, ctx);
+  const { url: thumb, file: thumbFile } = await resolveThumbnail(cfg.thumbnail, ctx);
+  if (thumbFile) payload.files = [thumbFile];
 
   // ---------- Texto ----------
   if (cfg.mode === "text") {

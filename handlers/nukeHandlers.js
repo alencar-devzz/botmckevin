@@ -3,6 +3,7 @@ const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 const { getNukeConfig, updateNukeConfig, resetNukeConfig, resetNukeMessage } = require("../utils/nuke/store");
 const { NEXT_MODE } = require("../utils/nuke/defaults");
 const { buildNukeMessage, parseColor, isUrl } = require("../utils/nuke/render");
+const { saveNukeThumbnail } = require("../utils/nuke/asset");
 const {
   NEXT_ACCESS,
   buildNukeHome,
@@ -115,7 +116,7 @@ async function handleNukeConfigButton(interaction) {
 
     case "nukecfg_preview": {
       // Mostra, só para quem clicou, como a mensagem vai ficar (com o canal atual como exemplo)
-      const payload = buildNukeMessage(cfg, {
+      const payload = await buildNukeMessage(cfg, {
         guild,
         executor: interaction.member,
         channel: interaction.channel,
@@ -225,16 +226,22 @@ async function handleNukeConfigModal(interaction) {
   }
 
   if (kind === "media") {
+    const file = interaction.fields.getUploadedFiles("thumbFile", false)?.first();
     const rawThumb = (readText(interaction, "thumbnail") ?? "").trim();
     const rawImage = (readText(interaction, "image") ?? "").trim();
     const word = rawThumb.toLowerCase();
 
     let thumbnail;
-    if (!rawThumb || ["nenhuma", "nenhum", "none", "sem"].includes(word)) thumbnail = "none";
+    if (file) {
+      // Imagem enviada: tem prioridade sobre o campo de texto
+      const saved = await saveNukeThumbnail(guild.id, file);
+      if (saved.error) return deny(interaction, saved.error);
+      thumbnail = "upload";
+    } else if (!rawThumb || ["nenhuma", "nenhum", "none", "sem"].includes(word)) thumbnail = "none";
     else if (["avatar", "executor", "foto"].includes(word)) thumbnail = "avatar";
     else if (["servidor", "server", "icone", "ícone"].includes(word)) thumbnail = "server";
     else if (isUrl(rawThumb)) thumbnail = rawThumb;
-    else return deny(interaction, "Miniatura inválida. Use avatar, servidor, nenhuma ou um link https://.");
+    else return deny(interaction, "Miniatura inválida. Envie uma imagem, ou escreva avatar, servidor, nenhuma ou um link https://.");
 
     if (rawImage && !isUrl(rawImage)) return deny(interaction, "Imagem inválida. Use um link que comece com https://.");
 
