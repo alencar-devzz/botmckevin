@@ -2,7 +2,7 @@ const { AttachmentBuilder, MessageFlags } = require("discord.js");
 const { getSpotify, getPosition } = require("../utils/spotify/activity");
 const { renderSpotifyCard, prefetchCardImages } = require("../utils/spotify/card");
 const { fetchLyrics, splitLyrics } = require("../utils/spotify/lyrics");
-const { buildSpotifyCard, buildInfoPanel, buildLyricsPart, buildNotice } = require("../ui/spotify");
+const { buildSpotifyCard, buildInfoPanel, buildNotice } = require("../ui/spotify");
 const { getSpotifyConfig } = require("../utils/spotify/store");
 
 const V2 = MessageFlags.IsComponentsV2;
@@ -16,6 +16,14 @@ const cards = new Map();
 function rememberCard(messageId, track) {
   cards.set(messageId, track);
   if (cards.size > 300) cards.delete(cards.keys().next().value);
+}
+
+// Letras divididas em páginas, por mensagem efêmera do painel de informações (para os botões de página).
+// Se o bot reiniciar, o botão pede para abrir "Informações e letra" de novo.
+const lyricsPages = new Map();
+function rememberLyrics(messageId, data) {
+  lyricsPages.set(messageId, data);
+  if (lyricsPages.size > 200) lyricsPages.delete(lyricsPages.keys().next().value);
 }
 
 // Dados que o desenho do card usa (o mesmo para o download antecipado e para o desenho)
@@ -56,7 +64,7 @@ async function buildCardPayload({ track, member, userId, cfg, preview = false })
 }
 
 async function handleSpotifyButton(interaction) {
-  const [, action, userId] = interaction.customId.split(":");
+  const [, action, userId] = interaction.customId.split(":"); // em "lyr", o terceiro valor é o número da página
 
   // Botão Atualizar: lê de novo o Spotify da pessoa e refaz o card com o ponto atual da música.
   // Confirma o clique ANTES de desenhar a imagem (ganha 15 minutos para responder, não falha por demora).
@@ -82,7 +90,34 @@ async function handleSpotifyButton(interaction) {
     return interaction.message.edit({ components, files, attachments: [] });
   }
 
-  // Botão Informações e letra: resposta efêmera com os dados e a letra completa
+  // Botões Página anterior / Próxima página da letra: troca a página na própria mensagem
+  if (action === "lyr") {
+    const data = lyricsPages.get(interaction.message.id);
+    if (!data) {
+      return interaction.reply({
+        components: buildNotice("Essa letra expirou. Use o botão Informações e letra de novo."),
+        flags: EPHEMERAL_V2,
+      });
+    }
+    const page = Math.min(Math.max(Number(userId) || 0, 0), data.parts.length - 1);
+    const cfg = await getSpotifyConfig(interaction.guild.id);
+    return interaction.update({
+      components: buildInfoPanel({
+        track: data.track,
+        userId: data.userId,
+        lyricsPart: data.parts[page],
+        partLabel: ` (${page + 1}/${data.parts.length})`,
+        page,
+        pages: data.parts.length,
+        lyricsSource: cfg.lyricsSource,
+        creditSource: data.creditSource,
+        cfg,
+      }),
+      allowedMentions: NO_MENTIONS,
+    });
+  }
+
+  // Botão Informações e letra: resposta efêmera com os dados e a primeira página da letra
   if (action === "info") {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -99,12 +134,14 @@ async function handleSpotifyButton(interaction) {
     const parts = lyrics?.text ? splitLyrics(lyrics.text).slice(0, MAX_PARTS) : [];
     const label = (i) => (parts.length > 1 ? ` (${i + 1}/${parts.length})` : "");
 
-    await interaction.editReply({
+    const reply = await interaction.editReply({
       components: buildInfoPanel({
         track,
         userId,
         lyricsPart: parts[0] ?? null,
         partLabel: label(0),
+        page: 0,
+        pages: parts.length,
         lyricsSource: cfg.lyricsSource,
         creditSource: lyrics?.source,
         cfg,
@@ -116,9 +153,8 @@ async function handleSpotifyButton(interaction) {
       allowedMentions: NO_MENTIONS,
     });
 
-    for (let i = 1; i < parts.length; i++) {
-      await interaction.followUp({ components: buildLyricsPart(parts[i], label(i), cfg), flags: EPHEMERAL_V2 });
-    }
+    // Letra grande: guarda as páginas para os botões trocarem de página na mesma mensagem
+    if (parts.length > 1) rememberLyrics(reply.id, { parts, track, userId, creditSource: lyrics?.source });
   }
 }
 

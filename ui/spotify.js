@@ -86,11 +86,12 @@ function buildSpotifyCard({ fileName, track, userId, cfg = {}, preview = false }
   ];
 }
 
-// Resposta efêmera: informações da música + primeira parte da letra.
+// Resposta efêmera: informações da música + uma página da letra.
 // lyricsPart: texto da letra (ou null); lyricsNote: aviso quando não há letra.
+// page / pages: página atual (começa em 0) e total; com mais de uma página aparecem os botões de navegação.
 // lyricsSource: "lrclib" | "vagalume" | "off" (quando "off", a seção de letra não aparece).
 // cfg: textos e cor do painel do n!menu.
-function buildInfoPanel({ track, userId, lyricsPart, lyricsNote, partLabel, lyricsSource = "lrclib", creditSource, cfg = {} }) {
+function buildInfoPanel({ track, userId, lyricsPart, lyricsNote, partLabel, page = 0, pages = 1, lyricsSource = "lrclib", creditSource, cfg = {} }) {
   const t = { ...DEFAULT_INFO_LABELS, ...Object.fromEntries(Object.entries(cfg).filter(([k]) => k in DEFAULT_INFO_LABELS)) };
   const container = applyAccent(
     new ContainerBuilder().addTextDisplayComponents(
@@ -114,17 +115,29 @@ function buildInfoPanel({ track, userId, lyricsPart, lyricsNote, partLabel, lyri
     text(lyricsPart ? `### ${t.lyricsTitle}${partLabel}\n${lyricsPart}` : `### ${t.lyricsTitle}\n${lyricsNote}`)
   );
   if (lyricsPart) container.addTextDisplayComponents(text(`-# Letras: ${SOURCE_NAME[creditSource ?? lyricsSource] ?? "LRCLIB"}`));
-  return [container];
-}
 
-// Continuação da letra (partes seguintes).
-function buildLyricsPart(part, label, cfg = {}) {
-  const title = cfg.lyricsTitle || DEFAULT_INFO_LABELS.lyricsTitle;
-  return [applyAccent(new ContainerBuilder().addTextDisplayComponents(text(`### ${title}${label}\n${part}`)), cfg.containerHex)];
+  // Letra grande: botões para trocar de página (a letra é dividida em partes)
+  if (lyricsPart && pages > 1) {
+    container.addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`spt:lyr:${page - 1}`)
+          .setLabel("Página anterior")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(page <= 0),
+        new ButtonBuilder()
+          .setCustomId(`spt:lyr:${page + 1}`)
+          .setLabel("Próxima página")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(page >= pages - 1)
+      )
+    );
+  }
+  return [container];
 }
 
 function buildNotice(content) {
   return [new ContainerBuilder().addTextDisplayComponents(text(content))];
 }
 
-module.exports = { buildSpotifyCard, buildInfoPanel, buildLyricsPart, buildNotice };
+module.exports = { buildSpotifyCard, buildInfoPanel, buildNotice };
