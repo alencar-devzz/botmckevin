@@ -38,18 +38,34 @@ function emojiMarkup(emoji) {
   return `<${emoji.animated ? "a" : ""}:${emoji.name}:${emoji.id}> `;
 }
 
+// Verifica se o bot consegue usar o emoji: de servidor (cache) ou do próprio bot (emojis da aplicação)
+async function canUseCustomEmoji(client, id) {
+  if (client.emojis.cache.has(id)) return true;
+
+  const appEmojis = client.application?.emojis;
+  if (!appEmojis) return false;
+  if (appEmojis.cache.has(id)) return true;
+
+  try {
+    await appEmojis.fetch();
+    return appEmojis.cache.has(id);
+  } catch {
+    return false;
+  }
+}
+
 // Valida o que o usuário digitou no modal.
 // Retorna { ok: true, value } ou { ok: false, error }
-function parseEmojiInput(raw, client) {
+async function parseEmojiInput(raw, client) {
   const input = String(raw ?? "").trim();
 
   const custom = CUSTOM_RE.exec(input);
   if (custom) {
-    if (!client.emojis.cache.has(custom[3])) {
+    if (!(await canUseCustomEmoji(client, custom[3]))) {
       return {
         ok: false,
         error:
-          "Não consegui acessar esse emoji. O bot precisa estar no servidor onde ele foi criado.",
+          "Não consegui acessar esse emoji. Use um emoji do próprio bot ou de um servidor onde o bot esteja.",
       };
     }
     return { ok: true, value: input };

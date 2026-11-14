@@ -219,7 +219,7 @@ async function handlePostsConfigModal(interaction) {
   const raw = interaction.fields.getTextInputValue("emoji").trim();
   let value = null; // vazio = emoji padrão
   if (raw) {
-    const parsed = parseEmojiInput(raw, interaction.client);
+    const parsed = await parseEmojiInput(raw, interaction.client);
     if (!parsed.ok) {
       return interaction.reply({ content: parsed.error, flags: EPHEMERAL });
     }
