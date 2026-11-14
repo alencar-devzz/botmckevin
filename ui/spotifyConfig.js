@@ -14,7 +14,8 @@ const {
 const { addBackButton } = require("./backButton");
 const { textLabel, modal } = require("./modalHelpers");
 const { vagalumeAvailable } = require("../utils/spotify/lyrics");
-const { DEFAULT_LABELS } = require("../utils/spotify/store");
+const { DEFAULT_LABELS, DEFAULT_INFO_LABELS } = require("../utils/spotify/store");
+const { THEMES, visualCustomCount } = require("../utils/spotify/themes");
 
 // Painéis do menu: Comunidade e interação → Comando spotify
 
@@ -25,7 +26,11 @@ const yesNo = (value) => (value ? "Sim" : "Não");
 const row = (...components) => new ActionRowBuilder().addComponents(...components);
 
 const ACCESS_LABEL = { everyone: "Todos os membros", roles: "Somente os cargos escolhidos" };
-const BAR_LABEL = { green: "Verde do Spotify", cover: "Cor tirada da capa" };
+const BAR_LABEL = { green: "Verde do Spotify", cover: "Cor tirada da capa", custom: "Cor personalizada" };
+const BAR_SHORT = { green: "Verde", cover: "Capa", custom: "Personalizada" };
+const STYLE_LABEL = { secondary: "Cinza", primary: "Azul", success: "Verde", danger: "Vermelho" };
+const NAME_LABEL = { username: "Nome de usuário", display: "Apelido do servidor", none: "Nenhum" };
+const hexView = (value) => (value ? `\`${value}\`` : "`padrão`");
 const GLASS_LABEL = { dark: "Mais escuro", normal: "Padrão", light: "Mais claro" };
 const LYRICS_LABEL = { lrclib: "LRCLIB", vagalume: "Vagalume", off: "Desligada" };
 
@@ -62,6 +67,7 @@ function buildSpotifyHome(guild, cfg) {
         `**Ver a música de outra pessoa (\`@pessoa\`):** ${yesNo(cfg.allowOthers)} · **Espera por pessoa:** ${cfg.cooldown ? `\`${cfg.cooldown}s\`` : "`nenhuma`"}`,
         `**Barra de progresso:** ${BAR_LABEL[cfg.barColor]} · **Vidro:** ${GLASS_LABEL[cfg.glass]}`,
         `**Pílula do Spotify:** ${yesNo(cfg.showPill)} · **Faixa "Ouvindo agora":** ${yesNo(cfg.showNowPlaying)}`,
+        `**Visual personalizado:** ${visualCustomCount(cfg) ? `${visualCustomCount(cfg)} ajuste(s) em cores e formato` : "padrão"}`,
         `**Botões:** ${[cfg.infoLabel, cfg.refreshLabel].filter((_, i) => (i === 0 ? cfg.showInfoButton : cfg.showRefreshButton)).map((l) => inline(l, 30)).join(" ") || "`só o link`"}`,
         `**Fonte da letra:** ${lyricsText(cfg)}`,
         `**Apagar o card sozinho:** ${minutes(cfg.autoDeleteMinutes)} · **Mensagem de "não está ouvindo":** ${cfg.notListeningMessage ? inline(cfg.notListeningMessage, 50) : "`padrão`"}`,
@@ -165,7 +171,7 @@ function buildSpotifyUse(guild, cfg) {
 function buildSpotifyLook(cfg) {
   const header = new ContainerBuilder().addTextDisplayComponents(
     text("### Aparência do card"),
-    text("-# Cores e elementos da imagem. Use \"Pré-visualizar\" para ver como fica antes de usar no servidor.")
+    text("-# Escolha um tema pronto ou personalize cada parte. Use \"Pré-visualizar\" para ver antes de usar no servidor.")
   );
 
   const glass = new StringSelectMenuBuilder()
@@ -177,31 +183,162 @@ function buildSpotifyLook(cfg) {
       { label: "Mais claro", description: "Vidro leve, deixa a capa aparecer mais.", value: "light", default: cfg.glass === "light" }
     );
 
+  const themes = new StringSelectMenuBuilder()
+    .setCustomId("sptcfg_theme")
+    .setPlaceholder("Aplicar um tema pronto")
+    .addOptions(Object.entries(THEMES).map(([value, t]) => ({ label: t.label, description: t.description, value })));
+
+  const barNote = cfg.barColor === "custom" ? ` (${cfg.barHex})` : "";
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
-      text("**Barra de progresso**"),
-      text(`-# Cor atual: **${BAR_LABEL[cfg.barColor]}**. Na cor da capa, sem cor marcante (capa cinza) a barra fica verde.`)
+      text("**Temas prontos**"),
+      text("-# Troca cores, vidro e formato de uma vez (textos, ícones e botões não mudam). Depois dá para ajustar cada detalhe.")
     )
-    .addActionRowComponents(
-      row(btn("sptcfg_bar", `Cor da barra: ${cfg.barColor === "cover" ? "Capa" : "Verde"}`))
-    )
+    .addActionRowComponents(row(themes))
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
-      text("**Elementos do card**"),
-      text("-# Sem a faixa \"Ouvindo agora\", o texto e a barra descem para ocupar o espaço.")
+      text("**Barra e elementos**"),
+      text(`-# Barra: **${BAR_LABEL[cfg.barColor]}**${barNote}. Na cor da capa, capa cinza = barra verde.`)
     )
     .addActionRowComponents(
       row(
-        btn("sptcfg_pill", `Pílula do Spotify: ${yesNo(cfg.showPill)}`),
+        btn("sptcfg_bar", `Barra: ${BAR_SHORT[cfg.barColor]}`),
+        btn("sptcfg_pill", `Pílula: ${yesNo(cfg.showPill)}`),
         btn("sptcfg_nowplaying", `Faixa Ouvindo agora: ${yesNo(cfg.showNowPlaying)}`)
       )
     )
     .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(text("**Intensidade do vidro**"), text("-# Quão escuro ou claro fica o vidro sobre a capa."))
+    .addTextDisplayComponents(text("**Intensidade do vidro**"))
     .addActionRowComponents(row(glass))
     .addSeparatorComponents(new SeparatorBuilder())
-    .addActionRowComponents(row(btn("sptcfg_preview", "Pré-visualizar", ButtonStyle.Primary)));
+    .addActionRowComponents(
+      row(
+        btn("sptcfg_page:colors", "Cores"),
+        btn("sptcfg_page:texts", "Textos e ícones"),
+        btn("sptcfg_page:shape", "Formato"),
+        btn("sptcfg_preview", "Pré-visualizar", ButtonStyle.Primary)
+      )
+    );
   addBackButton(container, "sptcfg_home");
+
+  return [header, container];
+}
+
+// ---------- Cores ----------
+
+function buildSpotifyColors(cfg) {
+  const header = new ContainerBuilder().addTextDisplayComponents(
+    text("### Cores do card"),
+    text("-# Códigos no formato `#rrggbb` (ou `#rgb`). Campo vazio = cor padrão.")
+  );
+
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(
+      text("**Cores atuais**"),
+      text(
+        [
+          `**Barra:** ${BAR_LABEL[cfg.barColor]}${cfg.barHex ? ` ${hexView(cfg.barHex)}` : ""} · **Trilho:** ${hexView(cfg.trackHex)} · **Bolinha:** ${hexView(cfg.knobHex)}`,
+          `**Título:** ${hexView(cfg.titleHex)} · **Artistas:** ${hexView(cfg.artistHex)} · **Tempos:** ${hexView(cfg.timeHex)}`,
+          `**Texto da pílula:** ${hexView(cfg.pillTextHex)} · **Texto da faixa inferior:** ${hexView(cfg.footerTextHex)}`,
+          `**Fundo:** ${cfg.bgHex ? `${hexView(cfg.bgHex)}${cfg.bgHex2 ? ` → ${hexView(cfg.bgHex2)}` : " (liso)"} (no lugar da capa)` : "`capa da música`"}`,
+          `**Escurecimento:** ${hexView(cfg.shadeHex)} · **Vidro:** ${hexView(cfg.glassHex)} · **Cor lateral da mensagem:** ${hexView(cfg.containerHex)}`,
+        ].join("\n")
+      )
+    )
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addActionRowComponents(
+      row(
+        btn("sptcfg_edit:colors_bar", "Barra e bolinha"),
+        btn("sptcfg_edit:colors_text", "Textos"),
+        btn("sptcfg_edit:colors_bg", "Fundo e vidro")
+      )
+    )
+    .addActionRowComponents(
+      row(btn("sptcfg_preview", "Pré-visualizar", ButtonStyle.Primary), btn("sptcfg_resetcolors", "Restaurar cores", ButtonStyle.Danger))
+    );
+  addBackButton(container, "sptcfg_page:look");
+
+  return [header, container];
+}
+
+// ---------- Formato ----------
+
+function buildSpotifyShape(cfg) {
+  const header = new ContainerBuilder().addTextDisplayComponents(
+    text("### Formato do card"),
+    text("-# Cantos, desfoque, espessura da barra e quais partes da barra aparecem.")
+  );
+
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(
+      text("**Formato atual**"),
+      text(
+        [
+          `**Cantos:** \`${cfg.radius}\` · **Desfoque do vidro:** \`${cfg.blur}\` · **Espessura da barra:** \`${cfg.barHeight}\``,
+          `**Escurecimento geral:** ${cfg.overlay == null ? "`automático (pelo vidro)`" : `\`${cfg.overlay}%\``}`,
+          `**Tempos (01:23 / 03:35):** ${yesNo(cfg.showTimes)} · **Bolinha da barra:** ${yesNo(cfg.showKnob)}`,
+        ].join("\n")
+      )
+    )
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addActionRowComponents(
+      row(
+        btn("sptcfg_edit:shape", "Editar formato"),
+        btn("sptcfg_times", `Tempos: ${yesNo(cfg.showTimes)}`),
+        btn("sptcfg_knob", `Bolinha: ${yesNo(cfg.showKnob)}`)
+      )
+    )
+    .addActionRowComponents(
+      row(btn("sptcfg_preview", "Pré-visualizar", ButtonStyle.Primary), btn("sptcfg_resetshape", "Restaurar formato", ButtonStyle.Danger))
+    );
+  addBackButton(container, "sptcfg_page:look");
+
+  return [header, container];
+}
+
+// ---------- Textos e ícones ----------
+
+function buildSpotifyTexts(cfg) {
+  const header = new ContainerBuilder().addTextDisplayComponents(
+    text("### Textos e ícones"),
+    text("-# Textos da imagem do card e do painel de informações. Nos campos de texto, vazio = padrão e `-` = esconder.")
+  );
+
+  const iconView = cfg.pillIcon === "-" ? "`sem ícone`" : cfg.pillIcon ? inline(cfg.pillIcon, 40) : "`ícone do Spotify`";
+  const info = [
+    cfg.infoArtistLabel !== DEFAULT_INFO_LABELS.infoArtistLabel,
+    cfg.infoAlbumLabel !== DEFAULT_INFO_LABELS.infoAlbumLabel,
+    cfg.infoDurationLabel !== DEFAULT_INFO_LABELS.infoDurationLabel,
+    cfg.infoListeningLabel !== DEFAULT_INFO_LABELS.infoListeningLabel,
+    cfg.lyricsTitle !== DEFAULT_INFO_LABELS.lyricsTitle,
+  ].filter(Boolean).length;
+
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(
+      text("**Textos atuais**"),
+      text(
+        [
+          `**Pílula:** ${cfg.pillText === "-" ? "`sem texto`" : inline(cfg.pillText)} · **Ícone:** ${iconView}`,
+          `**Faixa inferior:** ${cfg.footerText === "-" ? "`sem texto`" : inline(cfg.footerText)} · **Nome:** ${NAME_LABEL[cfg.footerName]} · **Foto:** ${yesNo(cfg.showAvatar)}`,
+          `**Painel de informações:** ${info ? `${info} texto(s) alterado(s)` : "`textos padrão`"}`,
+          "-# O nome em \"Apelido do servidor\" pode ter símbolos ou emojis que a fonte do card não desenha; o nome de usuário é o mais seguro.",
+        ].join("\n")
+      )
+    )
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addActionRowComponents(
+      row(btn("sptcfg_edit:texts_card", "Pílula e faixa inferior"), btn("sptcfg_edit:texts_info", "Painel de informações"))
+    )
+    .addActionRowComponents(
+      row(
+        btn("sptcfg_avatar", `Foto: ${yesNo(cfg.showAvatar)}`),
+        btn("sptcfg_name", `Nome: ${NAME_LABEL[cfg.footerName]}`)
+      )
+    )
+    .addActionRowComponents(
+      row(btn("sptcfg_preview", "Pré-visualizar", ButtonStyle.Primary), btn("sptcfg_resettexts", "Restaurar textos", ButtonStyle.Danger))
+    );
+  addBackButton(container, "sptcfg_page:look");
 
   return [header, container];
 }
@@ -237,6 +374,13 @@ function buildSpotifyButtons(cfg) {
         btn("sptcfg_edit:labels", "Textos dos botões")
       )
     )
+    .addActionRowComponents(
+      row(
+        btn("sptcfg_style:info", `Cor do Informações: ${STYLE_LABEL[cfg.infoStyle]}`),
+        btn("sptcfg_style:refresh", `Cor do Atualizar: ${STYLE_LABEL[cfg.refreshStyle]}`),
+        btn("sptcfg_edit:btn_emoji", "Emojis dos botões")
+      )
+    )
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
       text("**Fonte da letra**"),
@@ -248,7 +392,9 @@ function buildSpotifyButtons(cfg) {
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
       text("**Textos atuais**"),
-      text(`Link: ${inline(cfg.linkLabel, 40)} · Informações: ${inline(cfg.infoLabel, 40)} · Atualizar: ${inline(cfg.refreshLabel, 40)}`)
+      text(
+        `Link: ${[cfg.linkEmoji, inline(cfg.linkLabel, 40)].filter(Boolean).join(" ")} · Informações: ${[cfg.infoEmoji, inline(cfg.infoLabel, 40)].filter(Boolean).join(" ")} · Atualizar: ${[cfg.refreshEmoji, inline(cfg.refreshLabel, 40)].filter(Boolean).join(" ")}`
+      )
     );
   addBackButton(container, "sptcfg_home");
 
@@ -361,12 +507,121 @@ function buildBehaviorModal(cfg) {
   );
 }
 
+// ---------- Modais declarativos (cores, formato, textos, emojis) ----------
+// type: hex | int | intOrEmpty | text | icon | emoji. O handler usa as mesmas definições para ler e validar.
+const MODALS = {
+  colors_bar: {
+    title: "Barra e bolinha",
+    page: "colors",
+    fields: [
+      { id: "barHex", type: "hex", label: "Cor da barra de progresso", description: "#rrggbb. Preencher ativa a barra personalizada.", placeholder: "#1ed760" },
+      { id: "trackHex", type: "hex", label: "Trilho (parte ainda não tocada)", description: "Vazio = branco translúcido.", placeholder: "#444444" },
+      { id: "knobHex", type: "hex", label: "Bolinha da barra", description: "Vazio = branca.", placeholder: "#ffffff" },
+    ],
+  },
+  colors_text: {
+    title: "Cores dos textos",
+    page: "colors",
+    fields: [
+      { id: "titleHex", type: "hex", label: "Título da música", placeholder: "#ffffff" },
+      { id: "artistHex", type: "hex", label: "Artistas", placeholder: "#cccccc" },
+      { id: "timeHex", type: "hex", label: "Tempos (01:23 e 03:35)", placeholder: "#ffffff" },
+      { id: "pillTextHex", type: "hex", label: "Texto da pílula", placeholder: "#ffffff" },
+      { id: "footerTextHex", type: "hex", label: "Texto da faixa inferior", placeholder: "#ffffff" },
+    ],
+  },
+  colors_bg: {
+    title: "Fundo, vidro e mensagem",
+    page: "colors",
+    fields: [
+      { id: "bgHex", type: "hex", label: "Fundo no lugar da capa", description: "Vazio = usa a capa da música.", placeholder: "#161616" },
+      { id: "bgHex2", type: "hex", label: "Segunda cor do degradê", description: "Só vale com o fundo acima. Vazio = fundo liso.", placeholder: "#262626" },
+      { id: "shadeHex", type: "hex", label: "Cor do escurecimento", description: "Vazio = preto.", placeholder: "#000000" },
+      { id: "glassHex", type: "hex", label: "Cor do vidro das faixas", description: "Vazio = preto.", placeholder: "#000000" },
+      { id: "containerHex", type: "hex", label: "Cor lateral da mensagem", description: "Faixa colorida do container. Vazio = sem cor.", placeholder: "#1ed760" },
+    ],
+  },
+  shape: {
+    title: "Formato do card",
+    page: "shape",
+    fields: [
+      { id: "radius", type: "int", min: 0, max: 60, label: "Cantos arredondados (0 a 60)", description: "Padrão: 34.", placeholder: "34" },
+      { id: "blur", type: "int", min: 0, max: 40, label: "Desfoque do vidro (0 a 40)", description: "Padrão: 22.", placeholder: "22" },
+      { id: "barHeight", type: "int", min: 3, max: 16, label: "Espessura da barra (3 a 16)", description: "Padrão: 7.", placeholder: "7" },
+      { id: "overlay", type: "intOrEmpty", min: 0, max: 90, label: "Escurecimento geral (0 a 90)", description: "Vazio = automático pela intensidade do vidro.", placeholder: "22" },
+    ],
+  },
+  texts_card: {
+    title: "Pílula e faixa inferior",
+    page: "texts",
+    fields: [
+      { id: "pillText", type: "text", max: 20, label: "Texto da pílula", description: "Vazio = \"Spotify\". Use - para esconder o texto.", placeholder: "Spotify" },
+      { id: "pillIcon", type: "icon", max: 300, label: "Ícone da pílula", description: "ID ou <:emoji:id> do Discord, ou link https. - = sem ícone.", placeholder: "1571194086109487216" },
+      { id: "footerText", type: "text", max: 30, label: "Texto da faixa inferior", description: "Vazio = \"Ouvindo agora:\". Use - para esconder.", placeholder: "Ouvindo agora:" },
+    ],
+  },
+  texts_info: {
+    title: "Textos do painel de informações",
+    page: "texts",
+    fields: [
+      { id: "infoArtistLabel", type: "text", max: 30, label: "Rótulo dos artistas", description: "Vazio = padrão.", placeholder: DEFAULT_INFO_LABELS.infoArtistLabel },
+      { id: "infoAlbumLabel", type: "text", max: 30, label: "Rótulo do álbum", description: "Vazio = padrão.", placeholder: DEFAULT_INFO_LABELS.infoAlbumLabel },
+      { id: "infoDurationLabel", type: "text", max: 30, label: "Rótulo da duração", description: "Vazio = padrão.", placeholder: DEFAULT_INFO_LABELS.infoDurationLabel },
+      { id: "infoListeningLabel", type: "text", max: 30, label: "Rótulo de quem está ouvindo", description: "Vazio = padrão.", placeholder: DEFAULT_INFO_LABELS.infoListeningLabel },
+      { id: "lyricsTitle", type: "text", max: 30, label: "Título da letra", description: "Vazio = padrão.", placeholder: DEFAULT_INFO_LABELS.lyricsTitle },
+    ],
+  },
+  btn_emoji: {
+    title: "Emojis dos botões",
+    page: "buttons",
+    fields: [
+      { id: "linkEmoji", type: "emoji", max: 60, label: "Emoji do botão de link", description: "Emoji comum ou <:nome:id>. Vazio = sem emoji.", placeholder: "🎧" },
+      { id: "infoEmoji", type: "emoji", max: 60, label: "Emoji do botão de informações", description: "Vazio = sem emoji.", placeholder: "ℹ️" },
+      { id: "refreshEmoji", type: "emoji", max: 60, label: "Emoji do botão de atualizar", description: "Vazio = sem emoji.", placeholder: "🔄" },
+    ],
+  },
+};
+
+// Valor inicial de cada campo (mostra só o que foi personalizado)
+function fieldValue(field, cfg) {
+  const value = cfg[field.id];
+  if (value == null) return "";
+  if (field.type === "text") {
+    const def = DEFAULT_INFO_LABELS[field.id];
+    return def && value === def ? "" : String(value);
+  }
+  return String(value);
+}
+
+function buildFieldsModal(kind, cfg) {
+  const spec = MODALS[kind];
+  return modal(
+    `sptcfg_modal:${kind}`,
+    spec.title,
+    ...spec.fields.map((f) =>
+      textLabel({
+        id: f.id,
+        label: f.label,
+        description: f.description,
+        max: f.type === "hex" ? 7 : f.type === "int" || f.type === "intOrEmpty" ? 3 : f.max,
+        value: fieldValue(f, cfg),
+        placeholder: f.placeholder,
+      })
+    )
+  );
+}
+
 module.exports = {
   buildSpotifyHome,
   buildSpotifyUse,
   buildSpotifyLook,
+  buildSpotifyColors,
+  buildSpotifyShape,
+  buildSpotifyTexts,
   buildSpotifyButtons,
   buildSpotifyBehavior,
+  MODALS,
+  buildFieldsModal,
   buildCooldownModal,
   buildLabelsModal,
   buildBehaviorModal,

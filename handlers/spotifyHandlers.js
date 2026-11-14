@@ -30,9 +30,10 @@ async function buildCardPayload({ track, member, userId, cfg, preview = false })
       positionMs: getPosition(track),
       durationMs: track.durationMs,
       userName: member?.user?.username ?? "alguém", // nameTag (sem caracteres que a fonte não desenha)
+      displayName: member?.displayName ?? member?.user?.username ?? "alguém",
       avatarUrl: member?.displayAvatarURL({ extension: "png", size: 128 }) ?? null,
     },
-    { barColor: cfg.barColor, showPill: cfg.showPill, showNowPlaying: cfg.showNowPlaying, glass: cfg.glass }
+    cfg // cores, formato, textos e ícones do painel (a renderização lê só o que precisa)
   );
   const fileName = `spotify-${Date.now()}.png`;
   return {
@@ -92,6 +93,7 @@ async function handleSpotifyButton(interaction) {
         partLabel: label(0),
         lyricsSource: cfg.lyricsSource,
         creditSource: lyrics?.source,
+        cfg,
         lyricsNote: lyrics?.instrumental
           ? "Essa música é instrumental."
           : "Não encontrei a letra dessa música.",
@@ -101,7 +103,7 @@ async function handleSpotifyButton(interaction) {
     });
 
     for (let i = 1; i < parts.length; i++) {
-      await interaction.followUp({ components: buildLyricsPart(parts[i], label(i)), flags: EPHEMERAL_V2 });
+      await interaction.followUp({ components: buildLyricsPart(parts[i], label(i), cfg), flags: EPHEMERAL_V2 });
     }
   }
 }

@@ -10,15 +10,67 @@ const DEFAULT_LABELS = {
   refreshLabel: "Atualizar",
 };
 
+// Textos do painel de informações (botão "Informações e letra")
+const DEFAULT_INFO_LABELS = {
+  infoArtistLabel: "Artista(s)",
+  infoAlbumLabel: "Álbum",
+  infoDurationLabel: "Duração",
+  infoListeningLabel: "Ouvindo",
+  lyricsTitle: "Letra",
+};
+
+// ---------- Validação dos campos editáveis ----------
+
+// "#abc", "abc", "#aabbcc" -> "#aabbcc". Vazio -> "". Inválido -> null.
+function normalizeHex(raw) {
+  const value = String(raw ?? "").trim();
+  if (!value) return "";
+  const match = value.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!match) return null;
+  let hex = match[1].toLowerCase();
+  if (hex.length === 3) hex = [...hex].map((c) => c + c).join("");
+  return `#${hex}`;
+}
+
+// Ícone da pílula: "" = padrão | "-" = sem ícone | ID de emoji do Discord (ou <:nome:id>) | link https de imagem.
+// Retorna a string a guardar ou null se for inválido.
+function normalizeIcon(raw) {
+  const value = String(raw ?? "").trim();
+  if (!value || value === "-") return value;
+  const custom = value.match(/^<a?:\w+:(\d{17,20})>$/) ?? value.match(/^(\d{17,20})$/);
+  if (custom) return custom[1];
+  if (/^https:\/\/\S+$/i.test(value) && value.length <= 300) return value;
+  return null;
+}
+
+// Emoji de botão: unicode ou <:nome:id> / <a:nome:id>. "" = sem emoji. Inválido -> null.
+function normalizeEmoji(raw) {
+  const value = String(raw ?? "").trim();
+  if (!value) return "";
+  if (/^<a?:\w{2,32}:\d{17,20}>$/.test(value)) return value;
+  if (value.length <= 16 && /\p{Extended_Pictographic}/u.test(value)) return value;
+  return null;
+}
+
+// Converte o emoji guardado para o formato do ButtonBuilder
+function buttonEmoji(value) {
+  if (!value) return null;
+  const custom = value.match(/^<(a?):(\w+):(\d{17,20})>$/);
+  return custom ? { animated: custom[1] === "a", name: custom[2], id: custom[3] } : value;
+}
+
 const ids = (list) => [...new Set((Array.isArray(list) ? list : []).map(String))];
 const int = (value, fallback, min, max) => {
   const n = Number(value);
   return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.floor(n))) : fallback;
 };
-const label = (value, fallback) => {
-  const clean = typeof value === "string" ? value.trim().slice(0, 80) : "";
+const label = (value, fallback, max = 80) => {
+  const clean = typeof value === "string" ? value.trim().slice(0, max) : "";
   return clean || fallback;
 };
+const hex = (value) => normalizeHex(value) || "";
+const oneOf = (value, list, fallback) => (list.includes(value) ? value : fallback);
+const short = (value, max) => (typeof value === "string" ? value.trim().slice(0, max) : "");
 
 function toConfig(doc) {
   return {
@@ -29,7 +81,34 @@ function toConfig(doc) {
     allowOthers: doc?.allowOthers ?? true,
     cooldown: int(doc?.cooldown, 0, 0, 3600),
 
-    barColor: doc?.barColor === "cover" ? "cover" : "green",
+    barColor: oneOf(doc?.barColor, ["green", "cover", "custom"], "green"),
+    barHex: hex(doc?.barHex),
+    trackHex: hex(doc?.trackHex),
+    knobHex: hex(doc?.knobHex),
+    titleHex: hex(doc?.titleHex),
+    artistHex: hex(doc?.artistHex),
+    timeHex: hex(doc?.timeHex),
+    pillTextHex: hex(doc?.pillTextHex),
+    footerTextHex: hex(doc?.footerTextHex),
+    bgHex: hex(doc?.bgHex),
+    bgHex2: hex(doc?.bgHex2),
+    shadeHex: hex(doc?.shadeHex),
+    glassHex: hex(doc?.glassHex),
+    containerHex: hex(doc?.containerHex),
+
+    radius: int(doc?.radius, 34, 0, 60),
+    blur: int(doc?.blur, 22, 0, 40),
+    barHeight: int(doc?.barHeight, 7, 3, 16),
+    overlay: doc?.overlay == null ? null : int(doc.overlay, 22, 0, 90),
+    showTimes: doc?.showTimes ?? true,
+    showKnob: doc?.showKnob ?? true,
+
+    pillText: short(doc?.pillText, 20),
+    pillIcon: normalizeIcon(doc?.pillIcon) ?? "",
+    footerText: short(doc?.footerText, 30),
+    footerName: oneOf(doc?.footerName, ["username", "display", "none"], "username"),
+    showAvatar: doc?.showAvatar ?? true,
+
     showNowPlaying: doc?.showNowPlaying ?? true,
     showPill: doc?.showPill ?? true,
     glass: ["dark", "normal", "light"].includes(doc?.glass) ? doc.glass : "normal",
@@ -40,6 +119,17 @@ function toConfig(doc) {
     linkLabel: label(doc?.linkLabel, DEFAULT_LABELS.linkLabel),
     infoLabel: label(doc?.infoLabel, DEFAULT_LABELS.infoLabel),
     refreshLabel: label(doc?.refreshLabel, DEFAULT_LABELS.refreshLabel),
+    linkEmoji: normalizeEmoji(doc?.linkEmoji) ?? "",
+    infoEmoji: normalizeEmoji(doc?.infoEmoji) ?? "",
+    refreshEmoji: normalizeEmoji(doc?.refreshEmoji) ?? "",
+    infoStyle: oneOf(doc?.infoStyle, ["secondary", "primary", "success", "danger"], "secondary"),
+    refreshStyle: oneOf(doc?.refreshStyle, ["secondary", "primary", "success", "danger"], "secondary"),
+
+    infoArtistLabel: label(doc?.infoArtistLabel, DEFAULT_INFO_LABELS.infoArtistLabel, 30),
+    infoAlbumLabel: label(doc?.infoAlbumLabel, DEFAULT_INFO_LABELS.infoAlbumLabel, 30),
+    infoDurationLabel: label(doc?.infoDurationLabel, DEFAULT_INFO_LABELS.infoDurationLabel, 30),
+    infoListeningLabel: label(doc?.infoListeningLabel, DEFAULT_INFO_LABELS.infoListeningLabel, 30),
+    lyricsTitle: label(doc?.lyricsTitle, DEFAULT_INFO_LABELS.lyricsTitle, 30),
 
     autoDeleteMinutes: int(doc?.autoDeleteMinutes, 0, 0, 1440),
     notListeningMessage: typeof doc?.notListeningMessage === "string" ? doc.notListeningMessage.slice(0, 300) : "",
@@ -108,6 +198,11 @@ const startCooldown = (guildId, userId) => {
 
 module.exports = {
   DEFAULT_LABELS,
+  DEFAULT_INFO_LABELS,
+  normalizeHex,
+  normalizeIcon,
+  normalizeEmoji,
+  buttonEmoji,
   getSpotifyConfig,
   updateSpotifyConfig,
   resetSpotifyConfig,

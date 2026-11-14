@@ -1,13 +1,27 @@
 const { MessageFlags, PermissionFlagsBits, TextDisplayBuilder } = require("discord.js");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
-const { getSpotifyConfig, updateSpotifyConfig, resetSpotifyConfig } = require("../utils/spotify/store");
+const {
+  getSpotifyConfig,
+  updateSpotifyConfig,
+  resetSpotifyConfig,
+  normalizeHex,
+  normalizeIcon,
+  normalizeEmoji,
+} = require("../utils/spotify/store");
+const { VISUAL_DEFAULTS, COLOR_FIELDS, SHAPE_FIELDS, THEMES } = require("../utils/spotify/themes");
+const { sampleCoverUrl } = require("../utils/spotify/sample");
 const { getSpotify } = require("../utils/spotify/activity");
 const {
   buildSpotifyHome,
   buildSpotifyUse,
   buildSpotifyLook,
+  buildSpotifyColors,
+  buildSpotifyShape,
+  buildSpotifyTexts,
   buildSpotifyButtons,
   buildSpotifyBehavior,
+  MODALS,
+  buildFieldsModal,
   buildCooldownModal,
   buildLabelsModal,
   buildBehaviorModal,
@@ -42,6 +56,9 @@ const PAGES = {
   home: (guild, cfg) => buildSpotifyHome(guild, cfg),
   use: (guild, cfg) => buildSpotifyUse(guild, cfg),
   look: (guild, cfg) => buildSpotifyLook(cfg),
+  colors: (guild, cfg) => buildSpotifyColors(cfg),
+  shape: (guild, cfg) => buildSpotifyShape(cfg),
+  texts: (guild, cfg) => buildSpotifyTexts(cfg),
   buttons: (guild, cfg) => buildSpotifyButtons(cfg),
   behavior: (guild, cfg) => buildSpotifyBehavior(cfg),
 };
@@ -58,6 +75,9 @@ const TOGGLES = {
   sptcfg_others: ["allowOthers", "home"],
   sptcfg_nowplaying: ["showNowPlaying", "look"],
   sptcfg_pill: ["showPill", "look"],
+  sptcfg_times: ["showTimes", "shape"],
+  sptcfg_knob: ["showKnob", "shape"],
+  sptcfg_avatar: ["showAvatar", "texts"],
   sptcfg_infobtn: ["showInfoButton", "buttons"],
   sptcfg_refreshbtn: ["showRefreshButton", "buttons"],
 };
@@ -68,7 +88,7 @@ const SAMPLE_TRACK = () => ({
   title: "Música de exemplo",
   artists: "Artista de exemplo",
   album: "Álbum de exemplo",
-  coverUrl: null,
+  coverUrl: sampleCoverUrl(),
   startMs: Date.now() - 83_000,
   durationMs: 215_000,
 });
@@ -88,7 +108,7 @@ async function sendPreview(interaction, cfg) {
 
   const note = real
     ? "-# Pré-visualização com a música que você está ouvindo agora. Os botões ficam desligados aqui."
-    : "-# Pré-visualização com uma música de exemplo (sem capa, então a barra \"da capa\" aparece verde). Ouça algo no Spotify para ver com a capa real.";
+    : "-# Pré-visualização com uma música e uma capa de exemplo. Ouça algo no Spotify para ver com a capa real.";
   return interaction.editReply({
     components: [new TextDisplayBuilder().setContent(note), ...components],
     files,
@@ -120,9 +140,53 @@ async function handleSpotifyConfigButton(interaction) {
     }
 
     case "sptcfg_bar": {
-      const next = await updateSpotifyConfig(guild.id, { barColor: cfg.barColor === "cover" ? "green" : "cover" });
+      // verde -> capa -> personalizada (só existe se já houver uma cor da barra definida)
+      const order = cfg.barHex ? ["green", "cover", "custom"] : ["green", "cover"];
+      const next = await updateSpotifyConfig(guild.id, {
+        barColor: order[(order.indexOf(cfg.barColor) + 1) % order.length],
+      });
       return show("look", next);
     }
+
+    case "sptcfg_name": {
+      const order = ["username", "display", "none"];
+      const next = await updateSpotifyConfig(guild.id, {
+        footerName: order[(order.indexOf(cfg.footerName) + 1) % order.length],
+      });
+      return show("texts", next);
+    }
+
+    case "sptcfg_style": {
+      const field = arg === "refresh" ? "refreshStyle" : "infoStyle";
+      const order = ["secondary", "primary", "success", "danger"];
+      const next = await updateSpotifyConfig(guild.id, { [field]: order[(order.indexOf(cfg[field]) + 1) % order.length] });
+      return show("buttons", next);
+    }
+
+    case "sptcfg_resetcolors": {
+      const patch = Object.fromEntries(COLOR_FIELDS.map((key) => [key, ""]));
+      if (cfg.barColor === "custom") patch.barColor = "green";
+      return show("colors", await updateSpotifyConfig(guild.id, patch));
+    }
+
+    case "sptcfg_resetshape":
+      return show(
+        "shape",
+        await updateSpotifyConfig(guild.id, Object.fromEntries(SHAPE_FIELDS.map((key) => [key, VISUAL_DEFAULTS[key]])))
+      );
+
+    case "sptcfg_resettexts":
+      return show(
+        "texts",
+        await updateSpotifyConfig(guild.id, {
+          pillText: "",
+          pillIcon: "",
+          footerText: "",
+          footerName: "username",
+          showAvatar: true,
+          ...Object.fromEntries(MODALS.texts_info.fields.map((f) => [f.id, ""])),
+        })
+      );
 
     case "sptcfg_page":
       return PAGES[arg] ? show(arg, cfg) : undefined;
@@ -131,6 +195,7 @@ async function handleSpotifyConfigButton(interaction) {
       return sendPreview(interaction, cfg);
 
     case "sptcfg_edit":
+      if (MODALS[arg]) return interaction.showModal(buildFieldsModal(arg, cfg));
       if (arg === "cooldown") return interaction.showModal(buildCooldownModal(cfg));
       if (arg === "labels") return interaction.showModal(buildLabelsModal(cfg));
       if (arg === "behavior") return interaction.showModal(buildBehaviorModal(cfg));
@@ -156,6 +221,14 @@ async function handleSpotifyConfigSelect(interaction) {
   const { guild, customId, values } = interaction;
 
   // [campo, tela, valores válidos (para menus de texto) ou null (cargos/canais, podem ficar vazios)]
+  // Tema pronto: troca todo o visual (cores, vidro e formato) de uma vez
+  if (customId === "sptcfg_theme") {
+    const theme = THEMES[values[0]];
+    if (!theme) return;
+    const cfg = await updateSpotifyConfig(guild.id, { ...VISUAL_DEFAULTS, ...theme.patch });
+    return interaction.update({ components: await page("look", guild, cfg) });
+  }
+
   const fields = {
     sptcfg_allowedch: ["allowedChannels", "use", null],
     sptcfg_roles: ["roles", "use", null],
@@ -205,7 +278,44 @@ async function handleSpotifyConfigModal(interaction) {
   const patch = {};
   let where = "home";
 
-  if (kind === "cooldown") {
+  if (MODALS[kind]) {
+    const spec = MODALS[kind];
+    where = spec.page;
+    for (const field of spec.fields) {
+      const raw = readText(interaction, field.id);
+      if (raw === null) continue; // campo não veio no modal: não mexe
+
+      if (field.type === "hex") {
+        const hex = normalizeHex(raw);
+        if (hex === null) return deny(interaction, `${field.label}: use um código de cor como #ff5fa2.`);
+        patch[field.id] = hex;
+      } else if (field.type === "int" || field.type === "intOrEmpty") {
+        if (!raw) {
+          if (field.type === "intOrEmpty") patch[field.id] = null;
+          continue; // vazio mantém o valor atual
+        }
+        const result = readNumber(interaction, field.id, cfg[field.id], field.min, field.max, field.label);
+        if (result.error) return deny(interaction, result.error);
+        patch[field.id] = result.value;
+      } else if (field.type === "icon") {
+        const icon = normalizeIcon(raw);
+        if (icon === null) return deny(interaction, `${field.label}: use o ID de um emoji do Discord, <:nome:id> ou um link https.`);
+        patch[field.id] = icon;
+      } else if (field.type === "emoji") {
+        const emoji = normalizeEmoji(raw);
+        if (emoji === null) return deny(interaction, `${field.label}: use um emoji comum ou um emoji do servidor no formato <:nome:id>.`);
+        patch[field.id] = emoji;
+      } else {
+        patch[field.id] = raw.slice(0, field.max);
+      }
+    }
+
+    // A cor da barra definida liga o modo "personalizada"; sem cor, volta ao verde
+    if ("barHex" in patch) {
+      if (patch.barHex) patch.barColor = "custom";
+      else if (cfg.barColor === "custom") patch.barColor = "green";
+    }
+  } else if (kind === "cooldown") {
     where = "use";
     const result = readNumber(interaction, "cooldown", cfg.cooldown, 0, 3600, "Espera entre usos");
     if (result.error) return deny(interaction, result.error);
