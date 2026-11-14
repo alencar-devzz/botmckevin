@@ -21,6 +21,7 @@ const { handleBumpButton } = require("./bumpHandlers");
 const { handleAntiRaidButton } = require("./antiRaidHandlers");
 const { handleMessageButton } = require("./mensagemHandlers");
 const { handleMetricsButton } = require("./metricasHandlers");
+const { handleSpotifyButton } = require("./spotifyHandlers");
 
 const {
   handleCallHubConfigButton,
@@ -33,6 +34,11 @@ async function handleButton(interaction) {
   // Central de ajuda (comando /help)
   if (customId.startsWith("help:")) {
     return handleHelpButton(interaction);
+  }
+
+  // Card do comando spotify
+  if (customId.startsWith("spt:")) {
+    return handleSpotifyButton(interaction);
   }
 
   // Painel do comando metricas

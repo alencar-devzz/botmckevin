@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
+    "@napi-rs/canvas": "^1.1.1",
+    "dejavu-fonts-ttf": "^2.37.3",
     "discord.js": "^14.23.0",
     "dotenv": "^16.4.5",
     "mongoose": "^8.9.5"
