@@ -128,11 +128,13 @@ module.exports = {
     }
 
     const mention = `<@${user.id}>`;
+    const avatarUrl = user.displayAvatarURL({ extension: "png", size: 256 });
     const panelMsg = await message.channel.send({
       components: buildConfirmPanel({
         title: `Unban · ${user.tag ?? user.username}`,
         question: `Deseja realmente desbanir ${mention} do servidor?`,
         reason,
+        avatarUrl,
       }),
       flags: MessageFlags.IsComponentsV2,
       allowedMentions: { parse: [] },
@@ -146,6 +148,7 @@ module.exports = {
         targetTag: user.tag ?? user.username,
         reason,
         guild: message.guild,
+        avatarUrl,
         message: panelMsg,
         authorId: message.author.id,
       },

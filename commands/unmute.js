@@ -99,11 +99,13 @@ module.exports = {
     }
 
     const mention = `<@${user.id}>`;
+    const avatarUrl = user.displayAvatarURL({ extension: "png", size: 256 });
     const panelMsg = await message.channel.send({
       components: buildConfirmPanel({
         title: `Unmute · ${user.tag ?? user.username}`,
         question: `Deseja realmente desmutar ${mention}?`,
         reason,
+        avatarUrl,
       }),
       flags: MessageFlags.IsComponentsV2,
       allowedMentions: { parse: [] },
@@ -118,6 +120,7 @@ module.exports = {
         reason,
         guild: message.guild,
         member,
+        avatarUrl,
         message: panelMsg,
         authorId: message.author.id,
       },
