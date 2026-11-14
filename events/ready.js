@@ -2,6 +2,7 @@ const { ActivityType } = require("discord.js");
 const { DEFAULT_PREFIX } = require("../utils/getPrefix");
 const { getBotConfig, applyPresence } = require("../utils/botPresence");
 const { sweepCalls } = require("../utils/callHub");
+const { restoreCardTimers } = require("../utils/spotify/autoDelete");
 
 // Servidor onde os slash commands são registrados (pode trocar pela variável GUILD_ID).
 const GUILD_ID = process.env.GUILD_ID || "1542321888175456357";
@@ -17,6 +18,13 @@ module.exports = {
       await sweepCalls(client);
     } catch (err) {
       console.error("[CALLS] Erro ao verificar as calls ao iniciar:", err.message);
+    }
+
+    // n!spotify: retoma a exclusão automática dos cards que ainda estavam agendados
+    try {
+      await restoreCardTimers(client);
+    } catch (err) {
+      console.error("[SPOTIFY] Erro ao retomar as exclusões automáticas:", err.message);
     }
 
     // Registra os slash commands direto no servidor (aparecem na hora).

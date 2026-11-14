@@ -33,6 +33,11 @@ function buildComunidadePanel() {
         label: "Comando cl",
         description: "Apaga as mensagens de quem digita cl. Quem usa, canais e limites.",
         value: "cl",
+      },
+      {
+        label: "Comando spotify",
+        description: "Card da música do Spotify. Uso, aparência, botões, letra e comportamento.",
+        value: "spotify",
       }
     );
 

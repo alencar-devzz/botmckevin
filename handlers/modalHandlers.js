@@ -5,6 +5,7 @@ const { handleAparenciaModal } = require("./aparenciaHandlers");
 const { handleTicketModal } = require("./ticketHandlers");
 const { handlePostModal, handlePostsConfigModal } = require("./postsHandlers");
 const { handleClConfigModal } = require("./clHandlers");
+const { handleSpotifyConfigModal } = require("./spotifyConfigHandlers");
 const { handleNukeConfigModal } = require("./nukeHandlers");
 const { handleRoleManageModal, handleRoleManageConfigModal } = require("./roleManageHandlers");
 const { handleBumpModal } = require("./bumpHandlers");
@@ -48,6 +49,10 @@ async function handleModal(interaction) {
 
   if (customId.startsWith("clcfg_modal:")) {
     return handleClConfigModal(interaction);
+  }
+
+  if (customId.startsWith("sptcfg_modal:")) {
+    return handleSpotifyConfigModal(interaction);
   }
 
   if (customId.startsWith("nukecfg_modal:")) {

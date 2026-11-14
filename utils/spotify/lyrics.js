@@ -19,7 +19,7 @@ const cleanTitle = (title) =>
   title.replace(/\s*[(\[].*?[)\]]/g, "").replace(/\s+-\s+.*$/, "").trim() || title;
 
 // Retorna { text } com a letra, { instrumental: true } ou null se não achar.
-async function fetchLyrics({ title, artists, album, durationMs }) {
+async function fetchFromLrclib({ title, artists, album, durationMs }) {
   const artist = artists.split(";")[0].trim();
   const seconds = Math.round(durationMs / 1000);
 
@@ -51,6 +51,47 @@ async function fetchLyrics({ title, artists, album, durationMs }) {
   return null;
 }
 
+// Vagalume (https://api.vagalume.com.br): precisa de uma chave grátis na variável VAGALUME_API_KEY.
+const VAGALUME_KEY = () => process.env.VAGALUME_API_KEY || "";
+const vagalumeAvailable = () => Boolean(VAGALUME_KEY());
+
+async function fetchFromVagalume({ title, artists }) {
+  if (!vagalumeAvailable()) return null;
+  try {
+    const params = new URLSearchParams({
+      art: artists.split(";")[0].trim(),
+      mus: cleanTitle(title),
+      apikey: VAGALUME_KEY(),
+    });
+    const res = await fetch(`https://api.vagalume.com.br/search.php?${params}`, {
+      headers: HEADERS,
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const text = data?.mus?.[0]?.text?.trim();
+    return text ? { text } : null;
+  } catch {
+    return null;
+  }
+}
+
+// source: "lrclib" | "vagalume" | "off". O Vagalume cai para o LRCLIB se não achar a letra.
+// Retorna { text, source } | { instrumental: true } | null
+async function fetchLyrics(track, source = "lrclib") {
+  if (source === "off") return null;
+
+  if (source === "vagalume") {
+    const found = await fetchFromVagalume(track);
+    if (found) return { ...found, source: "vagalume" };
+  }
+
+  const found = await fetchFromLrclib(track);
+  return found?.text ? { ...found, source: "lrclib" } : found;
+}
+
+const SOURCE_NAME = { lrclib: "LRCLIB", vagalume: "Vagalume" };
+
 // Divide a letra em partes por linha (cada mensagem em Components V2 aceita ~4000 caracteres no total).
 function splitLyrics(text, size = 3300) {
   const parts = [];
@@ -66,4 +107,4 @@ function splitLyrics(text, size = 3300) {
   return parts;
 }
 
-module.exports = { fetchLyrics, splitLyrics };
+module.exports = { fetchLyrics, splitLyrics, vagalumeAvailable, SOURCE_NAME };

@@ -16,6 +16,7 @@ const { buildModeracaoPanel } = require("../ui/moderacao");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
 const { openPostsPanel, handlePostsConfigSelect } = require("./postsHandlers");
 const { openClPanel, handleClConfigSelect } = require("./clHandlers");
+const { openSpotifyPanel, handleSpotifyConfigSelect } = require("./spotifyConfigHandlers");
 const { openNukePanel, handleNukeConfigSelect } = require("./nukeHandlers");
 const {
   openCallHubPanel,
@@ -77,6 +78,11 @@ async function handleSelect(interaction) {
   // Configuração do comando cl no n!menu
   if (customId.startsWith("clcfg_")) {
     return handleClConfigSelect(interaction);
+  }
+
+  // Configuração do comando spotify no n!menu
+  if (customId.startsWith("sptcfg_")) {
+    return handleSpotifyConfigSelect(interaction);
   }
 
   // Configuração do comando nnuke no n!menu
@@ -171,6 +177,9 @@ async function handleSelect(interaction) {
       }
       if (value === "cl") {
         return openClPanel(interaction);
+      }
+      if (value === "spotify") {
+        return openSpotifyPanel(interaction);
       }
       return;
     }

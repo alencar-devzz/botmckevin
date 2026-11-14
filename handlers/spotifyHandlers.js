@@ -3,6 +3,7 @@ const { getSpotify, getPosition } = require("../utils/spotify/activity");
 const { renderSpotifyCard } = require("../utils/spotify/card");
 const { fetchLyrics, splitLyrics } = require("../utils/spotify/lyrics");
 const { buildSpotifyCard, buildInfoPanel, buildLyricsPart, buildNotice } = require("../ui/spotify");
+const { getSpotifyConfig } = require("../utils/spotify/store");
 
 const V2 = MessageFlags.IsComponentsV2;
 const EPHEMERAL_V2 = MessageFlags.Ephemeral | MessageFlags.IsComponentsV2;
@@ -17,20 +18,25 @@ function rememberCard(messageId, track) {
   if (cards.size > 300) cards.delete(cards.keys().next().value);
 }
 
-// Monta o card (imagem + botões) de uma música. Usado pelo comando e pelo botão Atualizar.
-async function buildCardPayload({ track, member, userId }) {
-  const buffer = await renderSpotifyCard({
-    title: track.title,
-    artists: track.artists,
-    coverUrl: track.coverUrl,
-    positionMs: getPosition(track),
-    durationMs: track.durationMs,
-    userName: member?.user?.username ?? "alguém", // nameTag (sem caracteres que a fonte não desenha)
-    avatarUrl: member?.displayAvatarURL({ extension: "png", size: 128 }) ?? null,
-  });
+// Monta o card (imagem + botões) de uma música. Usado pelo comando, pelo botão Atualizar e pela
+// pré-visualização do painel. cfg = configuração do n!menu (se não vier, é carregada do servidor).
+async function buildCardPayload({ track, member, userId, cfg, preview = false }) {
+  cfg ??= await getSpotifyConfig(member.guild.id);
+  const buffer = await renderSpotifyCard(
+    {
+      title: track.title,
+      artists: track.artists,
+      coverUrl: track.coverUrl,
+      positionMs: getPosition(track),
+      durationMs: track.durationMs,
+      userName: member?.user?.username ?? "alguém", // nameTag (sem caracteres que a fonte não desenha)
+      avatarUrl: member?.displayAvatarURL({ extension: "png", size: 128 }) ?? null,
+    },
+    { barColor: cfg.barColor, showPill: cfg.showPill, showNowPlaying: cfg.showNowPlaying, glass: cfg.glass }
+  );
   const fileName = `spotify-${Date.now()}.png`;
   return {
-    components: buildSpotifyCard({ fileName, track, userId }),
+    components: buildSpotifyCard({ fileName, track, userId, cfg, preview }),
     files: [new AttachmentBuilder(buffer, { name: fileName })],
     flags: V2,
     allowedMentions: NO_MENTIONS,
@@ -54,7 +60,8 @@ async function handleSpotifyButton(interaction) {
     }
 
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
-    const { components, files } = await buildCardPayload({ track, member, userId });
+    const cfg = await getSpotifyConfig(interaction.guild.id);
+    const { components, files } = await buildCardPayload({ track, member, userId, cfg });
     rememberCard(interaction.message.id, track);
     // Edita a própria mensagem (a imagem antiga é trocada pela nova)
     return interaction.message.edit({ components, files, attachments: [] });
@@ -72,7 +79,8 @@ async function handleSpotifyButton(interaction) {
       });
     }
 
-    const lyrics = await fetchLyrics(track);
+    const cfg = await getSpotifyConfig(interaction.guild.id);
+    const lyrics = await fetchLyrics(track, cfg.lyricsSource);
     const parts = lyrics?.text ? splitLyrics(lyrics.text).slice(0, MAX_PARTS) : [];
     const label = (i) => (parts.length > 1 ? ` (${i + 1}/${parts.length})` : "");
 
@@ -82,6 +90,8 @@ async function handleSpotifyButton(interaction) {
         userId,
         lyricsPart: parts[0] ?? null,
         partLabel: label(0),
+        lyricsSource: cfg.lyricsSource,
+        creditSource: lyrics?.source,
         lyricsNote: lyrics?.instrumental
           ? "Essa música é instrumental."
           : "Não encontrei a letra dessa música.",
