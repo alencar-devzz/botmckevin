@@ -33,7 +33,7 @@ const FALLBACK = {
     staffOnly: true,
   },
   cl: {
-    category: "Moderação",
+    category: "Comunidade",
     description: "Apaga as suas mensagens do canal. Também funciona sem prefixo, digitando só `cl`.",
     usage: "cl",
   },

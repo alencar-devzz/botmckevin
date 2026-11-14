@@ -37,11 +37,6 @@ function buildModeracaoPanel() {
         value: "cargos",
       },
       {
-        label: "Comando cl",
-        description: "Apaga as mensagens de quem digita cl. Quem usa, canais e limites.",
-        value: "cl",
-      },
-      {
         label: "Comando nnuke",
         description: "Recria o canal do zero. Mensagem, cores, quem usa e canais.",
         value: "nuke",

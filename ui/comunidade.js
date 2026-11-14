@@ -28,6 +28,11 @@ function buildComunidadePanel() {
         label: "Calls temporárias",
         description: "Call própria para quem entra no gatilho e painel de gerenciamento.",
         value: "calls",
+      },
+      {
+        label: "Comando cl",
+        description: "Apaga as mensagens de quem digita cl. Quem usa, canais e limites.",
+        value: "cl",
       }
     );
 

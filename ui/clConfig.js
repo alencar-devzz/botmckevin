@@ -86,7 +86,7 @@ function buildClHome(guild, cfg) {
         btn("clcfg_reset", "Restaurar padrão", ButtonStyle.Danger)
       )
     );
-  addBackButton(controls, "back_moderacao");
+  addBackButton(controls, "back_comunidade");
 
   return [header, status, controls];
 }

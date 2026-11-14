@@ -145,9 +145,6 @@ async function handleSelect(interaction) {
       if (value === "cargos") {
         return openRoleManagePanel(interaction);
       }
-      if (value === "cl") {
-        return openClPanel(interaction);
-      }
       if (value === "nuke") {
         return openNukePanel(interaction);
       }
@@ -171,6 +168,9 @@ async function handleSelect(interaction) {
       }
       if (value === "calls") {
         return openCallHubPanel(interaction);
+      }
+      if (value === "cl") {
+        return openClPanel(interaction);
       }
       return;
     }
