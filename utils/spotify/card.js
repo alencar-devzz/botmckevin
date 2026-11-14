@@ -5,7 +5,18 @@ const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
 
 const W = 1100;
 const H = 546;
+const MARGIN = 70; // sobra em volta da cópia desfocada (evita borda transparente do desfoque)
 const GREEN = "#1ed760";
+
+// Ícone do Spotify na pílula: emoji do próprio bot (baixado do CDN do Discord e guardado em memória).
+// Para trocar, mude o ID abaixo. Se não carregar, desenha o logo à mão.
+const SPOTIFY_EMOJI_ID = "1571194086109487216";
+const SPOTIFY_EMOJI_URL = `https://cdn.discordapp.com/emojis/${SPOTIFY_EMOJI_ID}.png?size=128&quality=lossless`;
+let emojiPromise = null;
+const loadSpotifyEmoji = () => (emojiPromise ??= loadImageFromUrl(SPOTIFY_EMOJI_URL).then((img) => {
+  if (!img) emojiPromise = null; // tenta de novo na próxima vez
+  return img;
+}));
 
 // A fonte vem do pacote dejavu-fonts-ttf (não depende das fontes do servidor da Render).
 // Se algo falhar, cai para a fonte padrão do sistema.
@@ -51,15 +62,13 @@ function formatTime(ms) {
   return `${m}:${s}`;
 }
 
-// Faixa de vidro: a própria capa desfocada recortada na área + brilho branco leve e borda fina.
-function glass(ctx, drawBackdrop, x, y, w, h, radius, tint = 0.1) {
+// Faixa de vidro: a capa já desfocada (blurred) recortada na área + escurecimento, brilho leve e borda fina.
+function glass(ctx, blurred, x, y, w, h, radius, tint = 0.1) {
   ctx.save();
   roundRect(ctx, x, y, w, h, radius);
   ctx.clip();
-  ctx.filter = "blur(22px)";
-  drawBackdrop();
-  ctx.filter = "none";
-  ctx.fillStyle = `rgba(0, 0, 0, ${0.38})`;
+  ctx.drawImage(blurred, -MARGIN, -MARGIN);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.38)";
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = `rgba(255, 255, 255, ${tint})`;
   ctx.fillRect(x, y, w, h);
@@ -101,26 +110,39 @@ async function renderSpotifyCard(dados) {
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
 
-  const [cover, avatar] = await Promise.all([loadImageFromUrl(coverUrl), loadImageFromUrl(avatarUrl)]);
+  const [cover, avatar, emoji] = await Promise.all([
+    loadImageFromUrl(coverUrl),
+    loadImageFromUrl(avatarUrl),
+    loadSpotifyEmoji(),
+  ]);
 
-  // Fundo: a capa preenche o card (recorte central); sem capa, um degradê escuro
-  const backdrop = () => {
+  // Pinta a capa (recorte central) ou um degradê escuro, em uma área de largura "w"
+  const paintBackdrop = (c, w, h) => {
     if (cover) {
-      const size = W; // capa quadrada ocupando a largura
-      ctx.drawImage(cover, 0, -(size - H) / 2 - 30, size, size);
+      c.drawImage(cover, 0, -(w - h) / 2 - 30, w, w);
     } else {
-      const g = ctx.createLinearGradient(0, 0, W, H);
+      const g = c.createLinearGradient(0, 0, w, h);
       g.addColorStop(0, "#1f3a2a");
       g.addColorStop(1, "#0b0b0b");
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
+      c.fillStyle = g;
+      c.fillRect(0, 0, w, h);
     }
   };
+
+  // Cópia desfocada da capa, feita uma vez só (o desfoque é a parte mais pesada do desenho)
+  const rawW = W + MARGIN * 2;
+  const rawH = H + MARGIN * 2;
+  const raw = createCanvas(rawW, rawH);
+  paintBackdrop(raw.getContext("2d"), rawW, rawH);
+  const blurred = createCanvas(rawW, rawH);
+  const bctx = blurred.getContext("2d");
+  bctx.filter = "blur(22px)";
+  bctx.drawImage(raw, 0, 0);
 
   // Cantos arredondados do card inteiro
   roundRect(ctx, 0, 0, W, H, 34);
   ctx.clip();
-  backdrop();
+  paintBackdrop(ctx, W, H);
 
   // Escurecimento geral + degradê forte embaixo (legibilidade do texto)
   ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
@@ -133,8 +155,9 @@ async function renderSpotifyCard(dados) {
   ctx.fillRect(0, 200, W, H - 200);
 
   // Pílula "Spotify" de vidro
-  glass(ctx, backdrop, 40, 34, 168, 44, 22, 0.1);
-  spotifyLogo(ctx, 66, 56, 14);
+  glass(ctx, blurred, 40, 34, 168, 44, 22, 0.1);
+  if (emoji) ctx.drawImage(emoji, 50, 41, 30, 30);
+  else spotifyLogo(ctx, 66, 56, 14);
   ctx.fillStyle = "#ffffff";
   ctx.font = `bold 19px ${BOLD}`;
   ctx.textBaseline = "middle";
@@ -182,7 +205,7 @@ async function renderSpotifyCard(dados) {
   ctx.textAlign = "left";
 
   // Rodapé de vidro: "Ouvindo agora" + foto e nome de quem está ouvindo
-  glass(ctx, backdrop, 30, 486, W - 60, 46, 23, 0.08);
+  glass(ctx, blurred, 30, 486, W - 60, 46, 23, 0.08);
   ctx.fillStyle = "#ffffff";
   ctx.font = `bold 21px ${BOLD}`;
   ctx.textBaseline = "middle";
@@ -205,7 +228,7 @@ async function renderSpotifyCard(dados) {
   ctx.font = `21px ${REGULAR}`;
   ctx.fillText(fitText(ctx, userName, 480), ax + 42, 510);
 
-  return canvas.toBuffer("image/png");
+  return canvas.encode("png"); // assíncrono: não trava o bot enquanto gera o PNG
 }
 
 module.exports = { renderSpotifyCard, formatTime };

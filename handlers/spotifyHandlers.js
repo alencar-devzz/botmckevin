@@ -25,7 +25,7 @@ async function buildCardPayload({ track, member, userId }) {
     coverUrl: track.coverUrl,
     positionMs: getPosition(track),
     durationMs: track.durationMs,
-    userName: member?.displayName ?? "alguém",
+    userName: member?.user?.username ?? "alguém", // nameTag (sem caracteres que a fonte não desenha)
     avatarUrl: member?.displayAvatarURL({ extension: "png", size: 128 }) ?? null,
   });
   const fileName = `spotify-${Date.now()}.png`;
@@ -40,20 +40,24 @@ async function buildCardPayload({ track, member, userId }) {
 async function handleSpotifyButton(interaction) {
   const [, action, userId] = interaction.customId.split(":");
 
-  // Botão Atualizar: lê de novo o Spotify da pessoa e refaz o card com o ponto atual da música
+  // Botão Atualizar: lê de novo o Spotify da pessoa e refaz o card com o ponto atual da música.
+  // Confirma o clique ANTES de desenhar a imagem (ganha 15 minutos para responder, não falha por demora).
   if (action === "refresh") {
+    await interaction.deferUpdate();
+
     const track = getSpotify(interaction.guild, userId);
     if (!track) {
-      return interaction.reply({
+      return interaction.followUp({
         components: buildNotice("Essa pessoa não está ouvindo nada no Spotify agora."),
         flags: EPHEMERAL_V2,
       });
     }
 
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
-    const payload = await buildCardPayload({ track, member, userId });
+    const { components, files } = await buildCardPayload({ track, member, userId });
     rememberCard(interaction.message.id, track);
-    return interaction.update({ ...payload, attachments: [] });
+    // Edita a própria mensagem (a imagem antiga é trocada pela nova)
+    return interaction.message.edit({ components, files, attachments: [] });
   }
 
   // Botão Informações e letra: resposta efêmera com os dados e a letra completa
