@@ -25,6 +25,7 @@ const { handleMetricsButton } = require("./metricasHandlers");
 const { handleSpotifyButton } = require("./spotifyHandlers");
 const { handleTagButton } = require("./tagHandlers");
 const { handleDupButton } = require("./dupCategoriaHandlers");
+const { handleEmojiButton } = require("./addEmojiHandlers");
 
 const {
   handleCallHubConfigButton,
@@ -42,6 +43,11 @@ async function handleButton(interaction) {
   // Painel do comando /duplicar-categoria
   if (customId.startsWith("dup:")) {
     return handleDupButton(interaction);
+  }
+
+  // Painel do comando /addemoji
+  if (customId.startsWith("emj:")) {
+    return handleEmojiButton(interaction);
   }
 
   // Painel do comando tag (cada botão entrega um cargo)
