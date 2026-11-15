@@ -22,6 +22,8 @@ const {
   describeCategory,
 } = require("../utils/catClone/clone");
 
+const CHECK = "<:check:1571598243526348850>";
+
 const CH_PAGE_SIZE = 25;
 const MAX_ACCESS_ROLES = 10;
 
@@ -517,7 +519,7 @@ function buildDone(state) {
   ];
 
   const container = new ContainerBuilder().addTextDisplayComponents(
-    text(result.failures.length ? "### Categoria duplicada com avisos" : "### Categoria duplicada"),
+    text(result.failures.length ? "### Categoria duplicada com avisos" : `### ${CHECK} Categoria duplicada`),
     text(lines.join("\n"))
   );
 
