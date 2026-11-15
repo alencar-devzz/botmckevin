@@ -2,7 +2,7 @@ const {
   ContainerBuilder,
   TextDisplayBuilder,
   SeparatorBuilder,
-  SeparatorSpacingSize,
+  SectionBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -14,13 +14,12 @@ const CHECK = "<:check:1571598243526348850>";
 const text = (content) => new TextDisplayBuilder().setContent(String(content || "-").slice(0, 3800));
 const clip = (value, max) => String(value ?? "").slice(0, max);
 
-const ACCENT_ACTIVE = 0xf2b544;
-const ACCENT_DONE = 0x57c785;
-const ACCENT_FAIL = 0xe5544b;
-
-function bar(done, total, size = 20) {
-  const filled = total ? Math.round((done / total) * size) : 0;
-  return `\`[${"=".repeat(filled)}${".".repeat(size - filled)}]\``;
+// Uma bolinha por emoji: cheia (●) quando já foi processado, vazia (○) quando ainda falta.
+// Passando de 20 itens, a barra fica em 20 bolinhas proporcionais.
+function dots(done, total, max = 20) {
+  const size = Math.min(Math.max(total, 1), max);
+  const filled = total ? Math.min(size, Math.round((done / total) * size)) : 0;
+  return `-# ${[...Array(size)].map((_, i) => (i < filled ? "●" : "○")).join(" ")}`;
 }
 
 const reasonLine = {
@@ -36,20 +35,22 @@ function buildActive(state) {
     .setLabel("Parar e finalizar")
     .setStyle(ButtonStyle.Danger);
 
-  const container = new ContainerBuilder()
-    .setAccentColor(ACCENT_ACTIVE)
-    .addActionRowComponents(new ActionRowBuilder().addComponents(stop))
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small))
+  // Título à esquerda e o botão de parar à direita
+  const header = new SectionBuilder()
     .addTextDisplayComponents(
       text("## Coleta de emojis ativa"),
       text("-# Envie emojis ou imagens neste canal, um por mensagem ou vários de uma vez. Cada um entra direto no servidor.")
     )
+    .setButtonAccessory(stop);
+
+  const container = new ContainerBuilder()
+    .addSectionComponents(header)
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
       text(
         [
-          `${bar(state.done, state.total)} **${state.done}/${state.total}**`,
-          `**Na fila:** ${state.total - state.done} · **Adicionados:** ${state.ok.length} · **Falhas:** ${state.failed.length}`,
+          dots(state.done, state.total),
+          `**Processados:** ${state.done}/${state.total} · **Adicionados:** ${state.ok.length} · **Falhas:** ${state.failed.length}`,
           state.current ? `-# Adicionando agora: ${clip(state.current, 60)}` : null,
         ]
           .filter(Boolean)
@@ -72,7 +73,6 @@ function buildActive(state) {
 function buildFinal(state) {
   const none = state.ok.length === 0 && state.failed.length > 0;
   const container = new ContainerBuilder()
-    .setAccentColor(none ? ACCENT_FAIL : ACCENT_DONE)
     .addTextDisplayComponents(
       text(none ? "## Nenhum emoji foi adicionado" : `## ${CHECK} Coleta de emojis concluída`),
       text(`-# ${reasonLine[state.reason] ?? reasonLine.stop}`)
