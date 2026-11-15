@@ -11,6 +11,7 @@ const { openBumpPanel, handleBumpSelect } = require("./bumpHandlers");
 const { handleAntiRaidSelect } = require("./antiRaidHandlers");
 const { handleMessageSelect } = require("./mensagemHandlers");
 const { handleMetricsSelect } = require("./metricasHandlers");
+const { handleDupSelect } = require("./dupCategoriaHandlers");
 const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHandlers");
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
@@ -40,6 +41,11 @@ async function handleSelect(interaction) {
   // Painel do comando metricas
   if (customId.startsWith("met:")) {
     return handleMetricsSelect(interaction);
+  }
+
+  // Painel do comando /duplicar-categoria
+  if (customId.startsWith("dup:")) {
+    return handleDupSelect(interaction);
   }
 
   // Painel do Anti-Raid (comando painelps)

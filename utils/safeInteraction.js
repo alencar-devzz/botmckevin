@@ -33,6 +33,7 @@ const MODAL_BUTTONS = [
   /^pcfg_emoji(:|$)/, // posts
   /^post_comment(:|$)/,
   /^ticket_open:/, // abre modal quando o painel pede motivo
+  /^dup:[^:]+:rename$/, // /duplicar-categoria: nome da cópia
   /^tcfg_(new|a_text|a_color|a_images|m_mode|m_btn|m_ph|o_add|o_edit|o_rmopen|i_text|c_text|i_opttitle|i_images|i_arch|su_text|su_btn|cc_text|lim_text|color|g_limit|x_rename)(:|$)/, // ticket (configuração)
 ];
 
