@@ -23,6 +23,7 @@ const { handleAntiRaidButton } = require("./antiRaidHandlers");
 const { handleMessageButton } = require("./mensagemHandlers");
 const { handleMetricsButton } = require("./metricasHandlers");
 const { handleSpotifyButton } = require("./spotifyHandlers");
+const { handleTagButton } = require("./tagHandlers");
 
 const {
   handleCallHubConfigButton,
@@ -35,6 +36,11 @@ async function handleButton(interaction) {
   // Central de ajuda (comando /help)
   if (customId.startsWith("help:")) {
     return handleHelpButton(interaction);
+  }
+
+  // Painel do comando tag (cada botão entrega um cargo)
+  if (customId.startsWith("tag:")) {
+    return handleTagButton(interaction);
   }
 
   // Card do comando spotify
