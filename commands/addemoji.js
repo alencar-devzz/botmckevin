@@ -5,7 +5,7 @@ const { createSession, enqueue, parseEmojis, cleanName } = require("../utils/add
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 const EPHEMERAL = MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral;
 
-// /addemoji: cola emojis de outros servidores (ou envia uma imagem) e abre uma coleta: tudo que a pessoa
+// /addemoji: cola emojis de outros servidores (ou envia uma imagem, ou nada) e abre uma coleta: tudo que a pessoa
 // enviar no canal depois também vira emoji do servidor, até ela parar no botão do painel (resposta só dela).
 module.exports = {
   name: "addemoji",
@@ -17,7 +17,7 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.CreateGuildExpressions)
     .setContexts(InteractionContextType.Guild)
     .addStringOption((o) =>
-      o.setName("emoji").setDescription("Cole um ou mais emojis de outros servidores").setRequired(true)
+      o.setName("emoji").setDescription("Cole um ou mais emojis de outros servidores (ou deixe vazio e envie no canal)")
     )
     .addStringOption((o) =>
       o
@@ -41,7 +41,8 @@ module.exports = {
       return reply("Eu não tenho a permissão de criar expressões neste servidor.");
     }
 
-    const pasted = parseEmojis(interaction.options.getString("emoji", true));
+    const pastedText = interaction.options.getString("emoji");
+    const pasted = parseEmojis(pastedText);
     const file = interaction.options.getAttachment("arquivo");
     const jobs = [...pasted];
 
@@ -53,7 +54,9 @@ module.exports = {
       }
     }
 
-    if (!jobs.length) {
+    // Sem emoji e sem arquivo: abre a coleta vazia e espera o que a pessoa enviar no canal.
+    // Se colou algo e nada foi reconhecido, avisa.
+    if (!jobs.length && pastedText) {
       return reply("Não encontrei nenhum emoji personalizado no que você colou. Cole emojis de outros servidores (os padrões já existem em todos).");
     }
 
