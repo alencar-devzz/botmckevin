@@ -10,12 +10,12 @@ const MAX_GUILD_CHANNELS = 500;
 
 // Tipos de canal que dá para copiar
 const TYPE_INFO = {
-  [ChannelType.GuildText]: { key: "text", emoji: "💬", label: "Texto" },
-  [ChannelType.GuildAnnouncement]: { key: "announcement", emoji: "📢", label: "Anúncios" },
-  [ChannelType.GuildVoice]: { key: "voice", emoji: "🔊", label: "Voz" },
-  [ChannelType.GuildStageVoice]: { key: "stage", emoji: "🎙️", label: "Palco" },
-  [ChannelType.GuildForum]: { key: "forum", emoji: "🗂️", label: "Fórum" },
-  [ChannelType.GuildMedia]: { key: "media", emoji: "🖼️", label: "Mídia" },
+  [ChannelType.GuildText]: { key: "text", label: "Texto" },
+  [ChannelType.GuildAnnouncement]: { key: "announcement", label: "Anúncios" },
+  [ChannelType.GuildVoice]: { key: "voice", label: "Voz" },
+  [ChannelType.GuildStageVoice]: { key: "stage", label: "Palco" },
+  [ChannelType.GuildForum]: { key: "forum", label: "Fórum" },
+  [ChannelType.GuildMedia]: { key: "media", label: "Mídia" },
 };
 
 const VOICE_TYPES = new Set([ChannelType.GuildVoice, ChannelType.GuildStageVoice]);
@@ -39,17 +39,36 @@ function categoryChildren(category) {
     .sort((a, b) => Number(VOICE_TYPES.has(a.type)) - Number(VOICE_TYPES.has(b.type)) || a.rawPosition - b.rawPosition);
 }
 
-// Canais que serão copiados: tipo ligado e não excluído na lista
-function plannedChannels(state, category) {
-  return categoryChildren(category).filter(
-    (channel) => state.types.has(TYPE_INFO[channel.type].key) && !state.excluded.has(channel.id)
-  );
+// Filtro por nome (o que a pessoa digitou em "Filtrar por nome"): só entra quem contém o texto de "incluir"
+// e nunca quem contém o texto de "excluir"
+function passesFilter(state, channel) {
+  const name = channel.name.toLowerCase();
+  if (state.filterInclude && !name.includes(state.filterInclude.toLowerCase())) return false;
+  if (state.filterExclude && name.includes(state.filterExclude.toLowerCase())) return false;
+  return true;
 }
 
-// Nome do canal na cópia (com "trocar texto", se configurado)
+// Canais que serão copiados: tipo ligado, dentro do filtro e não excluído na lista
+function plannedChannels(state, category) {
+  const list = categoryChildren(category).filter(
+    (channel) =>
+      state.types.has(TYPE_INFO[channel.type].key) && !state.excluded.has(channel.id) && passesFilter(state, channel)
+  );
+  if (state.order === "az") {
+    // Ordem alfabética dentro de cada grupo (texto primeiro, depois voz)
+    list.sort(
+      (a, b) =>
+        Number(VOICE_TYPES.has(a.type)) - Number(VOICE_TYPES.has(b.type)) || a.name.localeCompare(b.name, "pt-BR")
+    );
+  }
+  return list;
+}
+
+// Nome do canal na cópia: troca de texto, depois prefixo e sufixo
 function newChannelName(channel, state) {
-  if (!state.find) return channel.name;
-  const name = channel.name.replace(new RegExp(escapeRegex(state.find), "gi"), state.replace ?? "").slice(0, 100);
+  let name = channel.name;
+  if (state.find) name = name.replace(new RegExp(escapeRegex(state.find), "gi"), state.replace ?? "");
+  name = `${state.prefix ?? ""}${name}${state.suffix ?? ""}`.slice(0, 100);
   return name.trim() ? name : channel.name;
 }
 
@@ -128,13 +147,10 @@ async function reviewInfo(state, guild) {
   return { source, planned, toCreate, blocking, warnings };
 }
 
-// Permissões (cargos e membros) de um canal, prontas para criar o novo.
-// Membros que saíram do servidor e bits que o bot não tem são tirados (e contados em ctx).
-async function buildOverwrites(source, guild, ctx) {
-  const bot = guild.members.me;
-  const mask = !bot || bot.permissions.has(PermissionFlagsBits.Administrator) ? null : bot.permissions.bitfield;
+// Permissões (cargos e membros) de um canal. Membros que saíram do servidor e cargos apagados ficam de fora
+// (contados em ctx).
+async function readOverwrites(source, guild, ctx) {
   const list = [];
-
   for (const o of source.permissionOverwrites.cache.values()) {
     if (o.type === OverwriteType.Member) {
       if (!ctx.members.has(o.id)) {
@@ -149,61 +165,113 @@ async function buildOverwrites(source, guild, ctx) {
       ctx.skippedRoles++;
       continue;
     }
-
-    let allow = o.allow.bitfield;
-    let deny = o.deny.bitfield;
-    if (mask !== null) {
-      const maskedAllow = allow & mask;
-      const maskedDeny = deny & mask;
-      if (maskedAllow !== allow || maskedDeny !== deny) ctx.maskedOverwrites++;
-      allow = maskedAllow;
-      deny = maskedDeny;
-    }
-    list.push({ id: o.id, type: o.type, allow, deny });
+    list.push({ id: o.id, type: o.type, allow: o.allow.bitfield, deny: o.deny.bitfield });
   }
   return list;
 }
 
+// Opções da aba "Acesso": esconde de @everyone e/ou dá acesso (ver e, em voz, entrar) a cargos escolhidos
+function applyAccess(list, state, guild, voice) {
+  const out = list.map((o) => ({ ...o }));
+  const upsert = (roleId, change) => {
+    let entry = out.find((o) => o.id === roleId && o.type === OverwriteType.Role);
+    if (!entry) {
+      entry = { id: roleId, type: OverwriteType.Role, allow: 0n, deny: 0n };
+      out.push(entry);
+    }
+    change(entry);
+  };
+
+  if (state.privateCopy) {
+    upsert(guild.id, (o) => {
+      o.deny |= PermissionFlagsBits.ViewChannel;
+      o.allow &= ~PermissionFlagsBits.ViewChannel;
+    });
+  }
+  const bits = PermissionFlagsBits.ViewChannel | (voice ? PermissionFlagsBits.Connect : 0n);
+  for (const roleId of state.accessRoles ?? []) {
+    if (!guild.roles.cache.has(roleId)) continue;
+    upsert(roleId, (o) => {
+      o.allow |= bits;
+      o.deny &= ~bits;
+    });
+  }
+  return out;
+}
+
+// Se o bot não é administrador, o Discord só deixa copiar bits que ele mesmo tem
+function maskOverwrites(list, guild, ctx) {
+  const bot = guild.members.me;
+  if (!bot || bot.permissions.has(PermissionFlagsBits.Administrator)) return list;
+  const mask = bot.permissions.bitfield;
+  return list.map((o) => {
+    const allow = o.allow & mask;
+    const deny = o.deny & mask;
+    if (allow !== o.allow || deny !== o.deny) ctx.maskedOverwrites++;
+    return { ...o, allow, deny };
+  });
+}
+
+// Permissões finais da categoria (copiadas, se marcado) e de cada canal
+async function categoryOverwrites(source, guild, state, ctx) {
+  const base = state.items.has("catPerms") ? await readOverwrites(source, guild, ctx) : [];
+  return maskOverwrites(applyAccess(base, state, guild, false), guild, ctx);
+}
+
+async function channelOverwrites(channel, guild, state, ctx) {
+  const base = await readOverwrites(channel, guild, ctx);
+  return maskOverwrites(applyAccess(base, state, guild, VOICE_TYPES.has(channel.type)), guild, ctx);
+}
+
 const emojiData = (emoji) => (emoji ? { id: emoji.id ?? null, name: emoji.name ?? null } : null);
 
-// Opções de criação do novo canal a partir do original e do que a pessoa marcou para copiar
+// Opções de criação do novo canal a partir do original e do que a pessoa marcou para copiar.
+// Sem "permissões de cada canal" (e sem acesso extra), o canal nasce herdando as permissões da nova categoria.
 function channelOptions(source, state, parent, name, overwrites, reason) {
   const items = state.items;
   const options = { name, type: source.type, parent: parent.id, reason };
 
-  if (items.has("chanPerms")) options.permissionOverwrites = overwrites;
+  if (overwrites) options.permissionOverwrites = overwrites;
   if (items.has("topic") && source.topic) options.topic = source.topic;
   if (items.has("nsfw") && source.nsfw) options.nsfw = true;
   if (items.has("slowmode") && source.rateLimitPerUser) options.rateLimitPerUser = source.rateLimitPerUser;
 
-  if (items.has("voiceCfg") && VOICE_TYPES.has(source.type)) {
-    if (source.bitrate) options.bitrate = source.bitrate;
-    if (source.type === ChannelType.GuildVoice) {
-      if (source.userLimit) options.userLimit = source.userLimit;
-      if (source.videoQualityMode) options.videoQualityMode = source.videoQualityMode;
+  if (VOICE_TYPES.has(source.type)) {
+    if (items.has("voiceQuality")) {
+      if (source.bitrate) options.bitrate = source.bitrate;
+      if (source.type === ChannelType.GuildVoice && source.videoQualityMode) {
+        options.videoQualityMode = source.videoQualityMode;
+      }
     }
-    if (source.rtcRegion) options.rtcRegion = source.rtcRegion;
+    if (items.has("voiceLimit") && source.type === ChannelType.GuildVoice && source.userLimit) {
+      options.userLimit = source.userLimit;
+    }
+    if (items.has("voiceRegion") && source.rtcRegion) options.rtcRegion = source.rtcRegion;
   }
 
-  if (items.has("threadCfg") && THREAD_PARENT_TYPES.has(source.type)) {
-    if (source.defaultAutoArchiveDuration) options.defaultAutoArchiveDuration = source.defaultAutoArchiveDuration;
-    if (source.defaultThreadRateLimitPerUser) {
+  if (THREAD_PARENT_TYPES.has(source.type)) {
+    if (items.has("threadArchive") && source.defaultAutoArchiveDuration) {
+      options.defaultAutoArchiveDuration = source.defaultAutoArchiveDuration;
+    }
+    if (items.has("threadSlowmode") && source.defaultThreadRateLimitPerUser) {
       options.defaultThreadRateLimitPerUser = source.defaultThreadRateLimitPerUser;
     }
   }
 
-  if (items.has("forumCfg") && FORUM_TYPES.has(source.type)) {
-    if (source.availableTags?.length) {
+  if (FORUM_TYPES.has(source.type)) {
+    if (items.has("forumTags") && source.availableTags?.length) {
       options.availableTags = source.availableTags.map((tag) => ({
         name: tag.name,
         moderated: tag.moderated,
         emoji: emojiData(tag.emoji),
       }));
     }
-    if (source.defaultReactionEmoji) options.defaultReactionEmoji = emojiData(source.defaultReactionEmoji);
-    if (source.defaultSortOrder != null) options.defaultSortOrder = source.defaultSortOrder;
-    if (source.type === ChannelType.GuildForum && source.defaultForumLayout != null) {
-      options.defaultForumLayout = source.defaultForumLayout;
+    if (items.has("forumDefaults")) {
+      if (source.defaultReactionEmoji) options.defaultReactionEmoji = emojiData(source.defaultReactionEmoji);
+      if (source.defaultSortOrder != null) options.defaultSortOrder = source.defaultSortOrder;
+      if (source.type === ChannelType.GuildForum && source.defaultForumLayout != null) {
+        options.defaultForumLayout = source.defaultForumLayout;
+      }
     }
   }
 
@@ -242,13 +310,13 @@ async function runClone({ guild, state, executor, onProgress = () => {} }) {
     const name = copyName(state, copy);
     onProgress(done, total, name);
 
-    const categoryOverwrites = state.items.has("catPerms") ? await buildOverwrites(source, guild, ctx) : [];
+    const catOverwrites = await categoryOverwrites(source, guild, state, ctx);
     const category = await guild.channels
       .create({
         name,
         type: ChannelType.GuildCategory,
         position: categoryPosition(source, state, copy, guild),
-        permissionOverwrites: categoryOverwrites,
+        permissionOverwrites: catOverwrites,
         reason,
       })
       .catch((err) => {
@@ -264,12 +332,13 @@ async function runClone({ guild, state, executor, onProgress = () => {} }) {
       onProgress(done, total, channelName);
 
       try {
-        const overwrites = state.items.has("chanPerms") ? await buildOverwrites(channel, guild, ctx) : [];
+        // Com "permissões de cada canal" desligado, o canal herda as da nova categoria (que já levam o acesso extra)
+        const overwrites = state.items.has("chanPerms") ? await channelOverwrites(channel, guild, state, ctx) : null;
         const created = await guild.channels.create(channelOptions(channel, state, category, channelName, overwrites, reason));
         entry.channels.push(created);
 
         // Fórum/mídia: "exigir tag" e "esconder download" são flags do canal (não da criação)
-        if (state.items.has("forumCfg") && FORUM_TYPES.has(channel.type)) {
+        if (state.items.has("forumFlags") && FORUM_TYPES.has(channel.type)) {
           const bits = Number(channel.flags?.bitfield ?? 0) & FORUM_FLAGS;
           if (bits) {
             await created.edit({ flags: bits, reason }).catch(() => {
@@ -325,6 +394,7 @@ module.exports = {
   categoryChildren,
   plannedChannels,
   newChannelName,
+  passesFilter,
   copyName,
   describeCategory,
   reviewInfo,

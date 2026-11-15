@@ -40,6 +40,8 @@ async function render(state, guild) {
       return ui.buildChannels(state, guild);
     case "naming":
       return ui.buildNaming(state);
+    case "access":
+      return ui.buildAccess(state);
     case "review":
       return ui.buildReview(state, guild, await reviewInfo(state, guild));
     case "done":
@@ -54,7 +56,7 @@ const show = async (interaction, state) =>
 
 // A página só abre se a categoria ainda existir
 function goTo(state, guild, page) {
-  const needsSource = ["options", "channels", "naming", "review"].includes(page);
+  const needsSource = ["options", "channels", "naming", "access", "review"].includes(page);
   if (needsSource && !guild.channels.cache.has(state.sourceId)) {
     state.page = "home";
     return "A categoria escolhida não existe mais. Escolha outra.";
@@ -92,6 +94,17 @@ async function handleDupButton(interaction) {
 
     case "rename":
       return interaction.showModal(ui.buildRenameModal(state));
+
+    case "filter":
+      return interaction.showModal(ui.buildFilterModal(state));
+
+    // Aba Acesso
+    case "priv":
+      state.privateCopy = !state.privateCopy;
+      return show(interaction, state);
+    case "rolesclear":
+      state.accessRoles = [];
+      return show(interaction, state);
 
     // Lista de canais: páginas e marcar/desmarcar todos
     case "chprev":
@@ -235,6 +248,14 @@ async function handleDupSelect(interaction) {
       return show(interaction, state);
     }
 
+    case "roles":
+      state.accessRoles = values.slice(0, ui.MAX_ACCESS_ROLES);
+      return show(interaction, state);
+
+    case "order":
+      if (["original", "az"].includes(values[0])) state.order = values[0];
+      return show(interaction, state);
+
     case "pos":
       if (["below", "above", "top", "end"].includes(values[0])) state.position = values[0];
       return show(interaction, state);
@@ -248,20 +269,30 @@ async function handleDupSelect(interaction) {
   }
 }
 
-// ---------- Modal: nome da cópia e troca de texto ----------
+// ---------- Modais: nomes da cópia e filtro por nome ----------
 
 async function handleDupModal(interaction) {
   const loaded = await loadSession(interaction);
   if (!loaded) return;
-  const { state } = loaded;
+  const { state, action } = loaded;
+  const field = (name) => interaction.fields.getTextInputValue(name).trim();
 
-  const name = interaction.fields.getTextInputValue("name").trim();
-  if (name) state.newName = name.slice(0, 100);
-  state.find = interaction.fields.getTextInputValue("find").trim();
-  state.replace = state.find ? interaction.fields.getTextInputValue("replace").trim() : "";
-  state.page = "naming";
+  if (action === "fmodal") {
+    state.filterInclude = field("include");
+    state.filterExclude = field("exclude");
+    state.chPage = 0;
+    state.page = "channels";
+  } else {
+    const name = field("name");
+    if (name) state.newName = name.slice(0, 100);
+    state.find = field("find");
+    state.replace = state.find ? field("replace") : "";
+    state.prefix = field("prefix");
+    state.suffix = field("suffix");
+    state.page = "naming";
+  }
 
-  const payload = { components: ui.buildNaming(state), allowedMentions: NO_MENTIONS };
+  const payload = { components: await render(state, interaction.guild), allowedMentions: NO_MENTIONS };
   if (interaction.isFromMessage()) return interaction.update(payload);
   return interaction.reply({ ...payload, flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral });
 }

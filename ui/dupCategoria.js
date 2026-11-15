@@ -8,6 +8,7 @@ const {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
   ChannelSelectMenuBuilder,
+  RoleSelectMenuBuilder,
   ChannelType,
 } = require("discord.js");
 const { textLabel, modal } = require("./modalHelpers");
@@ -16,17 +17,20 @@ const {
   categoryChildren,
   plannedChannels,
   newChannelName,
+  passesFilter,
   copyName,
   describeCategory,
 } = require("../utils/catClone/clone");
 
 const CH_PAGE_SIZE = 25;
+const MAX_ACCESS_ROLES = 10;
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content || "-").slice(0, 3800));
 const sep = () => new SeparatorBuilder();
 const row = (...components) => new ActionRowBuilder().addComponents(...components);
 const clip = (value, max) => String(value ?? "").slice(0, max);
 const id = (state, action) => `dup:${state.sid}:${action}`;
+const yesNo = (value) => (value ? "Sim" : "Não");
 
 function btn(state, action, label, style = ButtonStyle.Secondary, disabled = false) {
   return new ButtonBuilder().setCustomId(id(state, action)).setLabel(label).setStyle(style).setDisabled(disabled);
@@ -34,24 +38,29 @@ function btn(state, action, label, style = ButtonStyle.Secondary, disabled = fal
 
 // Tipos de canal que podem ser copiados (select "Tipos de canal")
 const TYPE_OPTIONS = [
-  { key: "text", label: "Canais de texto", emoji: "💬" },
-  { key: "announcement", label: "Canais de anúncios", emoji: "📢" },
-  { key: "voice", label: "Canais de voz", emoji: "🔊" },
-  { key: "stage", label: "Canais de palco", emoji: "🎙️" },
-  { key: "forum", label: "Fóruns", emoji: "🗂️" },
-  { key: "media", label: "Canais de mídia", emoji: "🖼️" },
+  { key: "text", label: "Canais de texto", description: "Canais de conversa por mensagens" },
+  { key: "announcement", label: "Canais de anúncios", description: "Canais de avisos que podem ser seguidos" },
+  { key: "voice", label: "Canais de voz", description: "Canais de conversa por voz" },
+  { key: "stage", label: "Canais de palco", description: "Canais de palco para eventos e palestras" },
+  { key: "forum", label: "Fóruns", description: "Canais de fórum com posts" },
+  { key: "media", label: "Canais de mídia", description: "Canais de galeria de mídia" },
 ];
 
 // Itens que podem ser levados junto (select "O que copiar")
 const ITEM_OPTIONS = [
   { key: "catPerms", label: "Permissões da categoria", description: "Cargos e membros com permissão própria na categoria" },
-  { key: "chanPerms", label: "Permissões de cada canal", description: "Permissões de cargos e membros dentro de cada canal" },
+  { key: "chanPerms", label: "Permissões de cada canal", description: "Desligado: os canais herdam as da nova categoria" },
   { key: "topic", label: "Tópicos e descrições", description: "Tópico de canais de texto, anúncios, fóruns e mídia" },
   { key: "slowmode", label: "Modo lento", description: "Intervalo entre mensagens de cada canal" },
   { key: "nsfw", label: "Restrição de idade (+18)", description: "Canais marcados como +18 continuam marcados" },
-  { key: "voiceCfg", label: "Configurações de voz", description: "Taxa de bits, limite de pessoas, região e qualidade de vídeo" },
-  { key: "forumCfg", label: "Configurações de fórum e mídia", description: "Tags, emoji de reação, ordenação, layout e exigir tag" },
-  { key: "threadCfg", label: "Configurações de tópicos (threads)", description: "Arquivamento automático e modo lento padrão" },
+  { key: "voiceQuality", label: "Voz: qualidade", description: "Taxa de bits e qualidade de vídeo dos canais de voz e palco" },
+  { key: "voiceLimit", label: "Voz: limite de pessoas", description: "Máximo de pessoas em cada canal de voz" },
+  { key: "voiceRegion", label: "Voz: região", description: "Região de voz fixa dos canais de voz e palco" },
+  { key: "forumTags", label: "Fóruns e mídia: tags", description: "Tags disponíveis para os posts, com emoji e moderação" },
+  { key: "forumDefaults", label: "Fóruns e mídia: padrões", description: "Emoji de reação, ordenação e layout padrão" },
+  { key: "forumFlags", label: "Fóruns e mídia: regras", description: "Exigir tag nos posts e esconder opções de download" },
+  { key: "threadArchive", label: "Threads: arquivamento", description: "Tempo padrão para arquivar threads sem uso" },
+  { key: "threadSlowmode", label: "Threads: modo lento", description: "Modo lento padrão das threads criadas nos canais" },
 ];
 
 const POSITION_OPTIONS = [
@@ -62,11 +71,18 @@ const POSITION_OPTIONS = [
 ];
 const POSITION_LABEL = Object.fromEntries(POSITION_OPTIONS.map((o) => [o.value, o.label.toLowerCase()]));
 
+const ORDER_OPTIONS = [
+  { value: "original", label: "Ordem original", description: "Os canais ficam na mesma ordem da categoria original" },
+  { value: "az", label: "Ordem alfabética", description: "Canais de texto e de voz em ordem de A a Z" },
+];
+
 const countsLine = (counts) =>
   Object.entries(TYPE_INFO)
     .filter(([type]) => counts[type])
-    .map(([type, info]) => `${info.emoji} ${counts[type]}`)
+    .map(([type, info]) => `${info.label} ${counts[type]}`)
     .join(" · ") || "nenhum canal";
+
+const rolesLine = (roles) => (roles.length ? roles.map((r) => `<@&${r}>`).join(" ") : "nenhum");
 
 // ---------- Início: escolher a categoria ----------
 
@@ -126,8 +142,8 @@ function buildOptions(state, guild) {
       TYPE_OPTIONS.map((o) =>
         new StringSelectMenuOptionBuilder()
           .setLabel(o.label)
+          .setDescription(o.description)
           .setValue(o.key)
-          .setEmoji(o.emoji)
           .setDefault(state.types.has(o.key))
       )
     );
@@ -166,6 +182,7 @@ function buildOptions(state, guild) {
         row(
           btn(state, "go:channels", "Escolher canais"),
           btn(state, "go:naming", "Nome e posição"),
+          btn(state, "go:access", "Acesso"),
           btn(state, "go:review", "Revisar", ButtonStyle.Primary)
         )
       )
@@ -196,11 +213,16 @@ function buildChannels(state, guild) {
   }
 
   const { children, pages, page, slice } = pageChannels(state, source);
+  const filters = [
+    state.filterInclude ? `só com \`${clip(state.filterInclude, 30)}\`` : null,
+    state.filterExclude ? `sem \`${clip(state.filterExclude, 30)}\`` : null,
+  ].filter(Boolean);
+
   container.addTextDisplayComponents(
     text("### Escolher canais"),
     text(
       children.length
-        ? `-# Página ${page + 1}/${pages} · Marque os canais que devem ser copiados. Canais de um tipo desligado em "Opções" não são copiados mesmo marcados.`
+        ? `-# Página ${page + 1}/${pages} · Marque os canais que devem ser copiados. Canais de um tipo desligado ou fora do filtro não são copiados mesmo marcados.\n**Filtro por nome:** ${filters.length ? filters.join(", ") : "nenhum"}`
         : "Essa categoria não tem canais: só a categoria será copiada (com as permissões, se marcado)."
     )
   );
@@ -215,14 +237,13 @@ function buildChannels(state, guild) {
         slice.map((channel) => {
           const info = TYPE_INFO[channel.type];
           const own = channel.permissionOverwrites.cache.size;
-          const typeOff = !state.types.has(info.key);
+          const notes = [];
+          if (!state.types.has(info.key)) notes.push("tipo desligado");
+          if (!passesFilter(state, channel)) notes.push("fora do filtro");
           return new StringSelectMenuOptionBuilder()
             .setLabel(clip(channel.name, 100))
             .setValue(channel.id)
-            .setEmoji(info.emoji)
-            .setDescription(
-              clip(`${info.label}${typeOff ? " (tipo desligado)" : ""} · ${own} permissão(ões) própria(s)`, 100)
-            )
+            .setDescription(clip(`${info.label}${notes.length ? ` (${notes.join(", ")})` : ""} · ${own} permissão(ões) própria(s)`, 100))
             .setDefault(!state.excluded.has(channel.id));
         })
       );
@@ -231,14 +252,38 @@ function buildChannels(state, guild) {
 
   container.addActionRowComponents(
     row(
-      btn(state, "chprev", "◀ Anterior", ButtonStyle.Secondary, page <= 0),
-      btn(state, "chnext", "Próxima ▶", ButtonStyle.Secondary, page >= pages - 1),
+      btn(state, "chprev", "Anterior", ButtonStyle.Secondary, page <= 0),
+      btn(state, "chnext", "Próxima", ButtonStyle.Secondary, page >= pages - 1),
       btn(state, "chall", "Marcar todos", ButtonStyle.Secondary, !children.length),
-      btn(state, "chnone", "Desmarcar todos", ButtonStyle.Secondary, !children.length)
+      btn(state, "chnone", "Desmarcar todos", ButtonStyle.Secondary, !children.length),
+      btn(state, "filter", "Filtrar por nome", ButtonStyle.Secondary, !children.length)
     )
   );
   container.addActionRowComponents(row(btn(state, "go:options", "Voltar", ButtonStyle.Primary)));
   return [container];
+}
+
+function buildFilterModal(state) {
+  return modal(
+    id(state, "fmodal"),
+    "Filtrar canais por nome",
+    textLabel({
+      id: "include",
+      label: "Copiar só canais que contêm",
+      description: "Opcional. Ex.: \"evento\" copia só canais com \"evento\" no nome.",
+      max: 100,
+      value: state.filterInclude,
+      placeholder: "Texto que o nome precisa ter",
+    }),
+    textLabel({
+      id: "exclude",
+      label: "Nunca copiar canais que contêm",
+      description: "Opcional. Ex.: \"staff\" deixa de fora canais com \"staff\" no nome.",
+      max: 100,
+      value: state.filterExclude,
+      placeholder: "Texto que tira o canal da cópia",
+    })
+  );
 }
 
 // ---------- Nome e posição ----------
@@ -257,6 +302,19 @@ function buildNaming(state) {
       )
     );
 
+  const orderSelect = new StringSelectMenuBuilder()
+    .setCustomId(id(state, "order"))
+    .setPlaceholder("Ordem dos canais na cópia")
+    .addOptions(
+      ORDER_OPTIONS.map((o) =>
+        new StringSelectMenuOptionBuilder()
+          .setLabel(o.label)
+          .setDescription(o.description)
+          .setValue(o.value)
+          .setDefault(state.order === o.value)
+      )
+    );
+
   const copiesSelect = new StringSelectMenuBuilder()
     .setCustomId(id(state, "copies"))
     .setPlaceholder("Quantas cópias criar")
@@ -270,7 +328,7 @@ function buildNaming(state) {
       )
     );
 
-  const find = state.find ? `\`${clip(state.find, 40)}\` → \`${clip(state.replace, 40) || "(apagar)"}\`` : "nenhuma";
+  const swap = state.find ? `\`${clip(state.find, 40)}\` por \`${clip(state.replace, 40) || "(nada)"}\`` : "nenhuma";
   return [
     new ContainerBuilder()
       .addTextDisplayComponents(
@@ -278,15 +336,16 @@ function buildNaming(state) {
         text(
           [
             `**Nome da categoria:** ${copyName(state, 0)}${state.copies > 1 ? " (cada cópia ganha um número)" : ""}`,
-            `**Trocar texto nos nomes dos canais:** ${find}`,
-            `**Posição:** ${POSITION_LABEL[state.position]}`,
-            `**Cópias:** ${state.copies}`,
+            `**Troca de texto nos canais:** ${swap}`,
+            `**Prefixo / sufixo nos canais:** ${state.prefix ? `\`${clip(state.prefix, 30)}\`` : "nenhum"} / ${state.suffix ? `\`${clip(state.suffix, 30)}\`` : "nenhum"}`,
+            `**Posição:** ${POSITION_LABEL[state.position]} · **Ordem:** ${state.order === "az" ? "alfabética" : "original"} · **Cópias:** ${state.copies}`,
           ].join("\n")
         )
       )
-      .addActionRowComponents(row(btn(state, "rename", "Renomear / trocar texto", ButtonStyle.Primary)))
+      .addActionRowComponents(row(btn(state, "rename", "Nomes dos canais e da categoria", ButtonStyle.Primary)))
       .addSeparatorComponents(sep())
       .addActionRowComponents(row(positionSelect))
+      .addActionRowComponents(row(orderSelect))
       .addActionRowComponents(row(copiesSelect))
       .addActionRowComponents(row(btn(state, "go:options", "Voltar"), btn(state, "go:review", "Revisar", ButtonStyle.Primary))),
   ];
@@ -295,7 +354,7 @@ function buildNaming(state) {
 function buildRenameModal(state) {
   return modal(
     id(state, "modal"),
-    "Nome da cópia",
+    "Nomes da cópia",
     textLabel({
       id: "name",
       label: "Nome da nova categoria",
@@ -319,8 +378,59 @@ function buildRenameModal(state) {
       max: 100,
       value: state.replace,
       placeholder: "Texto novo",
+    }),
+    textLabel({
+      id: "prefix",
+      label: "Prefixo nos nomes dos canais",
+      description: "Opcional. Entra antes do nome de cada canal copiado.",
+      max: 30,
+      value: state.prefix,
+      placeholder: "Ex.: novo-",
+    }),
+    textLabel({
+      id: "suffix",
+      label: "Sufixo nos nomes dos canais",
+      description: "Opcional. Entra depois do nome de cada canal copiado.",
+      max: 30,
+      value: state.suffix,
+      placeholder: "Ex.: -2025",
     })
   );
+}
+
+// ---------- Acesso ----------
+
+function buildAccess(state) {
+  const select = new RoleSelectMenuBuilder()
+    .setCustomId(id(state, "roles"))
+    .setPlaceholder("Cargos que terão acesso à cópia")
+    .setMinValues(0)
+    .setMaxValues(MAX_ACCESS_ROLES);
+  if (state.accessRoles.length) select.setDefaultRoles(state.accessRoles);
+
+  return [
+    new ContainerBuilder()
+      .addTextDisplayComponents(
+        text("### Acesso à cópia"),
+        text(
+          [
+            "-# Opcional. Vale para a categoria e para todos os canais copiados, por cima das permissões copiadas.",
+            `**Esconder de @everyone:** ${yesNo(state.privateCopy)}`,
+            `**Cargos com acesso:** ${rolesLine(state.accessRoles)}`,
+            "-# Cargos escolhidos podem ver a categoria e os canais (e entrar nos canais de voz).",
+          ].join("\n")
+        )
+      )
+      .addSeparatorComponents(sep())
+      .addActionRowComponents(row(select))
+      .addActionRowComponents(
+        row(
+          btn(state, "priv", `Esconder de @everyone: ${yesNo(state.privateCopy)}`, state.privateCopy ? ButtonStyle.Success : ButtonStyle.Secondary),
+          btn(state, "rolesclear", "Limpar cargos", ButtonStyle.Secondary, !state.accessRoles.length)
+        )
+      )
+      .addActionRowComponents(row(btn(state, "go:options", "Voltar"), btn(state, "go:review", "Revisar", ButtonStyle.Primary))),
+  ];
 }
 
 // ---------- Revisar ----------
@@ -334,16 +444,26 @@ function buildReview(state, guild, info) {
     return [container.addActionRowComponents(row(btn(state, "go:home", "Voltar")))];
   }
 
-  const lines = [`📁 ${copyName(state, 0)}`];
+  const lines = [copyName(state, 0)];
   const shown = planned.slice(0, 24);
   shown.forEach((channel, i) => {
     const last = i === shown.length - 1 && planned.length === shown.length;
-    lines.push(`${last ? "└" : "├"} ${TYPE_INFO[channel.type].emoji} ${newChannelName(channel, state)}`);
+    lines.push(`${last ? "└" : "├"} ${newChannelName(channel, state)}  (${TYPE_INFO[channel.type].label.toLowerCase()})`);
   });
   if (planned.length > shown.length) lines.push(`└ … e mais ${planned.length - shown.length} canal(is)`);
   if (!planned.length) lines.push("└ (nenhum canal; só a categoria)");
 
   const copied = ITEM_OPTIONS.filter((o) => state.items.has(o.key)).map((o) => o.label.toLowerCase());
+  const extras = [];
+  if (state.find) extras.push(`troca \`${clip(state.find, 30)}\` por \`${clip(state.replace, 30) || "(nada)"}\``);
+  if (state.prefix) extras.push(`prefixo \`${clip(state.prefix, 30)}\``);
+  if (state.suffix) extras.push(`sufixo \`${clip(state.suffix, 30)}\``);
+  if (state.filterInclude) extras.push(`só canais com \`${clip(state.filterInclude, 30)}\``);
+  if (state.filterExclude) extras.push(`sem canais com \`${clip(state.filterExclude, 30)}\``);
+  if (state.order === "az") extras.push("ordem alfabética");
+  if (state.privateCopy) extras.push("escondida de @everyone");
+  if (state.accessRoles.length) extras.push(`acesso para ${rolesLine(state.accessRoles)}`);
+
   container.addTextDisplayComponents(
     text(
       [
@@ -351,14 +471,15 @@ function buildReview(state, guild, info) {
         `**Posição:** ${POSITION_LABEL[state.position]} · **Cópias:** ${state.copies}`,
         `**Vai criar:** ${toCreate} canal(is) no total (categorias e canais)`,
         `**Copia junto:** ${copied.length ? copied.join(", ") : "nada além dos nomes"}`,
+        `**Ajustes:** ${extras.length ? extras.join(" · ") : "nenhum"}`,
         "-# Mensagens, threads, convites e webhooks não são copiados.",
       ].join("\n")
     ),
     text(`\`\`\`\n${lines.join("\n")}\n\`\`\``)
   );
 
-  if (blocking.length) container.addTextDisplayComponents(text(blocking.map((b) => `⛔ ${b}`).join("\n")));
-  if (warnings.length) container.addTextDisplayComponents(text(warnings.map((w) => `⚠️ ${w}`).join("\n")));
+  if (blocking.length) container.addTextDisplayComponents(text(blocking.map((b) => `**Bloqueado:** ${b}`).join("\n")));
+  if (warnings.length) container.addTextDisplayComponents(text(warnings.map((w) => `**Atenção:** ${w}`).join("\n")));
 
   container.addSeparatorComponents(sep()).addActionRowComponents(
     row(
@@ -375,7 +496,7 @@ function buildReview(state, guild, info) {
 function buildProgress(state, done, total, current) {
   const size = 16;
   const filled = total ? Math.round((done / total) * size) : 0;
-  const bar = "▰".repeat(filled) + "▱".repeat(size - filled);
+  const bar = `\`[${"#".repeat(filled)}${"-".repeat(size - filled)}]\``;
   return [
     new ContainerBuilder().addTextDisplayComponents(
       text("### Duplicando categoria..."),
@@ -390,7 +511,7 @@ function buildDone(state) {
   const channelsCreated = result.created.reduce((sum, entry) => sum + entry.channels.length, 0);
 
   const lines = [
-    ...result.created.map((entry) => `📁 <#${entry.category.id}> · ${entry.channels.length} canal(is)`),
+    ...result.created.map((entry) => `<#${entry.category.id}> · ${entry.channels.length} canal(is)`),
     "",
     `**Criados:** ${result.created.length} categoria(s) e ${channelsCreated} canal(is).`,
   ];
@@ -455,13 +576,16 @@ const buildNotice = (content) => [new ContainerBuilder().addTextDisplayComponent
 
 module.exports = {
   CH_PAGE_SIZE,
+  MAX_ACCESS_ROLES,
   pageChannels,
   channelPages,
   buildHome,
   buildOptions,
   buildChannels,
+  buildFilterModal,
   buildNaming,
   buildRenameModal,
+  buildAccess,
   buildReview,
   buildProgress,
   buildDone,
