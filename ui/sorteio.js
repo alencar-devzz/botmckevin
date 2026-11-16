@@ -31,6 +31,8 @@ const EMOJI = {
   member: "<:member:1570579495746937002>",
   more: "<:more:1571750505426845810>",
   reload: "<a:reload:1569724363954065498>",
+  reload2: "<:reload2:1570940328880373810>",
+  lupa: "<:lupa:1569386560107970755>",
   trash: "<:trash:1571750967094022154>",
 };
 
@@ -156,11 +158,11 @@ function homeView(guild, doc) {
     .addTextDisplayComponents(text(`### ${EMOJI.settings} Montagem\n-# Canal, regras, aparência e forma de entrada.`))
     .addActionRowComponents(row(channel))
     .addSectionComponents(
-      section(btn(`sr:aj:${id}`, "Editar", ButtonStyle.Secondary, ended, EMOJI.more), "**Prêmio e prazo**\n-# Nome interno, prêmio, vencedores e duração."),
-      section(btn(`sr:rq:${id}`, "Editar", ButtonStyle.Secondary, ended, EMOJI.more), "**Requisitos e chances**\n-# Quem pode participar e cargos com bônus."),
-      section(btn(`sr:ed:${id}:0`, "Editar", ButtonStyle.Primary, false, EMOJI.more), "**Editar mensagem**\n-# Texto, imagens e botões da mensagem publicada."),
-      section(btn(`sr:en:${id}`, "Abrir", ButtonStyle.Secondary, false, EMOJI.more), `**Entrada e inscritos**\n-# Participação por ${doc.entryMode === "reaction" ? "reação" : "botão"} e botão de inscritos.`),
-      section(btn(`sr:en:${id}:dm`, "Abrir", ButtonStyle.Secondary, false, EMOJI.more), `**Aviso ao vencedor**\n-# Mensagem privada: ${onOff(doc.dm?.enabled)}.`)
+      section(btn(`sr:aj:${id}`, "Editar", ButtonStyle.Secondary, ended, EMOJI.pencil), "**Prêmio e prazo**\n-# Nome interno, prêmio, vencedores e duração."),
+      section(btn(`sr:rq:${id}`, "Editar", ButtonStyle.Secondary, ended, EMOJI.pencil), "**Requisitos e chances**\n-# Quem pode participar e cargos com bônus."),
+      section(btn(`sr:ed:${id}:0`, "Editar", ButtonStyle.Primary, false, EMOJI.pencil), "**Editar mensagem**\n-# Texto, imagens e botões da mensagem publicada."),
+      section(btn(`sr:en:${id}`, "Abrir", ButtonStyle.Secondary, false, EMOJI.pencil), `**Entrada e inscritos**\n-# Participação por ${doc.entryMode === "reaction" ? "reação" : "botão"} e botão de inscritos.`),
+      section(btn(`sr:en:${id}:dm`, "Abrir", ButtonStyle.Secondary, false, EMOJI.pencil), `**Aviso ao vencedor**\n-# Mensagem privada: ${onOff(doc.dm?.enabled)}.`)
     );
 
   const acoes = box().addTextDisplayComponents(
@@ -176,8 +178,8 @@ function homeView(guild, doc) {
     row(
       btn(`sr:pub:${id}`, "Publicar", ButtonStyle.Success, !draft, EMOJI.send),
       btn(`sr:pz:${id}`, "Mudar prazo", ButtonStyle.Secondary, !active, EMOJI.clock),
-      btn(`sr:end:${id}`, "Encerrar", ButtonStyle.Secondary, !active, EMOJI.more),
-      btn(`sr:rr:${id}`, "Sortear de novo", ButtonStyle.Secondary, !ended, EMOJI.more),
+      btn(`sr:end:${id}`, "Encerrar", ButtonStyle.Secondary, !active),
+      btn(`sr:rr:${id}`, "Sortear de novo", ButtonStyle.Secondary, !ended, EMOJI.reload2),
       btn(`sr:del:${id}`, "Excluir", ButtonStyle.Danger, false, EMOJI.trash)
     )
   );
@@ -188,7 +190,7 @@ function homeView(guild, doc) {
     acoes,
     row(
       btn("sr:list", "Todos os sorteios", ButtonStyle.Secondary, false, EMOJI.back),
-      btn(`sr:prev:${id}`, "Prévia", ButtonStyle.Secondary, false, EMOJI.more),
+      btn(`sr:prev:${id}`, "Prévia", ButtonStyle.Secondary, false, EMOJI.lupa),
       btn(`sr:home:${id}`, "Atualizar", ButtonStyle.Secondary, false, EMOJI.reload)
     ),
   ];
@@ -437,17 +439,17 @@ function editorView(doc, b) {
 
   const parts = box().addTextDisplayComponents(text(`### Bloco ${i + 1}\n-# Escolha o que mudar neste bloco.`));
   parts.addSectionComponents(
-    section(iconBtn(`sr:ct:${id}:${i}`, EMOJI.more), "**Texto**\n-# Conteúdo e variáveis do bloco."),
-    section(iconBtn(`sr:md:${id}:${i}`, EMOJI.more), "**Imagens**\n-# Imagem principal e miniatura."),
-    section(iconBtn(`sr:ap:${id}:${i}`, EMOJI.more), "**Aparência**\n-# Formato, cor e espaçamento."),
-    section(iconBtn(`sr:it:${id}:${i}`, EMOJI.more), "**Botões**\n-# Botão de entrada e de inscritos.")
+    section(iconBtn(`sr:ct:${id}:${i}`, EMOJI.pencil), "**Texto**\n-# Conteúdo e variáveis do bloco."),
+    section(iconBtn(`sr:md:${id}:${i}`, EMOJI.pencil), "**Imagens**\n-# Imagem principal e miniatura."),
+    section(iconBtn(`sr:ap:${id}:${i}`, EMOJI.pencil), "**Aparência**\n-# Formato, cor e espaçamento."),
+    section(iconBtn(`sr:it:${id}:${i}`, EMOJI.pencil), "**Botões**\n-# Botão de entrada e de inscritos.")
   );
 
   return [
     head,
     blocks,
     parts,
-    row(btn(`sr:home:${id}`, "Voltar ao sorteio", ButtonStyle.Secondary, false, EMOJI.back), btn(`sr:prev:${id}`, "Prévia", ButtonStyle.Secondary, false, EMOJI.more)),
+    row(btn(`sr:home:${id}`, "Voltar ao sorteio", ButtonStyle.Secondary, false, EMOJI.back), btn(`sr:prev:${id}`, "Prévia", ButtonStyle.Secondary, false, EMOJI.lupa)),
   ];
 }
 
@@ -465,10 +467,10 @@ function conteudoView(doc, b) {
         text(`**Texto atual**\n\`\`\`\n${clip(current || "(vazio)", 900)}\n\`\`\``)
       )
       .addSectionComponents(
-        section(btn(`sr:cte:${id}:${i}`, "Escrever", ButtonStyle.Primary, false, EMOJI.more), "**Escrever texto**\n-# Envie o novo texto no chat."),
+        section(btn(`sr:cte:${id}:${i}`, "Editar", ButtonStyle.Primary, false, EMOJI.pencil), "**Escrever texto**\n-# Envie o novo texto no chat."),
         section(btn(`sr:ctr:${id}:${i}`, "Restaurar", ButtonStyle.Secondary, false, EMOJI.reload), "**Modelo padrão**\n-# Volta ao texto original do bloco.")
       )
-      .addActionRowComponents(row(btn(`sr:prev:${id}`, "Prévia", ButtonStyle.Secondary, false, EMOJI.more))),
+      .addActionRowComponents(row(btn(`sr:prev:${id}`, "Prévia", ButtonStyle.Secondary, false, EMOJI.lupa))),
     backRow(`sr:ed:${id}:${i}`, "Voltar ao editor"),
   ];
 }
@@ -485,9 +487,9 @@ function midiaView(doc, b) {
   );
   main.addSectionComponents(
     section(btn(`sr:mdi:${id}:${i}`, "Enviar", ButtonStyle.Primary, false, EMOJI.more), "**Imagem principal**\n-# Aparece no corpo do bloco."),
-    section(btn(`sr:mdx:${id}:${i}:i`, "Tirar", ButtonStyle.Secondary, !block.image, EMOJI.trash), "**Tirar imagem**\n-# Remove a imagem principal."),
+    section(btn(`sr:mdx:${id}:${i}:i`, "Remover", ButtonStyle.Secondary, !block.image, EMOJI.trash), "**Tirar imagem**\n-# Remove a imagem principal."),
     section(btn(`sr:mdt:${id}:${i}`, "Enviar", ButtonStyle.Primary, false, EMOJI.more), "**Miniatura**\n-# Fica ao lado do texto."),
-    section(btn(`sr:mdx:${id}:${i}:t`, "Tirar", ButtonStyle.Secondary, !block.thumb, EMOJI.trash), "**Tirar miniatura**\n-# Remove a miniatura.")
+    section(btn(`sr:mdx:${id}:${i}:t`, "Remover", ButtonStyle.Secondary, !block.thumb, EMOJI.trash), "**Tirar miniatura**\n-# Remove a miniatura.")
   );
   return [main, backRow(`sr:ed:${id}:${i}`, "Voltar ao editor")];
 }
@@ -517,9 +519,9 @@ function aparenciaView(doc, b) {
     pick(`sr:apk:${id}:${i}`, "Cor do bloco", colors)
   );
   main.addSectionComponents(
-    section(btn(`sr:apc:${id}:${i}`, "Definir", ButtonStyle.Secondary, false, EMOJI.more), "**Cor em hexadecimal**\n-# Use um código de cor exato."),
+    section(btn(`sr:apc:${id}:${i}`, "Definir", ButtonStyle.Secondary, false), "**Cor em hexadecimal**\n-# Use um código de cor exato."),
     section(
-      btn(`sr:apw:${id}:${i}`, block.wide ? "Sim" : "Não", ButtonStyle.Secondary, false, EMOJI.more),
+      btn(`sr:apw:${id}:${i}`, block.wide ? "Sim" : "Não", ButtonStyle.Secondary, false),
       "**Espaço grande antes da imagem**\n-# Deixa um respiro maior acima da imagem."
     )
   );
@@ -534,8 +536,8 @@ function interacoesView(doc, b) {
     text("-# Os botões ficam no último bloco que tem conteúdo, ou abaixo da caixa, conforme a posição.")
   );
   main.addSectionComponents(
-    section(iconBtn(`sr:bt:${id}:${i}:main`, EMOJI.more, ButtonStyle.Primary), "**Botão de entrada**\n-# Texto, emoji, cor e posição."),
-    section(iconBtn(`sr:bt:${id}:${i}:part`, EMOJI.more), "**Botão de inscritos**\n-# Mostra a lista de quem entrou.")
+    section(iconBtn(`sr:bt:${id}:${i}:main`, EMOJI.pencil, ButtonStyle.Primary), "**Botão de entrada**\n-# Texto, emoji, cor e posição."),
+    section(iconBtn(`sr:bt:${id}:${i}:part`, EMOJI.pencil), "**Botão de inscritos**\n-# Mostra a lista de quem entrou.")
   );
   return [main, backRow(`sr:ed:${id}:${i}`, "Voltar ao editor")];
 }
@@ -559,8 +561,8 @@ function botaoView(doc, b, which) {
 
   const panel = box().addTextDisplayComponents(text(main ? "### Botão de entrada" : "### Botão de inscritos"), text(info.join("\n")));
   panel.addSectionComponents(
-    section(iconBtn(`sr:btm:${id}:${i}:${which}`, EMOJI.more, ButtonStyle.Primary), "**Editar botão**\n-# Texto, emoji, cor e posição."),
-    section(iconBtn(`sr:btx:${id}:${i}:${which}`, EMOJI.more, ButtonStyle.Secondary, !spec.emoji), "**Tirar emoji**\n-# Remove o emoji deste botão.")
+    section(iconBtn(`sr:btm:${id}:${i}:${which}`, EMOJI.pencil, ButtonStyle.Primary), "**Editar botão**\n-# Texto, emoji, cor e posição."),
+    section(iconBtn(`sr:btx:${id}:${i}:${which}`, EMOJI.trash, ButtonStyle.Secondary, !spec.emoji), "**Tirar emoji**\n-# Remove o emoji deste botão.")
   );
   panel.addActionRowComponents(pick(`sr:btc:${id}:${i}:${which}`, "Cor do botão", colors));
 
@@ -575,7 +577,7 @@ function botaoView(doc, b, which) {
   } else {
     panel.addSectionComponents(
       section(
-        btn(`sr:pb:${id}:${i}`, spec.visible === false ? "Mostrar" : "Esconder", spec.visible === false ? ButtonStyle.Success : ButtonStyle.Secondary, false, EMOJI.more),
+        btn(`sr:pb:${id}:${i}`, spec.visible === false ? "Mostrar" : "Esconder", spec.visible === false ? ButtonStyle.Success : ButtonStyle.Secondary, false),
         "**Visibilidade**\n-# Mostra ou esconde este botão na mensagem."
       )
     );
