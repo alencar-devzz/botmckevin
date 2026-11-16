@@ -1,11 +1,50 @@
 const { getPrefix } = require("../utils/getPrefix");
 const { suppressMessage, clearSuppressed } = require("../utils/logs/suppress");
 const { track } = require("../utils/metrics");
+const { getAfk, removeAfk } = require("../utils/afk/store");
+
+// AFK: tira a pessoa do AFK quando ela escreve e avisa quando marcam alguém ausente
+async function handleAfk(message, prefix) {
+  const guildId = message.guild.id;
+  const isAfkCommand =
+    message.content.startsWith(prefix) &&
+    message.content.slice(prefix.length).trim().split(/\s+/)[0]?.toLowerCase() === "afk";
+
+  if (!isAfkCommand && (await getAfk(guildId, message.author.id))) {
+    await removeAfk(guildId, message.author.id);
+    message.channel
+      .send({
+        content: `Bem-vindo de volta <@${message.author.id}>, seu AFK foi removido!`,
+        allowedMentions: { parse: [] },
+      })
+      .catch(() => {});
+  }
+
+  const lines = [];
+  for (const user of message.mentions.users.values()) {
+    if (user.bot || user.id === message.author.id) continue;
+    const entry = await getAfk(guildId, user.id);
+    if (entry) lines.push(`<@${user.id}> está ausente no momento: ${entry.reason ?? "AFK"}`);
+  }
+  if (lines.length) {
+    message.channel
+      .send({ content: lines.join("\n"), allowedMentions: { parse: [] } })
+      .catch(() => {});
+  }
+}
 
 module.exports = {
   name: "messageCreate",
   async execute(message) {
     if (message.author.bot || !message.guild) return;
+
+    const prefix = await getPrefix(message.guild.id);
+
+    try {
+      await handleAfk(message, prefix);
+    } catch (err) {
+      console.error("[AFK] Erro ao processar AFK:", err);
+    }
 
     // "cl" sem prefixo: apaga as mensagens de quem digitou (configurável no n!menu)
     if (message.content.trim().toLowerCase() === "cl") {
@@ -22,7 +61,6 @@ module.exports = {
     }
 
     // Comandos normais por prefixo
-    const prefix = await getPrefix(message.guild.id);
     if (!message.content.startsWith(prefix)) return;
 
     const args = message.content.slice(prefix.length).trim().split(/\s+/);
