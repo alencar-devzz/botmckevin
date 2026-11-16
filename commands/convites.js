@@ -14,15 +14,15 @@ module.exports = {
     .setDescription("Mostra os convites de uma pessoa: criados, entradas, saídas e contas recentes.")
     .setContexts(InteractionContextType.Guild)
     .addUserOption((o) =>
-      o.setName("pessoa").setDescription("De quem ver os convites (deixe vazio para ver os seus).")
+      o.setName("usuário").setDescription("De quem ver os convites (deixe vazio para ver os seus).")
     ),
 
   async executeSlash(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
-      const user = interaction.options.getUser("pessoa") ?? interaction.user;
-      const member = interaction.options.getMember("pessoa") ?? (user.id === interaction.user.id ? interaction.member : null);
+      const user = interaction.options.getUser("usuário") ?? interaction.user;
+      const member = interaction.options.getMember("usuário") ?? (user.id === interaction.user.id ? interaction.member : null);
       const stats = await getStats(interaction.guildId, user.id);
 
       await interaction.editReply({
