@@ -12,6 +12,7 @@ const { handleBumpModal } = require("./bumpHandlers");
 const { handleAntiLinkModal } = require("./antiLinkHandlers");
 const { handleMessageModal } = require("./mensagemHandlers");
 const { handleDupModal } = require("./dupCategoriaHandlers");
+const { handleSorteioModal } = require("./sorteioHandlers");
 
 const { handleCallHubConfigModal, handleCallPanelModal } = require("./callHubHandlers");
 
@@ -21,6 +22,11 @@ async function handleModal(interaction) {
   // Anti-link (listas de domínios, servidores parceiros e mensagem do aviso)
   if (customId.startsWith("ar:al:modal:")) {
     return handleAntiLinkModal(interaction);
+  }
+
+  // Comando /sorteio
+  if (customId.startsWith("sr:m:")) {
+    return handleSorteioModal(interaction);
   }
 
   // Painel do comando /duplicar-categoria (nome da cópia)

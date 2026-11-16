@@ -26,6 +26,7 @@ const { handleSpotifyButton } = require("./spotifyHandlers");
 const { handleTagButton } = require("./tagHandlers");
 const { handleDupButton } = require("./dupCategoriaHandlers");
 const { handleEmojiButton } = require("./addEmojiHandlers");
+const { handleSorteioButton } = require("./sorteioHandlers");
 
 const {
   handleCallHubConfigButton,
@@ -38,6 +39,11 @@ async function handleButton(interaction) {
   // Central de ajuda (comando /help)
   if (customId.startsWith("help:")) {
     return handleHelpButton(interaction);
+  }
+
+  // Painel do comando /sorteio e botões dos sorteios publicados
+  if (customId.startsWith("sr:")) {
+    return handleSorteioButton(interaction);
   }
 
   // Painel do comando /duplicar-categoria

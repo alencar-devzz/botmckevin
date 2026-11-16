@@ -14,8 +14,10 @@ const client = new Client({
     GatewayIntentBits.GuildModeration, // banimentos e registro de auditoria (logs)
     GatewayIntentBits.GuildPresences, // Rich Presence do Spotify (comando spotify); ligar em Privileged Gateway Intents
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMessageReactions, // /sorteio: entrada por reação
+    GatewayIntentBits.GuildInvites, // /sorteio: requisito de convites
   ],
-  partials: [Partials.Message, Partials.Channel, Partials.GuildMember],
+  partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.Reaction, Partials.User],
 });
 
 client.commands = new Collection();
