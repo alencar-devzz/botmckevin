@@ -29,8 +29,8 @@ function textLabel({
   if (placeholder) field.setPlaceholder(clip(placeholder, 100));
   if (value) field.setValue(clip(value, max));
 
-  const wrapper = new LabelBuilder().setLabel(label).setTextInputComponent(field);
-  if (description) wrapper.setDescription(description);
+  const wrapper = new LabelBuilder().setLabel(clip(label, 45)).setTextInputComponent(field);
+  if (description) wrapper.setDescription(clip(description, 100));
   return wrapper;
 }
 
@@ -52,8 +52,8 @@ function selectLabel({
   if (placeholder) menu.setPlaceholder(placeholder);
   if (typeof menu.setRequired === "function") menu.setRequired(required);
 
-  const wrapper = new LabelBuilder().setLabel(label).setStringSelectMenuComponent(menu);
-  if (description) wrapper.setDescription(description);
+  const wrapper = new LabelBuilder().setLabel(clip(label, 45)).setStringSelectMenuComponent(menu);
+  if (description) wrapper.setDescription(clip(description, 100));
   return wrapper;
 }
 
@@ -64,8 +64,8 @@ function uploadLabel({ id, label, description, min = 0, max = 1, required = fals
     .setMaxValues(max)
     .setRequired(required);
 
-  const wrapper = new LabelBuilder().setLabel(label).setFileUploadComponent(upload);
-  if (description) wrapper.setDescription(description);
+  const wrapper = new LabelBuilder().setLabel(clip(label, 45)).setFileUploadComponent(upload);
+  if (description) wrapper.setDescription(clip(description, 100));
   return wrapper;
 }
 

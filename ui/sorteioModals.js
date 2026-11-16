@@ -104,7 +104,7 @@ function textoModal(doc, b) {
     textLabel({
       id: "text",
       label: "Conteúdo",
-      description: "Markdown vale. Variáveis: {premio} {participantes} {termino} {numero_de_ganhadores} {responsavel} {regras} {resultado}",
+      description: "Markdown vale. Variáveis: {premio} {termino} {regras} {resultado} e outras.",
       style: TextInputStyle.Paragraph,
       max: 4000,
       value: doc.blocks[b]?.text,
