@@ -45,13 +45,14 @@ function describeRules(doc) {
   return need;
 }
 
+// {regras}: só a lista dos requisitos, sem título (quem monta o título é o próprio texto do sorteio)
 function rulesBlock(doc) {
   const lines = [];
   const need = describeRules(doc);
-  if (need.length) lines.push(`**Para entrar**\n-# ${need.join(" · ")}`);
+  if (need.length) lines.push(need.join(" · "));
   const extras = (doc.extras ?? []).filter((e) => e.roleId);
   if (extras.length) lines.push(`**Chances extras**\n-# ${extras.map((e) => `<@&${e.roleId}> +${e.extra}`).join(" · ")}`);
-  return lines.join("\n");
+  return lines.join("\n\n");
 }
 
 function resultBlock(doc, preview) {

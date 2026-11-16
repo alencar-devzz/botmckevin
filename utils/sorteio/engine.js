@@ -57,29 +57,39 @@ async function profileMatches(req, member, { fresh }) {
   return unknown ? null : false;
 }
 
-// Lista o que a pessoa ainda não cumpre (vazia = pode entrar)
-async function checkRequirements(doc, member) {
+// Requisitos de atividade (call, mensagens, convites): NÃO bloqueiam a entrada.
+// Quem entrar sem cumprir só é avisado se ganhar. Retorna uma lista de { text, have }.
+async function activityUnmet(doc, member) {
   const r = doc.req ?? {};
   const unmet = [];
+  if (!(r.callMin > 0 || r.messages > 0 || r.invites > 0)) return unmet;
 
-  if (r.callMin > 0 || r.messages > 0 || r.invites > 0) {
-    const a = await getActivity(member.guild.id, member.id);
-    if (r.callMin > 0 && a.voiceMin < r.callMin) unmet.push(`${r.callMin} min em call (você tem ${a.voiceMin})`);
-    if (r.messages > 0 && a.messages < r.messages) unmet.push(`${r.messages} mensagens (você tem ${a.messages})`);
-    if (r.invites > 0 && a.invites < r.invites) unmet.push(`${r.invites} convite(s) (você tem ${a.invites})`);
-  }
-
-  if ((r.where ?? []).length) {
-    const ok = await profileMatches(r, member, { fresh: true });
-    if (ok !== true) {
-      const parts = [];
-      if (r.where.includes("status") && (r.patterns ?? []).length) parts.push(`status com ${r.patterns.join(" ou ")}`);
-      if (r.where.includes("tag")) parts.push("a tag do servidor no perfil");
-      if (r.where.includes("bio") && (r.patterns ?? []).length) parts.push(`${r.patterns.join(" ou ")} na bio`);
-      unmet.push(parts.join(" ou ") || "o perfil exigido");
-    }
-  }
+  const a = await getActivity(member.guild.id, member.id);
+  if (r.callMin > 0 && a.voiceMin < r.callMin) unmet.push({ text: `${r.callMin} min em call`, have: `${a.voiceMin} min` });
+  if (r.messages > 0 && a.messages < r.messages) unmet.push({ text: `${r.messages} mensagens`, have: `${a.messages}` });
+  if (r.invites > 0 && a.invites < r.invites) unmet.push({ text: `${r.invites} convite(s)`, have: `${a.invites}` });
   return unmet;
+}
+
+// Requisitos de perfil (status, tag, bio): continuam bloqueando a entrada
+async function profileUnmet(doc, member) {
+  const r = doc.req ?? {};
+  if (!(r.where ?? []).length) return [];
+
+  const ok = await profileMatches(r, member, { fresh: true });
+  if (ok === true) return [];
+
+  const parts = [];
+  if (r.where.includes("status") && (r.patterns ?? []).length) parts.push(`status com ${r.patterns.join(" ou ")}`);
+  if (r.where.includes("tag")) parts.push("a tag do servidor no perfil");
+  if (r.where.includes("bio") && (r.patterns ?? []).length) parts.push(`${r.patterns.join(" ou ")} na bio`);
+  return [parts.join(" ou ") || "o perfil exigido"];
+}
+
+// Lista o que impede a pessoa de entrar agora (vazia = pode entrar).
+// Só o perfil bloqueia; call/mensagens/convites são cobrados de quem ganhar.
+async function checkRequirements(doc, member) {
+  return profileUnmet(doc, member);
 }
 
 // ---------- mensagem pública ----------
@@ -99,6 +109,20 @@ async function refreshPublicNow(client, doc) {
     .edit({ components: built.components, files: built.files, attachments: [], flags: V2, allowedMentions: { parse: [] } })
     .catch((err) => console.error("[SORTEIO] Não consegui atualizar a mensagem:", err.message));
   return true;
+}
+
+// Encerramento manual: apaga a embed principal (com os botões de entrar) do canal.
+// Retorna true se a mensagem não existe mais.
+async function deletePublic(client, doc) {
+  const message = await fetchPublicMessage(client, doc);
+  if (!message) return true;
+  return message
+    .delete()
+    .then(() => true)
+    .catch((err) => {
+      console.error("[SORTEIO] Não consegui apagar a mensagem do sorteio:", err.message);
+      return false;
+    });
 }
 
 // Reroll: apaga a mensagem original do sorteio e envia uma nova com o resultado atualizado
@@ -249,16 +273,17 @@ async function pickWinners(guild, doc, exclude = []) {
   return winners;
 }
 
-async function announce(client, guild, doc, winners, reroll) {
+async function announce(client, guild, doc, winners, reroll, { deleted = false } = {}) {
   const win = doc.win ?? {};
   let channel = win.channelId ? await client.channels.fetch(win.channelId).catch(() => null) : null;
   if (!channel?.isTextBased()) channel = await client.channels.fetch(doc.channelId).catch(() => null);
   if (!channel?.isTextBased()) return;
 
   const text = (c) => new TextDisplayBuilder().setContent(c);
-  const link = messageUrl(doc);
+  // se a mensagem do sorteio foi apagada (encerramento manual), não há link nem resposta para ela
+  const link = deleted ? "" : messageUrl(doc);
   const allowedMentions = { users: win.mention === false ? [] : winners, repliedUser: false };
-  const reply = win.reply && doc.messageId && channel.id === doc.channelId ? { messageReference: doc.messageId, failIfNotExists: false } : undefined;
+  const reply = !deleted && win.reply && doc.messageId && channel.id === doc.channelId ? { messageReference: doc.messageId, failIfNotExists: false } : undefined;
 
   const custom = await buildWinnerMessage(doc, { winners, reroll, guildName: guild.name, link });
   let sent = await channel
@@ -275,11 +300,13 @@ async function announce(client, guild, doc, winners, reroll) {
       .catch((err) => console.error("[SORTEIO] Não consegui anunciar:", err.message));
   }
 
+  await warnUnmetWinners(guild, channel, doc, winners);
+
   if (doc.dm?.enabled) {
     for (const id of winners) {
       const member = guild.members.cache.get(id) ?? (await guild.members.fetch(id).catch(() => null));
       if (!member) continue;
-      const body = buildDmText(doc, { winnerId: id, guildName: guild.name, link: messageUrl(doc) });
+      const body = buildDmText(doc, { winnerId: id, guildName: guild.name, link });
       await member
         .send({
           components: [new ContainerBuilder().addTextDisplayComponents(text(`### ${doc.name}`), text(body))],
@@ -288,6 +315,51 @@ async function announce(client, guild, doc, winners, reroll) {
         })
         .catch(() => {}); // DMs fechadas
     }
+  }
+}
+
+// Avisa no canal quem ganhou sem ter cumprido os requisitos de call/mensagens/convites
+async function warnUnmetWinners(guild, channel, doc, winners) {
+  if (!winners.length) return;
+  const r = doc.req ?? {};
+  if (!(r.callMin > 0 || r.messages > 0 || r.invites > 0)) return;
+
+  try {
+    const members = await fetchMembers(guild, winners);
+    const blocks = [];
+    for (const id of winners) {
+      const member = members.get(id);
+      if (!member) continue;
+      const unmet = await activityUnmet(doc, member);
+      if (!unmet.length) continue;
+      blocks.push(`<@${id}>\n${unmet.map((u) => `-# Faltou: **${u.text}** (tinha ${u.have})`).join("\n")}`);
+    }
+    if (!blocks.length) return;
+
+    // divide em mensagens de até ~3500 caracteres para não estourar o limite do Discord
+    const header = `### ⚠️ Ganhou, mas não cumpriu os requisitos\nQuem ganhou **${doc.prize}** sem completar o que o sorteio exigia:`;
+    const pages = [];
+    let current = [];
+    let size = header.length;
+    for (const block of blocks) {
+      if (size + block.length > 3500 && current.length) {
+        pages.push(current);
+        current = [];
+        size = header.length;
+      }
+      current.push(block);
+      size += block.length + 2;
+    }
+    if (current.length) pages.push(current);
+
+    for (const page of pages) {
+      const container = new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(`${header}\n\n${page.join("\n\n")}`));
+      await channel
+        .send({ components: [container], flags: V2, allowedMentions: { parse: [] } })
+        .catch((err) => console.error("[SORTEIO] Não consegui avisar sobre requisitos:", err.message));
+    }
+  } catch (err) {
+    console.error("[SORTEIO] Erro ao checar requisitos dos ganhadores:", err.message);
   }
 }
 
@@ -312,9 +384,11 @@ async function finish(client, id, { reroll = false, manual = false, byId = "" } 
       ? { winnerIds: winners, rerolls: (doc.rerolls ?? 0) + 1 }
       : { status: "ended", endedAt: new Date(), winnerIds: winners, endedManually: Boolean(manual), endedBy: manual ? String(byId || "") : "" };
     let updated = await updateSorteio(key, patch);
+    let deleted = false;
     if (reroll) updated = await repostPublic(client, updated);
-    else await refreshPublicNow(client, updated);
-    await announce(client, guild, updated, winners, reroll);
+    else if (manual) deleted = await deletePublic(client, updated);
+    if (!reroll && !deleted) await refreshPublicNow(client, updated);
+    await announce(client, guild, updated, winners, reroll, { deleted });
     return { doc: updated, winners };
   } finally {
     finishing.delete(key);
@@ -357,6 +431,7 @@ async function monitorSweep(client) {
 
 module.exports = {
   checkRequirements,
+  activityUnmet,
   tryEnter,
   leave,
   publish,

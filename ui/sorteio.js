@@ -442,7 +442,7 @@ function requisitosView(doc) {
   ];
   const main = box().addTextDisplayComponents(text(`### ${EMOJI.settings} Quem pode entrar`), text(lines.join("\n")));
   main.addSectionComponents(
-    section(btn(`sr:rqa:${id}`, "Editar", ButtonStyle.Secondary, false), "**Atividade no servidor**\n-# Mensagens, call e convites mínimos."),
+    section(btn(`sr:rqa:${id}`, "Editar", ButtonStyle.Secondary, false), "**Atividade no servidor**\n-# Mensagens, call e convites mínimos. Não bloqueiam a entrada: só são cobrados de quem ganhar."),
     section(btn(`sr:rqp:${id}`, "Editar", ButtonStyle.Secondary, false), "**Perfil do membro**\n-# Exige um padrão na bio, status, pronomes ou tag."),
     section(btn(`sr:rqx:${id}`, "Gerenciar", ButtonStyle.Secondary, false), "**Entradas extras**\n-# Cargos que ganham bilhetes a mais."),
     section(
