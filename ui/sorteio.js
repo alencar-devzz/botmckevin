@@ -157,8 +157,46 @@ function homeView(guild, doc) {
     .addSectionComponents(
       section(btn(`sr:aj:${id}`, "Editar", ButtonStyle.Secondary, ended, EMOJI.pencil), "**Prêmio e prazo**\n-# Nome interno, prêmio, vencedores e duração."),
       section(btn(`sr:rq:${id}`, "Editar", ButtonStyle.Secondary, ended, EMOJI.settings), "**Requisitos e chances**\n-# Quem pode participar e cargos com bônus."),
-      section(btn(`sr:ed:${id}:0`, "Editar", ButtonStyle.Primary, false, EMOJI.pencil), "**Editar mensagem**\n-# Texto, imagens e botões da mensagem publicada.")
+      section(btn(`sr:ed:${id}:0`, "Editar", ButtonStyle.Primary, false, EMOJI.pencil), "**Editar mensagem**\n-# Texto, imagens e botões da mensagem publicada."),
+      section(btn(`sr:en:${id}`, "Abrir", ButtonStyle.Secondary, false, EMOJI.member), `**Entrada e inscritos**\n-# Participação por ${doc.entryMode === "reaction" ? "reação" : "botão"} e botão de inscritos.`),
+      section(btn(`sr:en:${id}`, "Abrir", ButtonStyle.Secondary, false, EMOJI.send), `**Aviso ao vencedor**\n-# Mensagem privada: ${onOff(doc.dm?.enabled)}.`)
     );
+
+  const acoes = box().addTextDisplayComponents(
+    text(
+      draft
+        ? "### Lançamento\n-# O prazo começa a contar quando você publicar."
+        : active
+        ? "### Andamento\n-# Mude o prazo, encerre antes da hora ou apague."
+        : "### Pós-sorteio\n-# Sorteie novamente se algum vencedor não responder."
+    )
+  );
+  acoes.addActionRowComponents(
+    row(
+      btn(`sr:pub:${id}`, "Publicar", ButtonStyle.Success, !draft, EMOJI.send),
+      btn(`sr:pz:${id}`, "Mudar prazo", ButtonStyle.Secondary, !active, EMOJI.clock),
+      btn(`sr:end:${id}`, "Encerrar", ButtonStyle.Secondary, !active, EMOJI.settings),
+      btn(`sr:rr:${id}`, "Sortear de novo", ButtonStyle.Secondary, !ended, EMOJI.member),
+      btn(`sr:del:${id}`, "Excluir", ButtonStyle.Danger, false, EMOJI.trash)
+    )
+  );
+
+  return [
+    head,
+    montagem,
+    acoes,
+    row(
+      btn("sr:list", "Todos os sorteios", ButtonStyle.Secondary, false, EMOJI.back),
+      btn(`sr:prev:${id}`, "Prévia", ButtonStyle.Secondary, false, EMOJI.hashtag),
+      btn(`sr:home:${id}`, "Atualizar", ButtonStyle.Secondary, false, EMOJI.home)
+    ),
+  ];
+}
+
+function entregaView(guild, doc) {
+  const id = String(doc._id);
+  const draft = doc.status === "draft";
+  const head = box().addTextDisplayComponents(text(`## ${clip(doc.name, 80)}`), text("-# Entrada e aviso ao vencedor"));
 
   const entrada = box().addTextDisplayComponents(text(`### Como participar\n-# Botão na mensagem ou reação com um emoji. O botão de inscritos mostra quem entrou.`));
   entrada.addSectionComponents(
@@ -187,35 +225,7 @@ function homeView(guild, doc) {
     section(btn(`sr:dmr:${id}`, "Restaurar", ButtonStyle.Secondary, false, EMOJI.back), "**Texto padrão**\n-# Volta ao modelo original da DM.")
   );
 
-  const acoes = box().addTextDisplayComponents(
-    text(
-      draft
-        ? "### Lançamento\n-# O prazo começa a contar quando você publicar."
-        : active
-        ? "### Andamento\n-# Mude o prazo, encerre antes da hora ou apague."
-        : "### Pós-sorteio\n-# Sorteie novamente se algum vencedor não responder."
-    )
-  );
-  acoes.addSectionComponents(
-    section(btn(`sr:pub:${id}`, "Publicar", ButtonStyle.Success, !draft, EMOJI.send), "**Publicar e iniciar**\n-# A mensagem vai ao canal escolhido."),
-    section(btn(`sr:pz:${id}`, "Mudar", ButtonStyle.Secondary, !active, EMOJI.clock), "**Mudar prazo**\n-# Define uma nova data de encerramento."),
-    section(btn(`sr:end:${id}`, "Encerrar", ButtonStyle.Secondary, !active, EMOJI.settings), "**Encerrar agora**\n-# Sorteia os vencedores antes da hora."),
-    section(btn(`sr:rr:${id}`, "Sortear", ButtonStyle.Secondary, !ended, EMOJI.member), "**Sortear de novo**\n-# Escolhe outro(s) vencedor(es)."),
-    section(btn(`sr:del:${id}`, "Excluir", ButtonStyle.Danger, false, EMOJI.trash), "**Excluir sorteio**\n-# Apaga este sorteio de vez.")
-  );
-
-  return [
-    head,
-    montagem,
-    entrada,
-    entrega,
-    acoes,
-    row(
-      btn("sr:list", "Todos os sorteios", ButtonStyle.Secondary, false, EMOJI.back),
-      btn(`sr:prev:${id}`, "Prévia", ButtonStyle.Secondary, false, EMOJI.hashtag),
-      btn(`sr:home:${id}`, "Atualizar", ButtonStyle.Secondary, false, EMOJI.home)
-    ),
-  ];
+  return [head, entrada, entrega, row(btn(`sr:home:${id}`, "Voltar ao sorteio", ButtonStyle.Secondary, false, EMOJI.back))];
 }
 
 // ---------- prêmio, vencedores e prazo ----------
@@ -640,6 +650,7 @@ module.exports = {
   noticeView,
   listView,
   homeView,
+  entregaView,
   ajustesView,
   requisitosView,
   atividadeView,

@@ -151,6 +151,7 @@ async function handleSorteioButton(interaction) {
   const doc = await loadDoc(interaction, id);
   if (!doc) return;
   const home = () => goHome(interaction, id);
+  const entrega = async () => show(interaction, ui.entregaView(guild, await store.getSorteio(id)));
   const homeFresh = async () => ui.homeView(guild, await store.getSorteio(id));
   const blockNo = ui.blockIndex(doc, a);
 
@@ -203,10 +204,13 @@ async function handleSorteioButton(interaction) {
     }
 
     // ----- como participar, DM -----
+    case "en":
+      return show(interaction, ui.entregaView(guild, doc));
+
     case "em": {
-      if (doc.status !== "draft") return show(interaction, ui.homeView(guild, doc));
+      if (doc.status !== "draft") return show(interaction, ui.entregaView(guild, doc));
       await save(interaction, id, { entryMode: doc.entryMode === "reaction" ? "button" : "reaction" });
-      return home();
+      return entrega();
     }
 
     case "emo":
@@ -214,20 +218,20 @@ async function handleSorteioButton(interaction) {
 
     case "pb": {
       const updated = await save(interaction, id, { "partButton.visible": doc.partButton?.visible === false });
-      if (a === "h") return show(interaction, ui.homeView(guild, updated));
+      if (a === "h") return show(interaction, ui.entregaView(guild, updated));
       return show(interaction, ui.botaoView(updated, ui.blockIndex(updated, a), "part"));
     }
 
     case "dm":
       await save(interaction, id, { "dm.enabled": !doc.dm?.enabled });
-      return home();
+      return entrega();
 
     case "dme":
       return interaction.showModal(modals.dmModal(doc));
 
     case "dmr":
       await save(interaction, id, { "dm.text": "" });
-      return home();
+      return entrega();
 
     // ----- publicar e acompanhar -----
     case "pub": {
@@ -517,7 +521,7 @@ async function handleSorteioModal(interaction) {
 
     case "dm": {
       const text = field(interaction, "text");
-      return show(interaction, ui.homeView(guild, await save(interaction, id, { "dm.text": text === D.DEFAULT_DM ? "" : text })));
+      return show(interaction, ui.entregaView(guild, await save(interaction, id, { "dm.text": text === D.DEFAULT_DM ? "" : text })));
     }
 
     case "tx":
@@ -567,10 +571,10 @@ async function handleSorteioModal(interaction) {
     case "em": {
       const emoji = field(interaction, "emoji");
       if (!parseEmoji(emoji).value) {
-        await show(interaction, ui.homeView(guild, doc));
+        await show(interaction, ui.entregaView(guild, doc));
         return warn(interaction, "Emoji não reconhecido", "Informe um único emoji, normal ou personalizado.");
       }
-      return show(interaction, ui.homeView(guild, await save(interaction, id, { reactionEmoji: emoji })));
+      return show(interaction, ui.entregaView(guild, await save(interaction, id, { reactionEmoji: emoji })));
     }
 
     default:
