@@ -3,7 +3,7 @@ const { suppressMessage, clearSuppressed } = require("../utils/logs/suppress");
 const { track } = require("../utils/metrics");
 const { getAfk, removeAfk } = require("../utils/afk/store");
 
-// AFK: tira a pessoa do AFK quando ela escreve e avisa quando marcam alguém ausente
+// AFK: tira a pessoa do AFK quando ela escreve e avisa quando marcam alguém ausente em mensagem comum
 async function handleAfk(message, prefix) {
   const guildId = message.guild.id;
   const isAfkCommand =
@@ -19,6 +19,9 @@ async function handleAfk(message, prefix) {
       })
       .catch(() => {});
   }
+
+  // Aviso de AFK só em mensagens comuns: comandos por prefixo (ex.: n!ban @fulano) não mostram o aviso
+  if (message.content.startsWith(prefix)) return;
 
   const lines = [];
   for (const user of message.mentions.users.values()) {
