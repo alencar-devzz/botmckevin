@@ -240,6 +240,22 @@ async function buildMessage(doc, { preview = false, withData = true } = {}) {
     top.push(belowRow);
   }
 
+  // Aviso de encerramento no topo da mensagem publicada (independe do texto personalizado)
+  if (doc.status === "ended" && !preview) {
+    const when = doc.endedAt ? ` <t:${unix(doc.endedAt)}:R>` : "";
+    const who = doc.endedManually ? `manualmente${doc.endedBy ? ` por <@${doc.endedBy}>` : ""}${when}` : when.trim() ? when.trim() : "";
+    const lines = [`### Sorteio encerrado`, `-# Este sorteio foi encerrado${who ? ` ${who}` : ""}. Não é mais possível entrar.`];
+    if ((doc.rerolls ?? 0) > 0) lines.push(`-# Vencedores sorteados novamente (${doc.rerolls}x).`);
+    const content = lines.join("\n");
+    if (doc.layout === "loose") {
+      count += 2;
+      top.unshift(new TextDisplayBuilder().setContent(content), new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+    } else {
+      count += 2;
+      top.unshift(new ContainerBuilder().setAccentColor(0xed4245).addTextDisplayComponents(new TextDisplayBuilder().setContent(content)));
+    }
+  }
+
   const textTotal = rendered.reduce((n, r) => n + r.chunks.reduce((m, c) => m + (c.type === "text" ? c.value.length : 0), 0), 0);
   if (textTotal > D.LIMITS.text) problems.push(`O texto passa de ${D.LIMITS.text} caracteres (tem ${textTotal}). Encurte os blocos.`);
   if (count > D.LIMITS.components) problems.push(`A mensagem passa de ${D.LIMITS.components} componentes (tem ${count}). Tire separadores ou blocos.`);

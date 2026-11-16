@@ -342,7 +342,7 @@ async function handleSorteioButton(interaction) {
     case "end":
     case "rr": {
       await interaction.deferUpdate();
-      const result = await engine.finish(interaction.client, id, { reroll: action === "rr" });
+      const result = await engine.finish(interaction.client, id, { reroll: action === "rr", manual: action === "end", byId: interaction.user.id });
       await goHome(interaction, id);
       if (result.error) return warn(interaction, "Não foi possível", result.error);
       return;

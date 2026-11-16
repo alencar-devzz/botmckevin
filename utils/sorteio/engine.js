@@ -89,6 +89,28 @@ async function refreshPublicNow(client, doc) {
   return true;
 }
 
+// Reroll: apaga a mensagem original do sorteio e envia uma nova com o resultado atualizado
+async function repostPublic(client, doc) {
+  const channel = await client.channels.fetch(doc.channelId).catch(() => null);
+  if (!channel?.isTextBased()) return doc;
+
+  const old = await channel.messages.fetch(doc.messageId).catch(() => null);
+  const built = await buildMessage(doc);
+  const sent = await channel
+    .send({ components: built.components, files: built.files, flags: V2, allowedMentions: { parse: [] } })
+    .catch((err) => {
+      console.error("[SORTEIO] Não consegui enviar a nova mensagem:", err.message);
+      return null;
+    });
+  if (!sent) {
+    // sem conseguir enviar a nova, mantém a original (atualizada) em vez de ficar sem nada
+    await refreshPublicNow(client, doc);
+    return doc;
+  }
+  if (old) await old.delete().catch((err) => console.error("[SORTEIO] Não consegui apagar a mensagem original:", err.message));
+  return (await updateSorteio(doc._id, { messageId: sent.id })) ?? { ...doc, messageId: sent.id };
+}
+
 // Muita gente entrando junto não pode virar uma edição por clique: agrupa em uma a cada poucos segundos
 function scheduleRefresh(client, id) {
   const key = String(id);
@@ -169,6 +191,8 @@ async function publish(client, doc) {
     startedAt,
     endsAt,
     endedAt: null,
+    endedManually: false,
+    endedBy: "",
     entries: [],
     winnerIds: [],
     rerolls: 0,
@@ -256,7 +280,7 @@ async function announce(client, guild, doc, winners, reroll) {
 }
 
 // Encerra e sorteia. reroll=true sorteia outros vencedores num sorteio já encerrado.
-async function finish(client, id, { reroll = false } = {}) {
+async function finish(client, id, { reroll = false, manual = false, byId = "" } = {}) {
   const key = String(id);
   if (finishing.has(key)) return { error: "Esse sorteio já está sendo processado." };
   finishing.add(key);
@@ -272,9 +296,12 @@ async function finish(client, id, { reroll = false } = {}) {
     const winners = await pickWinners(guild, doc, reroll ? doc.winnerIds : []);
     if (reroll && !winners.length) return { error: "Não sobrou ninguém elegível além dos vencedores anteriores." };
 
-    const patch = reroll ? { winnerIds: winners, rerolls: (doc.rerolls ?? 0) + 1 } : { status: "ended", endedAt: new Date(), winnerIds: winners };
-    const updated = await updateSorteio(key, patch);
-    await refreshPublicNow(client, updated);
+    const patch = reroll
+      ? { winnerIds: winners, rerolls: (doc.rerolls ?? 0) + 1 }
+      : { status: "ended", endedAt: new Date(), winnerIds: winners, endedManually: Boolean(manual), endedBy: manual ? String(byId || "") : "" };
+    let updated = await updateSorteio(key, patch);
+    if (reroll) updated = await repostPublic(client, updated);
+    else await refreshPublicNow(client, updated);
     await announce(client, guild, updated, winners, reroll);
     return { doc: updated, winners };
   } finally {

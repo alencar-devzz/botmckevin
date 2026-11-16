@@ -39,6 +39,8 @@ const sorteioSchema = new Schema(
     startedAt: { type: Date, default: null },
     endsAt: { type: Date, default: null, index: true },
     endedAt: { type: Date, default: null },
+    endedManually: { type: Boolean, default: false }, // true quando alguém clicou em Encerrar antes do prazo
+    endedBy: { type: String, default: "" },
 
     entryMode: { type: String, enum: ["button", "reaction"], default: "button" },
     reactionEmoji: { type: String, default: "" },
