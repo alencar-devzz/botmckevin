@@ -159,7 +159,7 @@ function homeView(guild, doc) {
       section(btn(`sr:rq:${id}`, "Editar", ButtonStyle.Secondary, ended, EMOJI.settings), "**Requisitos e chances**\n-# Quem pode participar e cargos com bônus."),
       section(btn(`sr:ed:${id}:0`, "Editar", ButtonStyle.Primary, false, EMOJI.pencil), "**Editar mensagem**\n-# Texto, imagens e botões da mensagem publicada."),
       section(btn(`sr:en:${id}`, "Abrir", ButtonStyle.Secondary, false, EMOJI.member), `**Entrada e inscritos**\n-# Participação por ${doc.entryMode === "reaction" ? "reação" : "botão"} e botão de inscritos.`),
-      section(btn(`sr:en:${id}`, "Abrir", ButtonStyle.Secondary, false, EMOJI.send), `**Aviso ao vencedor**\n-# Mensagem privada: ${onOff(doc.dm?.enabled)}.`)
+      section(btn(`sr:en:${id}:dm`, "Abrir", ButtonStyle.Secondary, false, EMOJI.send), `**Aviso ao vencedor**\n-# Mensagem privada: ${onOff(doc.dm?.enabled)}.`)
     );
 
   const acoes = box().addTextDisplayComponents(
