@@ -114,15 +114,16 @@ async function handleSorteioButton(interaction) {
     const doc = await store.getSorteio(id);
     if (!doc) return interaction.reply({ components: ui.noticeView("Sorteio indisponível", "Esse sorteio não existe mais."), flags: V2 | EPHEMERAL });
     const member = interaction.member;
+    // defer: a checagem de bio pode levar mais de 3s; o Discord dá até 15 min para responder depois
+    await interaction.deferReply({ flags: V2 | EPHEMERAL });
     const result = await engine.tryEnter(interaction.client, doc, member);
     if (result.ok) {
-      return interaction.reply({
+      return interaction.editReply({
         components: ui.noticeView("Inscrição feita", `Você está dentro de **${doc.prize}**. Boa sorte!`),
-        flags: V2 | EPHEMERAL,
       });
     }
-    if (result.already) return interaction.reply({ components: ui.leaveView(doc), flags: V2 | EPHEMERAL });
-    return interaction.reply({ components: ui.noticeView("Ainda não deu", result.reason, 0xed4245), flags: V2 | EPHEMERAL });
+    if (result.already) return interaction.editReply({ components: ui.leaveView(doc) });
+    return interaction.editReply({ components: ui.noticeView("Ainda não deu", result.reason, 0xed4245) });
   }
 
   if (action === "leave") {
