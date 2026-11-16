@@ -28,6 +28,7 @@ module.exports = {
       await interaction.editReply({
         components: buildInvitesPanel({
           stats,
+          name: user.username,
           avatarUrl: (member ?? user).displayAvatarURL({ extension: "png", size: 256 }),
           tracking: isTracking(interaction.guildId),
         }),
