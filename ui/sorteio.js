@@ -33,6 +33,8 @@ const EMOJI = {
   reload: "<a:reload:1569724363954065498>",
   reload2: "<:reload2:1570940328880373810>",
   lupa: "<:lupa:1569386560107970755>",
+  on: "<:onn:1571764142757650484>",
+  off: "<:offf:1571764644383825990>",
   trash: "<:trash:1571750967094022154>",
 };
 
@@ -204,7 +206,7 @@ function entregaView(guild, doc) {
   const entrada = box().addTextDisplayComponents(text(`### Como participar\n-# Botão na mensagem ou reação com um emoji. O botão de inscritos mostra quem entrou.`));
   entrada.addSectionComponents(
     section(
-      btn(`sr:em:${id}`, doc.entryMode === "reaction" ? "Entrada: reação" : "Entrada: botão", ButtonStyle.Secondary, !draft, EMOJI.more),
+      btn(`sr:em:${id}`, doc.entryMode === "reaction" ? "Entrada: reação" : "Entrada: botão", ButtonStyle.Secondary, !draft),
       "**Forma de entrada**\n-# Escolha como as pessoas se inscrevem."
     )
   );
@@ -213,7 +215,7 @@ function entregaView(guild, doc) {
   }
   entrada.addSectionComponents(
     section(
-      btn(`sr:pb:${id}:h`, doc.partButton?.visible === false ? "Inscritos: oculto" : "Inscritos: visível", ButtonStyle.Secondary, false, EMOJI.more),
+      btn(`sr:pb:${id}:h`, doc.partButton?.visible === false ? "Inscritos: oculto" : "Inscritos: visível", ButtonStyle.Secondary, false),
       "**Botão de inscritos**\n-# Mostra ou esconde quem já entrou."
     )
   );
@@ -221,10 +223,10 @@ function entregaView(guild, doc) {
   const entrega = box().addTextDisplayComponents(text(`### Aviso ao vencedor\n-# Envio por mensagem privada: **${onOff(doc.dm?.enabled)}**. O anúncio público sempre acontece.`));
   entrega.addSectionComponents(
     section(
-      btn(`sr:dm:${id}`, doc.dm?.enabled ? "Desligar DM" : "Ligar DM", doc.dm?.enabled ? ButtonStyle.Danger : ButtonStyle.Success, false, doc.dm?.enabled ? EMOJI.trash : EMOJI.send),
+      btn(`sr:dm:${id}`, doc.dm?.enabled ? "Desligar DM" : "Ligar DM", doc.dm?.enabled ? ButtonStyle.Danger : ButtonStyle.Success, false, doc.dm?.enabled ? EMOJI.off : EMOJI.on),
       "**Aviso por DM**\n-# Liga ou desliga o envio por mensagem privada."
     ),
-    section(btn(`sr:dme:${id}`, "Escrever", ButtonStyle.Secondary, false, EMOJI.more), "**Texto da DM**\n-# Mensagem enviada a quem ganhar."),
+    section(btn(`sr:dme:${id}`, "Escrever", ButtonStyle.Secondary, false, EMOJI.pencil), "**Texto da DM**\n-# Mensagem enviada a quem ganhar."),
     section(btn(`sr:dmr:${id}`, "Restaurar", ButtonStyle.Secondary, false, EMOJI.reload), "**Texto padrão**\n-# Volta ao modelo original da DM.")
   );
 
