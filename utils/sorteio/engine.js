@@ -346,7 +346,7 @@ async function monitorSweep(client) {
         drop.push(entry.userId);
         continue;
       }
-      if ((doc.req.where ?? []).length && (await profileMatches(doc.req, member, { fresh: true })) === false) drop.push(entry.userId);
+      if ((doc.req.where ?? []).length && (await profileMatches(doc.req, member, { fresh: false })) === false) drop.push(entry.userId);
     }
     if (drop.length) {
       await Sorteio.updateOne({ _id: doc._id }, { $pull: { entries: { userId: { $in: drop } } } });

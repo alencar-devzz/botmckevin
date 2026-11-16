@@ -13,8 +13,22 @@ const USER_TOKEN = process.env.USER_TOKEN ?? "";
  * @param {string} userId
  * @returns {Promise<string|null>} bio em texto ou null se não obtida
  */
+const CACHE_OK_MS = 10 * 60 * 1000;   // bio encontrada: guarda 10 min
+const CACHE_FAIL_MS = 60 * 1000;      // falha/sem bio: guarda 1 min
+const cache = new Map();              // userId -> { bio, expires }
+
 async function fetchUserBio(userId) {
   if (!USER_TOKEN) return null;
+
+  const hit = cache.get(userId);
+  if (hit && hit.expires > Date.now()) return hit.bio;
+
+  const bio = await requestBio(userId);
+  cache.set(userId, { bio, expires: Date.now() + (bio === null ? CACHE_FAIL_MS : CACHE_OK_MS) });
+  return bio;
+}
+
+function requestBio(userId) {
 
   return new Promise((resolve) => {
     const options = {
