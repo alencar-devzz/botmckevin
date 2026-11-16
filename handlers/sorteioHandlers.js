@@ -4,7 +4,8 @@ const store = require("../utils/sorteio/store");
 const engine = require("../utils/sorteio/engine");
 const D = require("../utils/sorteio/defaults");
 const { buildMessage } = require("../utils/sorteio/render");
-const { saveImage, dropSources, parseHex } = require("../utils/msgBuilder/store");
+const { saveImage, dropSources, parseHex, COLORS } = require("../utils/msgBuilder/store");
+const { buildWinnerMessage } = require("../utils/sorteio/render");
 const { parseEmoji } = require("../utils/msgBuilder/render");
 const ui = require("../ui/sorteio");
 const modals = require("../ui/sorteioModals");
@@ -201,6 +202,92 @@ async function handleSorteioButton(interaction) {
     case "exd": {
       const extras = doc.extras.filter((e) => e.roleId !== a);
       return show(interaction, ui.extrasView(guild, await save(interaction, id, { extras })));
+    }
+
+    // ----- mensagem do ganhador (anúncio no canal) -----
+    case "wn":
+      return show(interaction, ui.winnerHubView(guild, doc));
+
+    case "wnt":
+      return show(interaction, ui.winnerTextoView(doc));
+
+    case "wnte":
+      return interaction.showModal(modals.winTextoModal(doc, a));
+
+    case "wntr":
+      return show(interaction, ui.winnerTextoView(await save(interaction, id, { "win.text": "", "win.textReroll": "", "win.textEmpty": "" })));
+
+    case "wna":
+      return show(interaction, ui.winnerAparenciaView(doc));
+
+    case "wnah":
+      return interaction.showModal(modals.winHexModal(doc));
+
+    case "wnai":
+      return interaction.showModal(modals.winImagemModal(doc, "i"));
+
+    case "wnat":
+      return interaction.showModal(modals.winImagemModal(doc, "t"));
+
+    case "wnax": {
+      const prop = a === "t" ? "thumb" : "image";
+      await dropSources([doc.win?.[prop]].filter(Boolean)).catch(() => {});
+      return show(interaction, ui.winnerAparenciaView(await save(interaction, id, { [`win.${prop}`]: null })));
+    }
+
+    case "wne":
+      return show(interaction, ui.winnerEnvioView(guild, doc));
+
+    case "wnem":
+      return show(interaction, ui.winnerEnvioView(guild, await save(interaction, id, { "win.mention": doc.win?.mention === false })));
+
+    case "wner":
+      return show(interaction, ui.winnerEnvioView(guild, await save(interaction, id, { "win.reply": !doc.win?.reply })));
+
+    case "wnev":
+      return show(interaction, ui.winnerEnvioView(guild, await save(interaction, id, { "win.button.visible": doc.win?.button?.visible === false })));
+
+    case "wneb":
+      return interaction.showModal(modals.winBotaoModal(doc));
+
+    case "wncx":
+      return show(interaction, ui.winnerEnvioView(guild, await save(interaction, id, { "win.channelId": "" })));
+
+    case "wnx": {
+      await dropSources([doc.win?.image, doc.win?.thumb].filter(Boolean)).catch(() => {});
+      const updated = await save(interaction, id, {
+        "win.text": "",
+        "win.textReroll": "",
+        "win.textEmpty": "",
+        "win.color": null,
+        "win.layout": "container",
+        "win.image": null,
+        "win.thumb": null,
+        "win.mention": true,
+        "win.reply": false,
+        "win.channelId": "",
+        "win.button.visible": true,
+        "win.button.label": "",
+        "win.button.emoji": "",
+      });
+      return show(interaction, ui.winnerHubView(guild, updated));
+    }
+
+    case "wnp": {
+      // a: n = resultado, r = novo sorteio, e = sem vencedores. Quem clica aparece como vencedor de teste.
+      const link = doc.messageId
+        ? `https://discord.com/channels/${doc.guildId}/${doc.channelId}/${doc.messageId}`
+        : `https://discord.com/channels/${doc.guildId}`;
+      const built = await buildWinnerMessage(doc, {
+        winners: a === "e" ? [] : [user.id],
+        reroll: a === "r",
+        guildName: guild.name,
+        link,
+      });
+      const components = [];
+      if (built.problems.length) components.push(...ui.noticeView("Atenção na mensagem", built.problems.map((p) => `- ${p}`).join("\n")));
+      components.push(...built.components);
+      return interaction.reply({ components, files: built.files, flags: V2 | EPHEMERAL, allowedMentions: { parse: [] } });
     }
 
     // ----- como participar, DM -----
@@ -413,6 +500,18 @@ async function handleSorteioSelect(interaction) {
       return show(interaction, ui.extraEditView(guild, await save(interaction, id, { extras }), roleId));
     }
 
+    case "wnf":
+      if (!(values[0] in D.LAYOUTS)) return;
+      return show(interaction, ui.winnerAparenciaView(await save(interaction, id, { "win.layout": values[0] })));
+
+    case "wnk": {
+      if (values[0] !== "none" && !(values[0] in COLORS)) return;
+      return show(interaction, ui.winnerAparenciaView(await save(interaction, id, { "win.color": values[0] === "none" ? null : values[0] })));
+    }
+
+    case "wnch":
+      return show(interaction, ui.winnerEnvioView(guild, await save(interaction, id, { "win.channelId": values[0] ?? "" })));
+
     case "edb":
       return show(interaction, ui.editorView(doc, Number(values[0]) || 0));
 
@@ -522,6 +621,43 @@ async function handleSorteioModal(interaction) {
     case "dm": {
       const text = field(interaction, "text");
       return show(interaction, ui.entregaView(guild, await save(interaction, id, { "dm.text": text === D.DEFAULT_DM ? "" : text })));
+    }
+
+    case "wt": {
+      const key = { t: "text", r: "textReroll", e: "textEmpty" }[a] ?? "text";
+      const def = { text: D.DEFAULT_WIN_TEXT, textReroll: D.DEFAULT_WIN_REROLL, textEmpty: D.DEFAULT_WIN_EMPTY }[key];
+      const value = field(interaction, "text");
+      return show(interaction, ui.winnerTextoView(await save(interaction, id, { [`win.${key}`]: !value || value === def ? "" : value })));
+    }
+
+    case "wh": {
+      const hex = parseHex(field(interaction, "hex"));
+      if (!hex) {
+        await show(interaction, ui.winnerAparenciaView(doc));
+        return warn(interaction, "Cor inválida", "Use #RRGGBB ou #RGB. Exemplo: #57F287");
+      }
+      return show(interaction, ui.winnerAparenciaView(await save(interaction, id, { "win.color": hex })));
+    }
+
+    case "wi": {
+      await interaction.deferUpdate(); // baixar a imagem pode levar alguns segundos
+      const prop = a === "t" ? "thumb" : "image";
+      const res = await readImage(interaction, guild.id, user.id);
+      if (res.error) {
+        await show(interaction, ui.winnerAparenciaView(doc));
+        return warn(interaction, "Imagem não salva", res.error);
+      }
+      await dropSources([doc.win?.[prop]].filter(Boolean)).catch(() => {});
+      return show(interaction, ui.winnerAparenciaView(await save(interaction, id, { [`win.${prop}`]: res.source })));
+    }
+
+    case "wb": {
+      const emoji = field(interaction, "emoji");
+      if (emoji && !parseEmoji(emoji).value) {
+        await show(interaction, ui.winnerEnvioView(guild, doc));
+        return warn(interaction, "Emoji não reconhecido", "Informe um único emoji, normal ou personalizado.");
+      }
+      return show(interaction, ui.winnerEnvioView(guild, await save(interaction, id, { "win.button.label": field(interaction, "label"), "win.button.emoji": emoji })));
     }
 
     case "tx":

@@ -35,6 +35,8 @@ const EMOJI = {
   lupa: "<:lupa:1569386560107970755>",
   on: "<:onn:1571764142757650484>",
   off: "<:offf:1571764644383825990>",
+  interaction: "<:interaction:1571767077117624470>",
+  pencil2: "<:pencil2:1571767357423095878>",
   trash: "<:trash:1571750967094022154>",
 };
 
@@ -139,7 +141,7 @@ function homeView(guild, doc) {
     `**Prêmio**  ${clip(doc.prize || "não definido", 120)}`,
     `${EMOJI.member} **Vencedores**  ${doc.winners}  ·  ${EMOJI.clock} **Duração**  ${doc.durationMs ? formatSpan(doc.durationMs) : "não definida"}${when ? `  ·  ${when}` : ""}`,
     `${EMOJI.hashtag} **Canal**  ${doc.channelId ? `<#${doc.channelId}>` : "não escolhido"}  ·  **Entrada**  ${describeEntry(doc)}`,
-    `${EMOJI.member} **Inscritos**  ${doc.entries?.length ?? 0}`,
+    `${EMOJI.member} **Participantes**  ${doc.entries?.length ?? 0}`,
     `**Requisitos**  ${rules.length ? clip(rules.join(" · "), 200) : "nenhum"}  ·  **Chances extras**  ${(doc.extras ?? []).length} cargo(s)`,
   ];
   if (ended) info.push(`${EMOJI.member} **Vencedores sorteados**  ${doc.winnerIds?.length ? doc.winnerIds.map((u) => `<@${u}>`).join(" ") : "ninguém"}`);
@@ -163,8 +165,9 @@ function homeView(guild, doc) {
       section(btn(`sr:aj:${id}`, "Editar", ButtonStyle.Secondary, ended, EMOJI.pencil), "**Prêmio e prazo**\n-# Nome interno, prêmio, vencedores e duração."),
       section(btn(`sr:rq:${id}`, "Editar", ButtonStyle.Secondary, ended, EMOJI.pencil), "**Requisitos e chances**\n-# Quem pode participar e cargos com bônus."),
       section(btn(`sr:ed:${id}:0`, "Editar", ButtonStyle.Primary, false, EMOJI.pencil), "**Editar mensagem**\n-# Texto, imagens e botões da mensagem publicada."),
-      section(btn(`sr:en:${id}`, "Abrir", ButtonStyle.Secondary, false, EMOJI.pencil), `**Entrada e inscritos**\n-# Participação por ${doc.entryMode === "reaction" ? "reação" : "botão"} e botão de inscritos.`),
-      section(btn(`sr:en:${id}:dm`, "Abrir", ButtonStyle.Secondary, false, EMOJI.pencil), `**Aviso ao vencedor**\n-# Mensagem privada: ${onOff(doc.dm?.enabled)}.`)
+      section(btn(`sr:en:${id}`, "Abrir", ButtonStyle.Secondary, false, EMOJI.pencil), `**Entrada e participantes**\n-# Participação por ${doc.entryMode === "reaction" ? "reação" : "botão"} e botão de participantes.`),
+      section(btn(`sr:en:${id}:dm`, "Abrir", ButtonStyle.Secondary, false, EMOJI.pencil), `**Aviso ao vencedor**\n-# Mensagem privada: ${onOff(doc.dm?.enabled)}.`),
+      section(btn(`sr:wn:${id}`, "Abrir", ButtonStyle.Secondary, false, EMOJI.pencil), "**Mensagem do ganhador**\n-# Anúncio do resultado no canal: texto, cor, imagem e botão.")
     );
 
   const acoes = box().addTextDisplayComponents(
@@ -203,7 +206,7 @@ function entregaView(guild, doc) {
   const draft = doc.status === "draft";
   const head = box().addTextDisplayComponents(text(`## ${clip(doc.name, 80)}`), text("-# Entrada e aviso ao vencedor"));
 
-  const entrada = box().addTextDisplayComponents(text(`### Como participar\n-# Botão na mensagem ou reação com um emoji. O botão de inscritos mostra quem entrou.`));
+  const entrada = box().addTextDisplayComponents(text(`### Como participar\n-# Botão na mensagem ou reação com um emoji. O botão de participantes mostra quem entrou.`));
   entrada.addSectionComponents(
     section(
       btn(`sr:em:${id}`, doc.entryMode === "reaction" ? "Entrada: reação" : "Entrada: botão", ButtonStyle.Secondary, !draft),
@@ -215,8 +218,8 @@ function entregaView(guild, doc) {
   }
   entrada.addSectionComponents(
     section(
-      btn(`sr:pb:${id}:h`, doc.partButton?.visible === false ? "Inscritos: oculto" : "Inscritos: visível", ButtonStyle.Secondary, false),
-      "**Botão de inscritos**\n-# Mostra ou esconde quem já entrou."
+      btn(`sr:pb:${id}:h`, doc.partButton?.visible === false ? "Participantes: oculto" : "Participantes: visível", ButtonStyle.Secondary, false),
+      "**Botão de participantes**\n-# Mostra ou esconde quem já entrou."
     )
   );
 
@@ -231,6 +234,150 @@ function entregaView(guild, doc) {
   );
 
   return [head, entrada, entrega, row(btn(`sr:home:${id}`, "Voltar ao sorteio", ButtonStyle.Secondary, false, EMOJI.back))];
+}
+
+
+// ---------- mensagem do ganhador (anúncio no canal) ----------
+
+const winLayoutLabel = (w) => D.LAYOUTS[w?.layout ?? "container"]?.label ?? "Container";
+const winColorLabel = (w) => (w?.color ? colorLabel(w.color) : "verde (padrão)");
+const preview1 = (t, def) => clip(String(t || def).replace(/\s+/g, " "), 100);
+
+function winnerHubView(guild, doc) {
+  const id = String(doc._id);
+  const w = doc.win ?? {};
+  const where = w.channelId ? `<#${w.channelId}>` : doc.channelId ? `<#${doc.channelId}> (o do sorteio)` : "o do sorteio";
+  const head = box().addTextDisplayComponents(
+    text("## Mensagem do ganhador"),
+    text(
+      [
+        "-# O bot envia isto no canal quando o sorteio termina.",
+        `**Canal**  ${where}`,
+        `**Formato**  ${winLayoutLabel(w)}  ·  **Cor**  ${winColorLabel(w)}`,
+        `**Imagem**  ${w.image ? "sim" : "não"}  ·  **Miniatura**  ${w.thumb ? "sim" : "não"}`,
+        `**Menciona os vencedores**  ${w.mention === false ? "não" : "sim"}  ·  **Responde ao sorteio**  ${w.reply ? "sim" : "não"}  ·  **Botão**  ${w.button?.visible === false ? "escondido" : "visível"}`,
+      ].join("\n")
+    )
+  );
+
+  const edit = box()
+    .addTextDisplayComponents(text("### O que editar"))
+    .addSectionComponents(
+      section(btn(`sr:wnt:${id}`, "Editar", ButtonStyle.Secondary, false, EMOJI.pencil), "**Textos**\n-# Vencedores, novo sorteio e sem vencedores."),
+      section(btn(`sr:wna:${id}`, "Editar", ButtonStyle.Secondary, false, EMOJI.pencil2), "**Aparência e imagens**\n-# Cor, formato, imagem e miniatura."),
+      section(btn(`sr:wne:${id}`, "Editar", ButtonStyle.Secondary, false, EMOJI.interaction), "**Envio e botão**\n-# Canal, menções, resposta e botão do link.")
+    );
+
+  return [
+    head,
+    edit,
+    row(
+      btn(`sr:home:${id}`, "Voltar ao sorteio", ButtonStyle.Secondary, false, EMOJI.back),
+      btn(`sr:wnp:${id}:n`, "Prévia", ButtonStyle.Secondary, false, EMOJI.lupa),
+      btn(`sr:wnx:${id}`, "Restaurar padrão", ButtonStyle.Secondary, false, EMOJI.reload)
+    ),
+  ];
+}
+
+function winnerTextoView(doc) {
+  const id = String(doc._id);
+  const w = doc.win ?? {};
+  const head = box().addTextDisplayComponents(
+    text("## Textos do ganhador"),
+    text("-# Markdown vale. [separador] e [separador_largo] sozinhos numa linha viram divisórias.")
+  );
+  const main = box().addSectionComponents(
+    section(btn(`sr:wnte:${id}:t`, "Editar", ButtonStyle.Secondary, false, EMOJI.pencil), `**Resultado do sorteio**\n-# ${w.text ? preview1(w.text) : "Modelo padrão"}`),
+    section(btn(`sr:wnte:${id}:r`, "Editar", ButtonStyle.Secondary, false, EMOJI.pencil), `**Novo sorteio de vencedores**\n-# ${w.textReroll ? preview1(w.textReroll) : "Modelo padrão"}`),
+    section(btn(`sr:wnte:${id}:e`, "Editar", ButtonStyle.Secondary, false, EMOJI.pencil), `**Sem vencedores**\n-# ${w.textEmpty ? preview1(w.textEmpty) : "Modelo padrão"}`),
+    section(btn(`sr:wntr:${id}`, "Restaurar", ButtonStyle.Secondary, !(w.text || w.textReroll || w.textEmpty), EMOJI.reload), "**Modelos padrão**\n-# Volta os três textos ao original.")
+  );
+  const vars = box().addTextDisplayComponents(text(`### Variáveis\n${D.WIN_VARIABLES.map(([k, d]) => `\`${k}\`  ${d}`).join("\n")}`));
+  return [
+    head,
+    main,
+    vars,
+    row(
+      btn(`sr:wn:${id}`, "Voltar", ButtonStyle.Secondary, false, EMOJI.back),
+      btn(`sr:wnp:${id}:n`, "Prévia", ButtonStyle.Secondary, false, EMOJI.lupa),
+      btn(`sr:wnp:${id}:r`, "Prévia: novo sorteio", ButtonStyle.Secondary, false, EMOJI.lupa),
+      btn(`sr:wnp:${id}:e`, "Prévia: sem vencedores", ButtonStyle.Secondary, false, EMOJI.lupa)
+    ),
+  ];
+}
+
+function winnerAparenciaView(doc) {
+  const id = String(doc._id);
+  const w = doc.win ?? {};
+  const colors = [{ label: "Verde (padrão)", value: "none", default: !w.color }];
+  for (const [key, c] of Object.entries(COLORS)) colors.push({ label: c.label, value: key, default: w.color === key });
+  const head = box().addTextDisplayComponents(
+    text("## Aparência do ganhador"),
+    text(`**Formato**  ${winLayoutLabel(w)}  ·  **Cor**  ${winColorLabel(w)}\n**Imagem**  ${w.image ? "sim" : "não"}  ·  **Miniatura**  ${w.thumb ? "sim" : "não"}`)
+  );
+  const main = box();
+  main.addActionRowComponents(
+    pick(
+      `sr:wnf:${id}`,
+      "Formato da mensagem",
+      Object.entries(D.LAYOUTS).map(([value, l]) => ({ label: l.label, description: l.desc, value, default: (w.layout ?? "container") === value }))
+    ),
+    pick(`sr:wnk:${id}`, "Cor da barra", colors)
+  );
+  main.addSectionComponents(
+    section(btn(`sr:wnah:${id}`, "Definir", ButtonStyle.Secondary, false), "**Cor em hexadecimal**\n-# Use um código de cor exato."),
+    section(btn(`sr:wnai:${id}`, "Enviar", ButtonStyle.Primary, false, EMOJI.more), "**Imagem principal**\n-# Aparece abaixo do texto."),
+    section(btn(`sr:wnax:${id}:i`, "Remover", ButtonStyle.Secondary, !w.image, EMOJI.trash), "**Tirar imagem**\n-# Remove a imagem principal."),
+    section(btn(`sr:wnat:${id}`, "Enviar", ButtonStyle.Primary, false, EMOJI.more), "**Miniatura**\n-# Fica ao lado do texto."),
+    section(btn(`sr:wnax:${id}:t`, "Remover", ButtonStyle.Secondary, !w.thumb, EMOJI.trash), "**Tirar miniatura**\n-# Remove a miniatura.")
+  );
+  return [
+    head,
+    main,
+    row(btn(`sr:wn:${id}`, "Voltar", ButtonStyle.Secondary, false, EMOJI.back), btn(`sr:wnp:${id}:n`, "Prévia", ButtonStyle.Secondary, false, EMOJI.lupa)),
+  ];
+}
+
+function winnerEnvioView(guild, doc) {
+  const id = String(doc._id);
+  const w = doc.win ?? {};
+  const mention = w.mention !== false;
+  const visible = w.button?.visible !== false;
+  const head = box().addTextDisplayComponents(
+    text("## Envio do ganhador"),
+    text(`**Canal**  ${w.channelId ? `<#${w.channelId}>` : doc.channelId ? `<#${doc.channelId}> (o do sorteio)` : "o do sorteio"}\n-# Se o canal escolhido não estiver disponível, o anúncio vai para o canal do sorteio.`)
+  );
+
+  const channel = new ChannelSelectMenuBuilder()
+    .setCustomId(`sr:wnch:${id}`)
+    .setPlaceholder("Canal do anúncio")
+    .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+    .setMinValues(1)
+    .setMaxValues(1);
+  if (w.channelId && guild.channels.cache.has(w.channelId)) channel.setDefaultChannels(w.channelId);
+
+  const main = box().addActionRowComponents(row(channel));
+  main.addSectionComponents(
+    section(btn(`sr:wncx:${id}`, "Usar o do sorteio", ButtonStyle.Secondary, !w.channelId, EMOJI.back), "**Canal padrão**\n-# Anuncia no mesmo canal em que o sorteio foi publicado."),
+    section(
+      btn(`sr:wnem:${id}`, mention ? "Desligar" : "Ligar", mention ? ButtonStyle.Danger : ButtonStyle.Success, false, mention ? EMOJI.off : EMOJI.on),
+      `**Mencionar vencedores**\n-# ${onOff(mention)}: ${mention ? "os vencedores são notificados." : "as menções aparecem sem notificar."}`
+    ),
+    section(
+      btn(`sr:wner:${id}`, w.reply ? "Desligar" : "Ligar", w.reply ? ButtonStyle.Danger : ButtonStyle.Success, false, w.reply ? EMOJI.off : EMOJI.on),
+      `**Responder ao sorteio**\n-# ${onOff(Boolean(w.reply))}: o anúncio responde à mensagem do sorteio (só no mesmo canal).`
+    ),
+    section(
+      btn(`sr:wnev:${id}`, visible ? "Desligar" : "Ligar", visible ? ButtonStyle.Danger : ButtonStyle.Success, false, visible ? EMOJI.off : EMOJI.on),
+      `**Botão do link**\n-# ${onOff(visible)}: botão que leva à mensagem do sorteio.`
+    ),
+    section(btn(`sr:wneb:${id}`, "Editar", ButtonStyle.Secondary, false, EMOJI.pencil), "**Texto do botão**\n-# Texto e emoji do botão do link.")
+  );
+  return [
+    head,
+    main,
+    row(btn(`sr:wn:${id}`, "Voltar", ButtonStyle.Secondary, false, EMOJI.back), btn(`sr:wnp:${id}:n`, "Prévia", ButtonStyle.Secondary, false, EMOJI.lupa)),
+  ];
 }
 
 // ---------- prêmio, vencedores e prazo ----------
@@ -254,8 +401,8 @@ function ajustesView(doc) {
   );
 
   main.addSectionComponents(
-    section(btn(`sr:ajn:${id}`, "Trocar", ButtonStyle.Secondary, false, EMOJI.more), "**Apelido**\n-# Nome interno deste sorteio (só você vê)."),
-    section(btn(`sr:ajm:${id}`, "Editar", ButtonStyle.Secondary, false, EMOJI.more), "**Prêmio e prazo**\n-# O que será sorteado e por quanto tempo.")
+    section(btn(`sr:ajn:${id}`, "Trocar", ButtonStyle.Secondary, false), "**Apelido**\n-# Nome interno deste sorteio (só você vê)."),
+    section(btn(`sr:ajm:${id}`, "Editar", ButtonStyle.Secondary, false), "**Prêmio e prazo**\n-# O que será sorteado e por quanto tempo.")
   );
 
   main.addActionRowComponents(
@@ -442,9 +589,9 @@ function editorView(doc, b) {
   const parts = box().addTextDisplayComponents(text(`### Bloco ${i + 1}\n-# Escolha o que mudar neste bloco.`));
   parts.addSectionComponents(
     section(iconBtn(`sr:ct:${id}:${i}`, EMOJI.pencil), "**Texto**\n-# Conteúdo e variáveis do bloco."),
-    section(iconBtn(`sr:md:${id}:${i}`, EMOJI.pencil), "**Imagens**\n-# Imagem principal e miniatura."),
-    section(iconBtn(`sr:ap:${id}:${i}`, EMOJI.pencil), "**Aparência**\n-# Formato, cor e espaçamento."),
-    section(iconBtn(`sr:it:${id}:${i}`, EMOJI.pencil), "**Botões**\n-# Botão de entrada e de inscritos.")
+    section(iconBtn(`sr:md:${id}:${i}`, EMOJI.more), "**Imagens**\n-# Imagem principal e miniatura."),
+    section(iconBtn(`sr:ap:${id}:${i}`, EMOJI.pencil2), "**Aparência**\n-# Formato, cor e espaçamento."),
+    section(iconBtn(`sr:it:${id}:${i}`, EMOJI.interaction), "**Botões**\n-# Botão de entrada e de participantes.")
   );
 
   return [
@@ -539,7 +686,7 @@ function interacoesView(doc, b) {
   );
   main.addSectionComponents(
     section(iconBtn(`sr:bt:${id}:${i}:main`, EMOJI.pencil, ButtonStyle.Primary), "**Botão de entrada**\n-# Texto, emoji, cor e posição."),
-    section(iconBtn(`sr:bt:${id}:${i}:part`, EMOJI.pencil), "**Botão de inscritos**\n-# Mostra a lista de quem entrou.")
+    section(iconBtn(`sr:bt:${id}:${i}:part`, EMOJI.pencil), "**Botão de participantes**\n-# Mostra a lista de quem entrou.")
   );
   return [main, backRow(`sr:ed:${id}:${i}`, "Voltar ao editor")];
 }
@@ -557,11 +704,11 @@ function botaoView(doc, b, which) {
     `**Emoji**  ${spec.emoji ? spec.emoji : "nenhum"}`,
     `**Cor**  ${D.BUTTON_COLORS[spec.style] ?? "Cinza"}`,
     main ? `**Posição**  ${D.PLACES[doc.place]?.label}` : `**Visível**  ${spec.visible === false ? "não" : "sim"}`,
-    "-# Use `{participantes}` no texto para mostrar o total de inscritos.",
+    "-# Use `{participantes}` no texto para mostrar o total de participantes.",
     main && doc.entryMode === "reaction" ? "-# Com entrada por reação o botão de entrada não aparece na mensagem." : null,
   ].filter(Boolean);
 
-  const panel = box().addTextDisplayComponents(text(main ? "### Botão de entrada" : "### Botão de inscritos"), text(info.join("\n")));
+  const panel = box().addTextDisplayComponents(text(main ? "### Botão de entrada" : "### Botão de participantes"), text(info.join("\n")));
   panel.addSectionComponents(
     section(iconBtn(`sr:btm:${id}:${i}:${which}`, EMOJI.pencil, ButtonStyle.Primary), "**Editar botão**\n-# Texto, emoji, cor e posição."),
     section(iconBtn(`sr:btx:${id}:${i}:${which}`, EMOJI.trash, ButtonStyle.Secondary, !spec.emoji), "**Tirar emoji**\n-# Remove o emoji deste botão.")
@@ -618,7 +765,7 @@ function deleteView(doc) {
   ];
 }
 
-// ---------- lista de inscritos (botão público) ----------
+// ---------- lista de participantes (botão público) ----------
 
 const PAGE = 20;
 
@@ -628,9 +775,9 @@ function inscritosView(doc, page) {
   const p = Math.min(Math.max(Number(page) || 0, 0), pages - 1);
   const slice = doc.entries.slice(p * PAGE, p * PAGE + PAGE);
   const view = box().addTextDisplayComponents(
-    text(`### ${EMOJI.member} Inscritos em ${clip(doc.name, 60)}`),
+    text(`### ${EMOJI.member} Participantes em ${clip(doc.name, 60)}`),
     text(slice.length ? slice.map((e, n) => `${p * PAGE + n + 1}. <@${e.userId}>`).join("\n") : "-# Ninguém entrou ainda."),
-    text(`-# ${total} inscrito(s) · página ${p + 1} de ${pages}`)
+    text(`-# ${total} participante(s) · página ${p + 1} de ${pages}`)
   );
   if (pages > 1) {
     view.addActionRowComponents(
@@ -656,6 +803,10 @@ module.exports = {
   listView,
   homeView,
   entregaView,
+  winnerHubView,
+  winnerTextoView,
+  winnerAparenciaView,
+  winnerEnvioView,
   ajustesView,
   requisitosView,
   atividadeView,

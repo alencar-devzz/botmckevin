@@ -260,4 +260,100 @@ function buildDmText(doc, { winnerId, guildName, link }) {
   return fill(doc.dm?.text || D.DEFAULT_DM, vars).slice(0, D.LIMITS.dm + 400);
 }
 
-module.exports = { buildMessage, buildDmText, describeRules, formatSpan, variables, fill, unix };
+// ---------- mensagem do ganhador (vai para o canal ao encerrar) ----------
+
+function winnerVars(doc, { winners, guildName, link }) {
+  return {
+    premio: doc.prize || "Prêmio não definido",
+    vencedores: winners.length ? winners.map((id) => `<@${id}>`).join(" ") : "ninguém",
+    lista_vencedores: winners.length ? winners.map((id) => `- <@${id}>`).join("\n") : "ninguém",
+    numero_de_ganhadores: String(doc.winners ?? 1),
+    participantes: String(doc.entries?.length ?? 0),
+    sorteio: doc.name || "Sorteio",
+    servidor: guildName || "o servidor",
+    responsavel: doc.hostId ? `<@${doc.hostId}>` : "a equipe",
+    link: link ?? "",
+    encerramento: `<t:${unix(new Date())}:f>`,
+  };
+}
+
+function winnerText(doc, winners, reroll) {
+  const win = doc.win ?? {};
+  if (!winners.length) return win.textEmpty || D.DEFAULT_WIN_EMPTY;
+  return (reroll ? win.textReroll || D.DEFAULT_WIN_REROLL : win.text || D.DEFAULT_WIN_TEXT);
+}
+
+async function buildWinnerMessage(doc, { winners = [], reroll = false, guildName = "", link = "", withData = true } = {}) {
+  const win = doc.win ?? {};
+  const vars = winnerVars(doc, { winners, guildName, link });
+  const problems = [];
+  const files = [];
+
+  const assets = await loadAssets([win.image, win.thumb].filter(Boolean), withData);
+  const media = (source, name) => {
+    if (!source) return null;
+    if (!isStored(source)) return source;
+    const stored = assets.get(storedId(source));
+    if (!stored) {
+      problems.push(`A imagem salva (${name}) não foi encontrada. Envie de novo.`);
+      return null;
+    }
+    const file = `${name}.${stored.ext}`;
+    if (withData) files.push(new AttachmentBuilder(Buffer.from(stored.data), { name: file }));
+    return `attachment://${file}`;
+  };
+  const image = media(win.image, "ganhador-imagem");
+  const thumb = media(win.thumb, "ganhador-miniatura");
+
+  const chunks = chunkText(fill(winnerText(doc, winners, reroll), vars));
+  const items = [];
+  let thumbUsed = false;
+  for (const item of chunks) {
+    if (item.type === "sep") {
+      items.push(new SeparatorBuilder().setDivider(true).setSpacing(item.large ? SeparatorSpacingSize.Large : SeparatorSpacingSize.Small));
+    } else if (thumb && !thumbUsed) {
+      thumbUsed = true;
+      items.push(
+        new SectionBuilder()
+          .addTextDisplayComponents(new TextDisplayBuilder().setContent(item.value))
+          .setThumbnailAccessory(new ThumbnailBuilder().setURL(thumb))
+      );
+    } else {
+      items.push(new TextDisplayBuilder().setContent(item.value));
+    }
+  }
+  if (thumb && !thumbUsed) problems.push("A miniatura só aparece quando a mensagem tem texto.");
+  if (image) {
+    if (items.length) items.push(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+    items.push(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(image)));
+  }
+  if (!items.length) problems.push("A mensagem do ganhador ficou sem conteúdo.");
+
+  if (link && win.button?.visible !== false) {
+    const label = fill(win.button?.label || "", vars).trim();
+    const emoji = parseEmoji(win.button?.emoji).value;
+    const button = new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(link);
+    const shown = label || (emoji ? "" : D.DEFAULT_WIN_BUTTON);
+    if (shown) button.setLabel(shown.slice(0, 80));
+    if (emoji) button.setEmoji(emoji);
+    items.push(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+    items.push(new ActionRowBuilder().addComponents(button));
+  }
+
+  const textTotal = chunks.reduce((n, c) => n + (c.type === "text" ? c.value.length : 0), 0);
+  if (textTotal > D.LIMITS.text) problems.push(`O texto passa de ${D.LIMITS.text} caracteres (tem ${textTotal}).`);
+
+  if (win.layout === "loose") return { components: items, files, problems };
+
+  const container = new ContainerBuilder().setAccentColor(colorValue(win.color) ?? D.DEFAULT_WIN_COLOR);
+  for (const part of items) {
+    if (part instanceof TextDisplayBuilder) container.addTextDisplayComponents(part);
+    else if (part instanceof SeparatorBuilder) container.addSeparatorComponents(part);
+    else if (part instanceof SectionBuilder) container.addSectionComponents(part);
+    else if (part instanceof MediaGalleryBuilder) container.addMediaGalleryComponents(part);
+    else if (part instanceof ActionRowBuilder) container.addActionRowComponents(part);
+  }
+  return { components: [container], files, problems };
+}
+
+module.exports = { buildMessage, buildWinnerMessage, buildDmText, describeRules, formatSpan, variables, fill, unix };

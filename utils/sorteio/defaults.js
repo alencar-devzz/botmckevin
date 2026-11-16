@@ -6,6 +6,7 @@ const LIMITS = {
   prize: 100,
   text: 3800, // soma do texto dos blocos (limite do Discord para Components V2)
   dm: 1800,
+  win: 1500,
   components: 40,
   maxDurationMs: 365 * 24 * 60 * 60 * 1000,
   minDurationMs: 60 * 1000,
@@ -67,7 +68,7 @@ const DEFAULT_TEXT = [
   "-# Sorteio aberto, encerra {termino}",
   "[separador]",
   "**Vencedores**  {numero_de_ganhadores}",
-  "**Inscritos**  {participantes}",
+  "**Participantes**  {participantes}",
   "**Organização**  {responsavel}",
   "[separador]",
   "Toque no botão abaixo para entrar na disputa.",
@@ -82,12 +83,51 @@ const DEFAULT_DM = [
   "{link}",
 ].join("\n");
 
+const DEFAULT_WIN_TEXT = [
+  "## Sorteio encerrado",
+  "[separador]",
+  "**Prêmio**  {premio}",
+  "**Vencedores**  {vencedores}",
+  "-# Fale com a organização para combinar a entrega.",
+].join("\n");
+
+const DEFAULT_WIN_REROLL = [
+  "## Novo sorteio de vencedores",
+  "[separador]",
+  "**Prêmio**  {premio}",
+  "**Vencedores**  {vencedores}",
+  "-# Fale com a organização para combinar a entrega.",
+].join("\n");
+
+const DEFAULT_WIN_EMPTY = [
+  "## Sorteio encerrado",
+  "[separador]",
+  "**Prêmio**  {premio}",
+  "**Vencedores**  ninguém se inscreveu de forma válida",
+].join("\n");
+
+const DEFAULT_WIN_BUTTON = "Abrir o sorteio";
+const DEFAULT_WIN_COLOR = 0x57f287;
+
+const WIN_VARIABLES = [
+  ["{premio}", "o prêmio"],
+  ["{vencedores}", "menções dos vencedores, na mesma linha"],
+  ["{lista_vencedores}", "um vencedor por linha"],
+  ["{numero_de_ganhadores}", "quantos vencem"],
+  ["{participantes}", "total de participantes"],
+  ["{sorteio}", "apelido do sorteio"],
+  ["{servidor}", "nome do servidor"],
+  ["{responsavel}", "quem organiza"],
+  ["{link}", "link do sorteio"],
+  ["{encerramento}", "data e hora do resultado"],
+];
+
 const DEFAULT_MAIN_LABEL = "Entrar no sorteio";
-const DEFAULT_PART_LABEL = "Inscritos: {participantes}";
+const DEFAULT_PART_LABEL = "Participantes: {participantes}";
 
 const VARIABLES = [
   ["{premio}", "o prêmio"],
-  ["{participantes}", "total de inscritos"],
+  ["{participantes}", "total de participantes"],
   ["{termino}", "quando encerra"],
   ["{numero_de_ganhadores}", "quantos vencem"],
   ["{responsavel}", "quem organiza"],
@@ -113,6 +153,12 @@ module.exports = {
   WHERE,
   DEFAULT_TEXT,
   DEFAULT_DM,
+  DEFAULT_WIN_TEXT,
+  DEFAULT_WIN_REROLL,
+  DEFAULT_WIN_EMPTY,
+  DEFAULT_WIN_BUTTON,
+  DEFAULT_WIN_COLOR,
+  WIN_VARIABLES,
   DEFAULT_MAIN_LABEL,
   DEFAULT_PART_LABEL,
   VARIABLES,

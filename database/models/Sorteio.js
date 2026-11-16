@@ -54,6 +54,25 @@ const sorteioSchema = new Schema(
       text: { type: String, default: "" },
     },
 
+    // Mensagem de ganhador que vai para o canal quando o sorteio termina (vazio = padrão)
+    win: {
+      text: { type: String, default: "" },
+      textReroll: { type: String, default: "" },
+      textEmpty: { type: String, default: "" },
+      color: { type: String, default: null }, // nome da cor pronta ou #RRGGBB (vazio = verde)
+      layout: { type: String, enum: ["container", "loose"], default: "container" },
+      image: { type: String, default: null },
+      thumb: { type: String, default: null },
+      mention: { type: Boolean, default: true },
+      reply: { type: Boolean, default: false },
+      channelId: { type: String, default: "" },
+      button: {
+        visible: { type: Boolean, default: true },
+        label: { type: String, default: "" },
+        emoji: { type: String, default: "" },
+      },
+    },
+
     req: {
       callMin: { type: Number, default: 0 },
       messages: { type: Number, default: 0 },

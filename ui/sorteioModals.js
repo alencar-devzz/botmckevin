@@ -169,7 +169,7 @@ function botaoModal(doc, b, which) {
       })
     );
   }
-  return modal(`sr:m:bt:${doc._id}:${b}:${which}`, main ? "Botão de entrada" : "Botão de inscritos", ...fields);
+  return modal(`sr:m:bt:${doc._id}:${b}:${which}`, main ? "Botão de entrada" : "Botão de participantes", ...fields);
 }
 
 function emojiModal(doc) {
@@ -180,4 +180,56 @@ function emojiModal(doc) {
   );
 }
 
-module.exports = { newModal, renameModal, ajustesModal, prazoModal, perfilModal, dmModal, textoModal, imagemModal, hexModal, botaoModal, emojiModal };
+// ----- mensagem do ganhador -----
+
+const WIN_TEXT = {
+  t: { key: "text", title: "Texto: resultado", def: D.DEFAULT_WIN_TEXT },
+  r: { key: "textReroll", title: "Texto: novo sorteio", def: D.DEFAULT_WIN_REROLL },
+  e: { key: "textEmpty", title: "Texto: sem vencedores", def: D.DEFAULT_WIN_EMPTY },
+};
+
+function winTextoModal(doc, which) {
+  const spec = WIN_TEXT[which] ?? WIN_TEXT.t;
+  return modal(
+    `sr:m:wt:${doc._id}:${WIN_TEXT[which] ? which : "t"}`,
+    spec.title,
+    textLabel({
+      id: "text",
+      label: "Conteúdo",
+      description: "Markdown vale. As variáveis estão na tela anterior.",
+      style: TextInputStyle.Paragraph,
+      max: D.LIMITS.win,
+      required: true,
+      value: doc.win?.[spec.key] || spec.def,
+    })
+  );
+}
+
+function winHexModal(doc) {
+  return modal(
+    `sr:m:wh:${doc._id}`,
+    "Cor da barra",
+    textLabel({ id: "hex", label: "Código da cor", description: "#RRGGBB ou #RGB.", max: 7, required: true, placeholder: "#57F287" })
+  );
+}
+
+function winImagemModal(doc, kind) {
+  return modal(
+    `sr:m:wi:${doc._id}:${kind}`,
+    kind === "i" ? "Imagem do ganhador" : "Miniatura do ganhador",
+    uploadLabel({ id: "file", label: "Arquivo", description: "png, jpg, gif ou webp, até 4 MB." }),
+    textLabel({ id: "link", label: "Ou um link direto", description: "Usado só se nenhum arquivo for enviado.", max: 500, placeholder: "https://..." })
+  );
+}
+
+function winBotaoModal(doc) {
+  const b = doc.win?.button ?? {};
+  return modal(
+    `sr:m:wb:${doc._id}`,
+    "Botão do link",
+    textLabel({ id: "label", label: "Texto", description: "Vazio usa o padrão. Aceita as variáveis do texto.", max: 80, value: b.label, placeholder: D.DEFAULT_WIN_BUTTON }),
+    textLabel({ id: "emoji", label: "Emoji", description: "Normal ou personalizado. Vazio = sem emoji.", max: 60, value: b.emoji })
+  );
+}
+
+module.exports = { winTextoModal, winHexModal, winImagemModal, winBotaoModal, newModal, renameModal, ajustesModal, prazoModal, perfilModal, dmModal, textoModal, imagemModal, hexModal, botaoModal, emojiModal };

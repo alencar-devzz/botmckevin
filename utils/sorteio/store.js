@@ -30,7 +30,7 @@ async function updateSorteio(id, patch) {
 }
 
 const blockSources = (b) => [b?.image, b?.thumb].filter(Boolean);
-const docSources = (doc) => (doc?.blocks ?? []).flatMap(blockSources);
+const docSources = (doc) => [...(doc?.blocks ?? []).flatMap(blockSources), ...blockSources(doc?.win)];
 
 async function removeSorteio(id) {
   const doc = await getSorteio(id);

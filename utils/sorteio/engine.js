@@ -12,7 +12,7 @@ const {
 const Sorteio = require("../../database/models/Sorteio");
 const { getSorteio, updateSorteio } = require("./store");
 const { getActivity } = require("./activity");
-const { buildMessage, buildDmText } = require("./render");
+const { buildMessage, buildWinnerMessage, buildDmText } = require("./render");
 const { parseEmoji } = require("../msgBuilder/render");
 const D = require("./defaults");
 
@@ -214,31 +214,30 @@ async function pickWinners(guild, doc, exclude = []) {
 }
 
 async function announce(client, guild, doc, winners, reroll) {
-  const channel = await client.channels.fetch(doc.channelId).catch(() => null);
+  const win = doc.win ?? {};
+  let channel = win.channelId ? await client.channels.fetch(win.channelId).catch(() => null) : null;
+  if (!channel?.isTextBased()) channel = await client.channels.fetch(doc.channelId).catch(() => null);
   if (!channel?.isTextBased()) return;
 
   const text = (c) => new TextDisplayBuilder().setContent(c);
-  const box = new ContainerBuilder().setAccentColor(0x57f287);
-  box.addTextDisplayComponents(text(reroll ? `## Novo sorteio de vencedores` : `## Sorteio encerrado`));
-  box.addSeparatorComponents(new SeparatorBuilder());
-  box.addTextDisplayComponents(
-    text(
-      [
-        `**Prêmio**  ${doc.prize}`,
-        winners.length ? `**Vencedores**  ${winners.map((id) => `<@${id}>`).join(" ")}` : "**Vencedores**  ninguém se inscreveu de forma válida",
-        winners.length ? "-# Fale com a organização para combinar a entrega." : "",
-      ]
-        .filter(Boolean)
-        .join("\n")
-    )
-  );
-  box.addActionRowComponents(
-    new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Abrir o sorteio").setURL(messageUrl(doc)))
-  );
+  const link = messageUrl(doc);
+  const allowedMentions = { users: win.mention === false ? [] : winners, repliedUser: false };
+  const reply = win.reply && doc.messageId && channel.id === doc.channelId ? { messageReference: doc.messageId, failIfNotExists: false } : undefined;
 
-  await channel
-    .send({ components: [box], flags: V2, allowedMentions: { users: winners } })
-    .catch((err) => console.error("[SORTEIO] Não consegui anunciar:", err.message));
+  const custom = await buildWinnerMessage(doc, { winners, reroll, guildName: guild.name, link });
+  let sent = await channel
+    .send({ components: custom.components, files: custom.files, flags: V2, allowedMentions, reply })
+    .catch((err) => {
+      console.error("[SORTEIO] Anúncio personalizado falhou, usando o padrão:", err.message);
+      return null;
+    });
+  if (!sent) {
+    // Se a versão personalizada não passar (texto grande, imagem inválida...), o resultado sai no modelo padrão
+    const fallback = await buildWinnerMessage({ ...doc, win: { channelId: win.channelId } }, { winners, reroll, guildName: guild.name, link });
+    sent = await channel
+      .send({ components: fallback.components, files: fallback.files, flags: V2, allowedMentions })
+      .catch((err) => console.error("[SORTEIO] Não consegui anunciar:", err.message));
+  }
 
   if (doc.dm?.enabled) {
     for (const id of winners) {
