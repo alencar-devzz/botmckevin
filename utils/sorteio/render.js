@@ -252,7 +252,7 @@ async function buildMessage(doc, { preview = false, withData = true } = {}) {
       top.unshift(new TextDisplayBuilder().setContent(content), new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
     } else {
       count += 2;
-      top.unshift(new ContainerBuilder().setAccentColor(0xed4245).addTextDisplayComponents(new TextDisplayBuilder().setContent(content)));
+      top.unshift(new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(content)));
     }
   }
 
@@ -362,7 +362,8 @@ async function buildWinnerMessage(doc, { winners = [], reroll = false, guildName
   if (win.layout === "loose") return { components: items, files, problems };
 
   const container = new ContainerBuilder();
-  if (win.color !== "none") container.setAccentColor(colorValue(win.color) ?? D.DEFAULT_WIN_COLOR); // "none" = sem barra de cor
+  const winColor = colorValue(win.color); // sem cor escolhida = sem barra de cor
+  if (win.color !== "none" && winColor !== null) container.setAccentColor(winColor);
   for (const part of items) {
     if (part instanceof TextDisplayBuilder) container.addTextDisplayComponents(part);
     else if (part instanceof SeparatorBuilder) container.addSeparatorComponents(part);
