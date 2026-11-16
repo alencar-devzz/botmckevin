@@ -442,11 +442,11 @@ function requisitosView(doc) {
   ];
   const main = box().addTextDisplayComponents(text(`### ${EMOJI.settings} Quem pode entrar`), text(lines.join("\n")));
   main.addSectionComponents(
-    section(btn(`sr:rqa:${id}`, "Editar", ButtonStyle.Secondary, false, EMOJI.more), "**Atividade no servidor**\n-# Mensagens, call e convites mínimos."),
-    section(btn(`sr:rqp:${id}`, "Editar", ButtonStyle.Secondary, false, EMOJI.more), "**Perfil do membro**\n-# Exige um padrão na bio, status, pronomes ou tag."),
-    section(btn(`sr:rqx:${id}`, "Gerenciar", ButtonStyle.Secondary, false, EMOJI.more), "**Entradas extras**\n-# Cargos que ganham bilhetes a mais."),
+    section(btn(`sr:rqa:${id}`, "Editar", ButtonStyle.Secondary, false), "**Atividade no servidor**\n-# Mensagens, call e convites mínimos."),
+    section(btn(`sr:rqp:${id}`, "Editar", ButtonStyle.Secondary, false), "**Perfil do membro**\n-# Exige um padrão na bio, status, pronomes ou tag."),
+    section(btn(`sr:rqx:${id}`, "Gerenciar", ButtonStyle.Secondary, false), "**Entradas extras**\n-# Cargos que ganham bilhetes a mais."),
     section(
-      btn(`sr:rqm:${id}`, r.monitor ? "Desligar" : "Ligar", r.monitor ? ButtonStyle.Danger : ButtonStyle.Success, false, r.monitor ? EMOJI.trash : EMOJI.send),
+      btn(`sr:rqm:${id}`, r.monitor ? "Desligar" : "Ligar", r.monitor ? ButtonStyle.Danger : ButtonStyle.Success, false),
       "**Monitor de requisitos**\n-# Remove quem deixar de cumprir."
     )
   );
