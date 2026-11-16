@@ -45,7 +45,7 @@ async function profileMatches(req, member, { fresh }) {
   }
 
   if (where.includes("bio") && (req.patterns ?? []).length) {
-    const bio = await fetchUserBio(member.id);
+    const bio = await fetchUserBio(member.id, { fresh });
     if (bio === null) {
       unknown = true;
     } else {
