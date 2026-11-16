@@ -309,7 +309,10 @@ function winnerTextoView(doc) {
 function winnerAparenciaView(doc) {
   const id = String(doc._id);
   const w = doc.win ?? {};
-  const colors = [{ label: "Verde (padrão)", value: "none", default: !w.color }];
+  const colors = [
+    { label: "Verde (padrão)", value: "default", default: !w.color },
+    { label: "Sem cor", value: "none", default: w.color === "none" },
+  ];
   for (const [key, c] of Object.entries(COLORS)) colors.push({ label: c.label, value: key, default: w.color === key });
   const head = box().addTextDisplayComponents(
     text("## Aparência do ganhador"),

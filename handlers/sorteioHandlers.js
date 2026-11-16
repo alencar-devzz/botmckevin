@@ -505,8 +505,8 @@ async function handleSorteioSelect(interaction) {
       return show(interaction, ui.winnerAparenciaView(await save(interaction, id, { "win.layout": values[0] })));
 
     case "wnk": {
-      if (values[0] !== "none" && !(values[0] in COLORS)) return;
-      return show(interaction, ui.winnerAparenciaView(await save(interaction, id, { "win.color": values[0] === "none" ? null : values[0] })));
+      if (values[0] !== "default" && values[0] !== "none" && !(values[0] in COLORS)) return;
+      return show(interaction, ui.winnerAparenciaView(await save(interaction, id, { "win.color": values[0] === "default" ? null : values[0] })));
     }
 
     case "wnch":

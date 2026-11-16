@@ -345,7 +345,8 @@ async function buildWinnerMessage(doc, { winners = [], reroll = false, guildName
 
   if (win.layout === "loose") return { components: items, files, problems };
 
-  const container = new ContainerBuilder().setAccentColor(colorValue(win.color) ?? D.DEFAULT_WIN_COLOR);
+  const container = new ContainerBuilder();
+  if (win.color !== "none") container.setAccentColor(colorValue(win.color) ?? D.DEFAULT_WIN_COLOR); // "none" = sem barra de cor
   for (const part of items) {
     if (part instanceof TextDisplayBuilder) container.addTextDisplayComponents(part);
     else if (part instanceof SeparatorBuilder) container.addSeparatorComponents(part);
