@@ -20,9 +20,10 @@ module.exports = {
     const reason = raw || null;
     await setAfk(message.guild.id, message.author.id, reason);
 
-    await message.channel.send({
+    const sent = await message.channel.send({
       content: `<@${message.author.id}> Seu AFK foi ativado: ${reason ?? "Não informado"}`,
       allowedMentions: { parse: [] },
     });
+    setTimeout(() => sent.delete().catch(() => {}), 5000);
   },
 };

@@ -13,10 +13,8 @@ async function handleAfk(message, prefix) {
   if (!isAfkCommand && (await getAfk(guildId, message.author.id))) {
     await removeAfk(guildId, message.author.id);
     message.channel
-      .send({
-        content: `Bem-vindo de volta <@${message.author.id}>, seu AFK foi removido!`,
-        allowedMentions: { parse: [] },
-      })
+      .send({ content: `Bem-vindo de volta <@${message.author.id}>, seu AFK foi removido!` })
+      .then((sent) => setTimeout(() => sent.delete().catch(() => {}), 5000))
       .catch(() => {});
   }
 
