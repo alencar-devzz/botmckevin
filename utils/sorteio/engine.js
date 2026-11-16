@@ -75,6 +75,7 @@ async function checkRequirements(doc, member) {
       const parts = [];
       if (r.where.includes("status") && (r.patterns ?? []).length) parts.push(`status com ${r.patterns.join(" ou ")}`);
       if (r.where.includes("tag")) parts.push("a tag do servidor no perfil");
+      if (r.where.includes("bio") && (r.patterns ?? []).length) parts.push(`${r.patterns.join(" ou ")} na bio`);
       unmet.push(parts.join(" ou ") || "o perfil exigido");
     }
   }
