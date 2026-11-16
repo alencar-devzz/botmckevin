@@ -15,6 +15,7 @@ const { getActivity } = require("./activity");
 const { buildMessage, buildWinnerMessage, buildDmText } = require("./render");
 const { parseEmoji } = require("../msgBuilder/render");
 const D = require("./defaults");
+const { fetchUserBio } = require("./fetchUserBio");
 
 const V2 = MessageFlags.IsComponentsV2;
 const finishing = new Set();
@@ -41,6 +42,16 @@ async function profileMatches(req, member, { fresh }) {
     const guildTag = user.primaryGuild;
     if (guildTag === undefined) unknown = true;
     else if (guildTag && guildTag.identityGuildId === member.guild.id && guildTag.identityEnabled !== false) return true;
+  }
+
+  if (where.includes("bio") && (req.patterns ?? []).length) {
+    const bio = await fetchUserBio(member.id);
+    if (bio === null) {
+      unknown = true;
+    } else {
+      const bioLower = bio.toLowerCase();
+      if (req.patterns.some((p) => bioLower.includes(String(p).toLowerCase()))) return true;
+    }
   }
 
   return unknown ? null : false;
@@ -222,7 +233,7 @@ async function pickWinners(guild, doc, exclude = []) {
   for (const member of members.values()) {
     if (member.user.bot) continue;
     if (doc.req?.monitor && (doc.req.where ?? []).length) {
-      if ((await profileMatches(doc.req, member, { fresh: false })) === false) continue;
+      if ((await profileMatches(doc.req, member, { fresh: true })) === false) continue;
     }
     pool.push({ id: member.id, weight: ticketsOf(doc, member) });
   }
@@ -334,7 +345,7 @@ async function monitorSweep(client) {
         drop.push(entry.userId);
         continue;
       }
-      if ((doc.req.where ?? []).length && (await profileMatches(doc.req, member, { fresh: false })) === false) drop.push(entry.userId);
+      if ((doc.req.where ?? []).length && (await profileMatches(doc.req, member, { fresh: true })) === false) drop.push(entry.userId);
     }
     if (drop.length) {
       await Sorteio.updateOne({ _id: doc._id }, { $pull: { entries: { userId: { $in: drop } } } });

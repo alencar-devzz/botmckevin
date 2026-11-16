@@ -59,6 +59,7 @@ const BUTTON_COLORS = {
 const WHERE = {
   status: { label: "Status personalizado", desc: "Procura os padrões no status da pessoa" },
   tag: { label: "Tag do servidor", desc: "Exige a tag deste servidor no perfil" },
+  bio: { label: "Bio do perfil", desc: "Procura os padrões na bio do perfil do usuário" },
 };
 
 // Texto inicial do primeiro bloco. Variáveis: {premio} {participantes} {termino} {numero_de_ganhadores}

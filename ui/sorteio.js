@@ -487,7 +487,7 @@ function perfilView(doc) {
       [
         `**Padrões**  ${r.patterns?.length ? r.patterns.map(tag).join(" ") : "nenhum"}`,
         `**Onde procurar**  ${r.where?.length ? r.where.map((w) => D.WHERE[w]?.label).filter(Boolean).join(" ou ") : "nenhum lugar marcado"}`,
-        "-# Basta bater em um dos lugares marcados. O status precisa dos padrões; a tag do servidor não.",
+        "-# Basta bater em um dos lugares marcados. O status e a bio precisam dos padrões; a tag do servidor não.",
         statusNeedsPatterns ? "**Atenção**  o status está marcado, mas sem padrões. Defina os padrões ou desmarque." : null,
       ]
         .filter(Boolean)
@@ -499,7 +499,7 @@ function perfilView(doc) {
       `sr:rqw:${id}`,
       "Onde procurar",
       Object.entries(D.WHERE).map(([value, i]) => ({ label: i.label, description: i.desc, value, default: r.where?.includes(value) })),
-      { max: 2, min: 0 }
+      { max: 3, min: 0 }
     )
   );
   main.addSectionComponents(
