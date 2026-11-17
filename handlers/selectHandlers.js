@@ -103,6 +103,15 @@ async function openComunidadeOption(interaction, value) {
   }
 }
 
+// Abre um sistema pela chave "grupo:valor" (ex.: "moderacao:tickets"). Usado pelo resultado da busca
+// e pela busca que leva direto ao sistema.
+async function openSystem(interaction, key) {
+  const [group, value] = String(key).split(":");
+  if (group === "main") return openMainOption(interaction, value);
+  if (group === "moderacao") return openModeracaoOption(interaction, value);
+  if (group === "comunidade") return openComunidadeOption(interaction, value);
+}
+
 async function handleSelect(interaction) {
   const { customId, values } = interaction;
 
@@ -215,11 +224,7 @@ async function handleSelect(interaction) {
 
     // Resultado da busca do /menu: o valor é "grupo:sistema" (ex.: "comunidade:portaria")
     case "menu_search_pick": {
-      const [group, value] = String(values[0]).split(":");
-      if (group === "main") return openMainOption(interaction, value);
-      if (group === "moderacao") return openModeracaoOption(interaction, value);
-      if (group === "comunidade") return openComunidadeOption(interaction, value);
-      return;
+      return openSystem(interaction, values[0]);
     }
 
     case "moderacao_menu": {
@@ -242,4 +247,4 @@ async function handleSelect(interaction) {
   }
 }
 
-module.exports = { handleSelect };
+module.exports = { handleSelect, openSystem };

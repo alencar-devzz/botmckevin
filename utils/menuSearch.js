@@ -126,8 +126,8 @@ function scoreEntry(entry, queryWords, queryNormalized) {
   return Math.min(score, 1.3);
 }
 
-// Retorna até `limit` sistemas parecidos com o texto, do mais para o menos parecido.
-function searchSystems(query, limit = 8) {
+// Retorna até `limit` sistemas parecidos com o texto, do mais para o menos parecido (com a nota de cada um).
+function searchSystemsRanked(query, limit = 8) {
   const normalized = normalize(query);
   if (!normalized) return [];
 
@@ -139,7 +139,26 @@ function searchSystems(query, limit = 8) {
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score || a.entry.index - b.entry.index)
     .slice(0, limit)
-    .map((r) => r.entry);
+    .map((r) => ({ ...r.entry, score: r.score }));
 }
 
-module.exports = { searchSystems, normalize, buildRegistry, KEYWORDS };
+// Mesma busca, só com os sistemas (sem a nota)
+function searchSystems(query, limit = 8) {
+  return searchSystemsRanked(query, limit).map(({ score, ...entry }) => entry);
+}
+
+// A busca leva DIRETO ao sistema quando só um combina, ou quando um combina bem
+// (nome/apelido exato) e os outros ficam bem atrás. Se houver dúvida, devolve null
+// e o menu mostra a lista de sistemas encontrados.
+const DIRECT_MIN_SCORE = 1; // nome ou apelido digitado por inteiro
+const DIRECT_MIN_GAP = 0.3; // vantagem sobre o segundo colocado
+
+function pickDirectMatch(ranked) {
+  if (!ranked.length) return null;
+  if (ranked.length === 1) return ranked[0];
+  const [first, second] = ranked;
+  if (first.score >= DIRECT_MIN_SCORE && first.score - second.score >= DIRECT_MIN_GAP) return first;
+  return null;
+}
+
+module.exports = { searchSystems, searchSystemsRanked, pickDirectMatch, normalize, buildRegistry, KEYWORDS };

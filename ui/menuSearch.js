@@ -5,8 +5,9 @@ const {
   ActionRowBuilder,
 } = require("discord.js");
 const { textLabel, modal } = require("./modalHelpers");
-const { addBackButton } = require("./backButton");
-const { buildSearchButtonRow, SEARCH_EMOJI } = require("./mainMenu");
+const { buildBackButton } = require("./backButton");
+const { buildSearchButton, SEARCH_EMOJI } = require("./mainMenu");
+const { searchCrumbLine } = require("./breadcrumb");
 
 const SEARCH_MARKUP = `<:${SEARCH_EMOJI.name}:${SEARCH_EMOJI.id}>`;
 
@@ -34,19 +35,24 @@ function buildSearchModal() {
   );
 }
 
-// Resultado da busca: container com as opções encontradas + select para abrir o sistema.
-// O botão Buscar fica fora do container, igual ao menu principal.
+// Voltar + Buscar ficam FORA do container, numa linha só, embaixo dele
+function buildNavRow() {
+  return buildBackButton("back_main").addComponents(buildSearchButton());
+}
+
+// Resultado da busca (só aparece quando a busca não leva direto a um sistema):
+// container com as opções encontradas + select para abrir o sistema.
 function buildSearchResults({ query, results }) {
   const shown = clip(safe(query), 60);
   const container = new ContainerBuilder();
+  const crumb = searchCrumbLine(shown);
 
   if (!results.length) {
     container.addTextDisplayComponents(
-      text(`### ${SEARCH_MARKUP} Nenhum sistema encontrado`),
+      text(`### ${SEARCH_MARKUP} Nenhum sistema encontrado\n${crumb}`),
       text(`-# Não achei nada parecido com \`${shown}\`. Tente outra palavra ou só o começo do nome.`)
     );
-    addBackButton(container, "back_main");
-    return [container, buildSearchButtonRow()];
+    return [container, buildNavRow()];
   }
 
   const list = results
@@ -54,7 +60,7 @@ function buildSearchResults({ query, results }) {
     .join("\n");
 
   container.addTextDisplayComponents(
-    text(`### ${SEARCH_MARKUP} Resultados da busca`),
+    text(`### ${SEARCH_MARKUP} Resultados da busca\n${crumb}`),
     text(`-# Você buscou por \`${shown}\`. Selecione abaixo o sistema que deseja configurar.`),
     text(list)
   );
@@ -74,8 +80,7 @@ function buildSearchResults({ query, results }) {
     )
   );
 
-  addBackButton(container, "back_main");
-  return [container, buildSearchButtonRow()];
+  return [container, buildNavRow()];
 }
 
 module.exports = { buildSearchModal, buildSearchResults };

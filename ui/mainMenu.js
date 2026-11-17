@@ -9,6 +9,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require("discord.js");
+const { crumbLine } = require("./breadcrumb");
 
 const MENU_EMOJI = "<:menu:1572384509259685899>";
 const SEARCH_EMOJI = { name: "search", id: "1569386560107970755" };
@@ -38,14 +39,16 @@ const SISTEMAS = [
 ];
 
 // Botão "Buscar" (fica FORA do container). Abre o modal de busca de sistemas.
+function buildSearchButton() {
+  return new ButtonBuilder()
+    .setCustomId("menu_search")
+    .setLabel("Buscar")
+    .setEmoji(SEARCH_EMOJI)
+    .setStyle(ButtonStyle.Secondary);
+}
+
 function buildSearchButtonRow() {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("menu_search")
-      .setLabel("Buscar")
-      .setEmoji(SEARCH_EMOJI)
-      .setStyle(ButtonStyle.Secondary)
-  );
+  return new ActionRowBuilder().addComponents(buildSearchButton());
 }
 
 // Painel principal (aberto pelo /menu): um único container compacto + botão Buscar abaixo.
@@ -58,7 +61,7 @@ function buildMainMenu({ guild, client, prefix } = {}) {
     null;
 
   const lines = [
-    `## ${MENU_EMOJI} Menu de configurações`,
+    `## ${MENU_EMOJI} Menu de configurações\n${crumbLine([])}`,
     guild
       ? `-# Painel de controle do bot em **${guild.name}**.`
       : "-# Painel de controle do bot.",
@@ -96,4 +99,4 @@ function buildMainMenu({ guild, client, prefix } = {}) {
   return [container, buildSearchButtonRow()];
 }
 
-module.exports = { buildMainMenu, buildSearchButtonRow, SISTEMAS, MENU_EMOJI, SEARCH_EMOJI };
+module.exports = { buildMainMenu, buildSearchButton, buildSearchButtonRow, SISTEMAS, MENU_EMOJI, SEARCH_EMOJI };

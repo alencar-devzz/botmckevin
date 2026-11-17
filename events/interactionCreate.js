@@ -3,6 +3,7 @@ const { handleButton } = require("../handlers/buttonHandlers");
 const { handleSelect } = require("../handlers/selectHandlers");
 const { handleModal } = require("../handlers/modalHandlers");
 const { touchMenu } = require("../utils/menuSession");
+const { installMenuDecorator } = require("../utils/menuDecorator");
 const { touchRolePanel } = require("../utils/rolePanelSession");
 const { runProtected, opensModal } = require("../utils/safeInteraction");
 const { track } = require("../utils/metrics");
@@ -42,6 +43,11 @@ module.exports = {
         !interaction.customId?.startsWith("help:") // o /help não renova o prazo do n!menu
       ) {
         touchMenu(interaction);
+      }
+
+      // /menu: subtítulo "Painel > ..." e botão Voltar fora do container em todas as telas
+      if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+        installMenuDecorator(interaction);
       }
 
       // Renova o prazo de expiração do painel do comando groles
