@@ -3,6 +3,7 @@ const { handleButton } = require("../handlers/buttonHandlers");
 const { handleSelect } = require("../handlers/selectHandlers");
 const { handleModal } = require("../handlers/modalHandlers");
 const { touchMenu } = require("../utils/menuSession");
+const { touchRolePanel } = require("../utils/rolePanelSession");
 const { runProtected, opensModal } = require("../utils/safeInteraction");
 const { track } = require("../utils/metrics");
 
@@ -41,6 +42,11 @@ module.exports = {
         !interaction.customId?.startsWith("help:") // o /help não renova o prazo do n!menu
       ) {
         touchMenu(interaction);
+      }
+
+      // Renova o prazo de expiração do painel do comando groles
+      if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+        touchRolePanel(interaction);
       }
 
       // Os botões confirmam logo no clique (igual ao painel groles) e avisam se algo falhar.

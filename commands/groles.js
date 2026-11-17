@@ -3,6 +3,8 @@ const { getRoleManageConfig, isManager, searchRoles, normalize } = require("../u
 const { renderRolePanel } = require("../handlers/roleManageHandlers");
 const { buildNotice } = require("../ui/grolesPanel");
 const { resolveTarget } = require("../utils/resolveTarget");
+const { getPrefix } = require("../utils/getPrefix");
+const { startRolePanelSession } = require("../utils/rolePanelSession");
 
 const V2 = MessageFlags.IsComponentsV2;
 
@@ -98,6 +100,10 @@ module.exports = {
     }
 
     const components = await renderRolePanel({ guild, executor: message.member, state, results });
-    await message.channel.send({ components, flags: V2, allowedMentions: { parse: [] } });
+    const sent = await message.channel.send({ components, flags: V2, allowedMentions: { parse: [] } });
+
+    // Expira após 5 minutos sem interação, igual ao n!menu
+    const prefix = await getPrefix(guild.id);
+    startRolePanelSession(sent, prefix);
   },
 };
