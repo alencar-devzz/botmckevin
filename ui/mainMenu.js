@@ -106,4 +106,26 @@ function buildMainMenu({ guild, client, prefix } = {}) {
   return containers;
 }
 
-module.exports = { buildMainMenu, SISTEMAS };
+// Versão enxuta usada só para o botão "Voltar" (dentro da mensagem efêmera de um sistema).
+// Sem o cabeçalho com informações do servidor/bot e sem repetir a lista de sistemas: isso já
+// apareceu na mensagem pública do n!menu. Aqui é só o título e o select para escolher de novo.
+function buildMainMenuSelect() {
+  const header = new ContainerBuilder().addTextDisplayComponents(text("### Menu de configurações"));
+
+  const selectContainer = new ContainerBuilder().addTextDisplayComponents(
+    text("**Selecione abaixo**"),
+    text("-# Selecione o que deseja configurar.")
+  );
+  selectContainer.addActionRowComponents(
+    new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId("main_menu")
+        .setPlaceholder("Selecione uma opção")
+        .addOptions(SISTEMAS)
+    )
+  );
+
+  return [header, selectContainer];
+}
+
+module.exports = { buildMainMenu, buildMainMenuSelect, SISTEMAS };

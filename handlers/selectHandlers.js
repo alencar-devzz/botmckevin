@@ -143,20 +143,22 @@ async function handleSelect(interaction) {
   switch (customId) {
     case "main_menu": {
       const value = values[0];
+      // Se já estamos numa mensagem efêmera (voltou e escolheu outra opção), edita no lugar.
+      // Se é a primeira vez (select na mensagem pública do n!menu), abre uma mensagem nova.
+      const alreadyEphemeral = Boolean(interaction.message?.flags?.has(MessageFlags.Ephemeral));
+      const respond = (components) =>
+        alreadyEphemeral
+          ? interaction.update({ components })
+          : interaction.reply({ components, flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral });
+
       if (value === "aparencia") {
         return openAparencia(interaction);
       }
       if (value === "comunidade") {
-        return interaction.reply({
-          components: buildComunidadePanel(),
-          flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
-        });
+        return respond(buildComunidadePanel());
       }
       if (value === "moderacao") {
-        return interaction.reply({
-          components: buildModeracaoPanel(),
-          flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
-        });
+        return respond(buildModeracaoPanel());
       }
       return;
     }

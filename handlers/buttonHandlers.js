@@ -1,6 +1,5 @@
 const { MessageFlags } = require("discord.js");
-const { buildMainMenu } = require("../ui/mainMenu");
-const { getPrefix } = require("../utils/getPrefix");
+const { buildMainMenuSelect } = require("../ui/mainMenu");
 const { buildComunidadePanel } = require("../ui/comunidade");
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { handlePortariaButton } = require("./portariaHandlers");
@@ -171,13 +170,7 @@ async function handleButton(interaction) {
 
   switch (customId) {
     case "back_main": {
-      return interaction.update({
-        components: buildMainMenu({
-          guild: interaction.guild,
-          client: interaction.client,
-          prefix: await getPrefix(interaction.guildId),
-        }),
-      });
+      return interaction.update({ components: buildMainMenuSelect() });
     }
 
     case "back_moderacao": {

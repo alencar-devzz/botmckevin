@@ -80,10 +80,13 @@ async function statusView(client) {
 // Chamado pelo menu principal (select "Aparência e prefixo")
 async function openAparencia(interaction) {
   if (!(await guard(interaction))) return;
-  return interaction.reply({
-    components: buildAparenciaPanel(await summaryState(interaction)),
-    flags: MessageFlags.IsComponentsV2 | EPHEMERAL,
-  });
+  const components = buildAparenciaPanel(await summaryState(interaction));
+  // Já estamos numa mensagem efêmera (voltou do menu principal e escolheu de novo): edita no lugar
+  // em vez de abrir outra mensagem.
+  if (interaction.message?.flags?.has(MessageFlags.Ephemeral)) {
+    return interaction.update({ components });
+  }
+  return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 | EPHEMERAL });
 }
 
 // ---------- botões ----------

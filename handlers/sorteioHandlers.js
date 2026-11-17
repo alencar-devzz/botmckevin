@@ -31,6 +31,26 @@ function parseSpan(raw) {
 
 const isStaff = (interaction) => Boolean(interaction.member?.roles?.cache?.hasAny(...ALL_STAFF_ROLE_IDS));
 
+// Lembra, pelo id da mensagem efêmera, que essa central de sorteios foi aberta pelo n!menu
+// (Comunidade e interação > Sorteios), para o botão "Voltar ao menu" continuar aparecendo
+// mesmo depois de navegar para dentro de um sorteio e voltar para a lista.
+const MENU_ORIGIN_TTL = 30 * 60 * 1000;
+const menuOrigin = new Map(); // messageId -> timestamp
+
+function markMenuOrigin(messageId) {
+  if (messageId) menuOrigin.set(messageId, Date.now());
+}
+
+function isMenuOrigin(messageId) {
+  const at = messageId && menuOrigin.get(messageId);
+  if (!at) return false;
+  if (Date.now() - at > MENU_ORIGIN_TTL) {
+    menuOrigin.delete(messageId);
+    return false;
+  }
+  return true;
+}
+
 // Responde com o painel novo: edita a mensagem do clique (ou a resposta já confirmada)
 const show = (interaction, components, files) =>
   interaction.deferred || interaction.replied
@@ -48,6 +68,7 @@ async function openSorteioMenu(interaction) {
       flags: V2 | EPHEMERAL,
     });
   }
+  markMenuOrigin(interaction.message?.id);
   const list = await store.listSorteios(interaction.guild.id);
   return interaction.update({ components: ui.listView(interaction.guild, list, { fromMenu: true }) });
 }
@@ -156,7 +177,11 @@ async function handleSorteioButton(interaction) {
     return interaction.reply({ components: ui.noticeView("Sem permissão", "Só a equipe configura sorteios."), flags: V2 | EPHEMERAL });
   }
 
-  if (action === "list") return show(interaction, ui.listView(guild, await store.listSorteios(guild.id)));
+  if (action === "list") {
+    const fromMenu = isMenuOrigin(interaction.message?.id);
+    if (fromMenu) markMenuOrigin(interaction.message.id); // renova o prazo enquanto a pessoa estiver navegando
+    return show(interaction, ui.listView(guild, await store.listSorteios(guild.id), { fromMenu }));
+  }
 
   if (action === "new") return interaction.showModal(modals.newModal());
 
@@ -369,7 +394,10 @@ async function handleSorteioButton(interaction) {
         const channel = await interaction.client.channels.fetch(removed.channelId).catch(() => null);
         await channel?.messages?.delete(removed.messageId).catch(() => {});
       }
-      return show(interaction, ui.listView(guild, await store.listSorteios(guild.id)));
+      return show(
+        interaction,
+        ui.listView(guild, await store.listSorteios(guild.id), { fromMenu: isMenuOrigin(interaction.message?.id) })
+      );
     }
 
     // ----- editor da mensagem -----
