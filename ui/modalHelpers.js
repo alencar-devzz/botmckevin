@@ -17,6 +17,7 @@ function textLabel({
   description,
   style = TextInputStyle.Short,
   max,
+  min,
   required = false,
   value,
   placeholder,
@@ -26,6 +27,7 @@ function textLabel({
     .setStyle(style)
     .setRequired(required)
     .setMaxLength(max);
+  if (min) field.setMinLength(min);
   if (placeholder) field.setPlaceholder(clip(placeholder, 100));
   if (value) field.setValue(clip(value, max));
 

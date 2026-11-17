@@ -2,18 +2,22 @@ const {
   ContainerBuilder,
   TextDisplayBuilder,
   SectionBuilder,
-  SeparatorBuilder,
   ThumbnailBuilder,
+  SeparatorBuilder,
   StringSelectMenuBuilder,
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require("discord.js");
-const { TIMEOUT_MS } = require("../utils/menuSession");
+
+const MENU_EMOJI = "<:menu:1572384509259685899>";
+const SEARCH_EMOJI = { name: "search", id: "1569386560107970755" };
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3500));
 const code = (value) => `\`${String(value ?? "—").replaceAll("`", "'")}\``;
 const unix = (ms) => Math.floor(ms / 1000);
 
-// Lista única de sistemas: alimenta o texto do topo e as opções do select.
+// Lista única de sistemas: alimenta as opções do select e a busca do menu.
 // Para adicionar um sistema novo, basta incluir aqui (e tratar o value em handlers/selectHandlers.js).
 const SISTEMAS = [
   {
@@ -33,7 +37,19 @@ const SISTEMAS = [
   },
 ];
 
-// guild/client/prefix são opcionais: sem eles o menu aparece sem a parte de informações
+// Botão "Buscar" (fica FORA do container). Abre o modal de busca de sistemas.
+function buildSearchButtonRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("menu_search")
+      .setLabel("Buscar")
+      .setEmoji(SEARCH_EMOJI)
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
+// Painel principal (aberto pelo /menu): um único container compacto + botão Buscar abaixo.
+// guild/client/prefix são opcionais: sem eles o menu aparece sem a parte de informações.
 function buildMainMenu({ guild, client, prefix } = {}) {
   // Miniatura: ícone do servidor -> avatar do bot -> nenhuma (nunca a logo padrão do Discord)
   const icon =
@@ -41,91 +57,43 @@ function buildMainMenu({ guild, client, prefix } = {}) {
     client?.user?.displayAvatarURL({ extension: "png", size: 256 }) ??
     null;
 
-  const headerLines = [
-    "## Menu de configurações",
+  const lines = [
+    `## ${MENU_EMOJI} Menu de configurações`,
     guild
-      ? `-# Painel de controle do bot em **${guild.name}**. Escolha um sistema abaixo para configurar.`
-      : "-# Painel de controle do bot. Escolha um sistema abaixo para configurar.",
-    `-# Sistemas disponíveis: ${SISTEMAS.map((s) => s.label).join(" · ")}`,
+      ? `-# Painel de controle do bot em **${guild.name}**.`
+      : "-# Painel de controle do bot.",
   ];
 
-  const header = new ContainerBuilder();
+  if (client?.user) {
+    const info = [`**Bot:** ${code(client.user.username)} · **Prefixo:** ${code(prefix ?? "n!")}`];
+    const ping = client.ws?.ping;
+    if (Number.isFinite(ping) && ping >= 0) info.push(`**Latência:** ${code(`${Math.round(ping)}ms`)}`);
+    if (client.readyTimestamp) info.push(`**Online desde:** <t:${unix(client.readyTimestamp)}:R>`);
+    lines.push(`-# ${info.join(" · ")}`);
+  }
+
+  const container = new ContainerBuilder();
   if (icon) {
-    header.addSectionComponents(
+    container.addSectionComponents(
       new SectionBuilder()
-        .addTextDisplayComponents(...headerLines.map(text))
+        .addTextDisplayComponents(...lines.map(text))
         .setThumbnailAccessory(new ThumbnailBuilder().setURL(icon))
     );
   } else {
-    header.addTextDisplayComponents(...headerLines.map(text));
+    container.addTextDisplayComponents(...lines.map(text));
   }
 
-  const containers = [header];
-
-  if (client?.user) {
-    const lines = [
-      `**Bot:** ${code(client.user.username)} · **Prefixo:** ${code(prefix ?? "n!")}`,
-    ];
-    const ping = client.ws?.ping;
-    const parts = [];
-    if (Number.isFinite(ping) && ping >= 0) parts.push(`**Latência:** ${code(`${Math.round(ping)}ms`)}`);
-    if (client.readyTimestamp) parts.push(`**Online desde:** <t:${unix(client.readyTimestamp)}:R>`);
-    if (parts.length) lines.push(parts.join(" · "));
-
-    containers.push(
-      new ContainerBuilder().addTextDisplayComponents(text("### Sobre o bot"), text(lines.join("\n")))
-    );
-  }
-
-  containers.push(
-    new ContainerBuilder().addTextDisplayComponents(
-      text("### Sistemas"),
-      text(SISTEMAS.map((s) => `**${s.label}**\n-# ${s.description}`).join("\n"))
-    )
-  );
-
-  const selectContainer = new ContainerBuilder().addTextDisplayComponents(
-    text("### Selecione abaixo"),
-    text("-# Selecione o que deseja configurar.")
-  );
-  selectContainer.addActionRowComponents(
+  container.addSeparatorComponents(new SeparatorBuilder());
+  container.addActionRowComponents(
     new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId("main_menu")
-        .setPlaceholder("Selecione uma opção")
-        .addOptions(SISTEMAS)
-    )
-  );
-  selectContainer
-    .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(
-      text(`-# Este menu expira após ${Math.round(TIMEOUT_MS / 60000)} minutos sem interação.`)
-    );
-  containers.push(selectContainer);
-
-  return containers;
-}
-
-// Versão enxuta usada só para o botão "Voltar" (dentro da mensagem efêmera de um sistema).
-// Sem o cabeçalho com informações do servidor/bot e sem repetir a lista de sistemas: isso já
-// apareceu na mensagem pública do n!menu. Aqui é só o título e o select para escolher de novo.
-function buildMainMenuSelect() {
-  const header = new ContainerBuilder().addTextDisplayComponents(text("### Menu de configurações"));
-
-  const selectContainer = new ContainerBuilder().addTextDisplayComponents(
-    text("**Selecione abaixo**"),
-    text("-# Selecione o que deseja configurar.")
-  );
-  selectContainer.addActionRowComponents(
-    new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId("main_menu")
-        .setPlaceholder("Selecione uma opção")
+        .setPlaceholder("Selecione o que deseja configurar")
         .addOptions(SISTEMAS)
     )
   );
 
-  return [header, selectContainer];
+  return [container, buildSearchButtonRow()];
 }
 
-module.exports = { buildMainMenu, buildMainMenuSelect, SISTEMAS };
+module.exports = { buildMainMenu, buildSearchButtonRow, SISTEMAS, MENU_EMOJI, SEARCH_EMOJI };

@@ -12,6 +12,7 @@ const { handleBumpModal } = require("./bumpHandlers");
 const { handleAntiLinkModal } = require("./antiLinkHandlers");
 const { handleMessageModal } = require("./mensagemHandlers");
 const { handleDupModal } = require("./dupCategoriaHandlers");
+const { handleSearchModal } = require("./menuSearchHandlers");
 const { handleSorteioModal } = require("./sorteioHandlers");
 const { handleInvitesConfigModal } = require("./convitesConfigHandlers");
 
@@ -19,6 +20,11 @@ const { handleCallHubConfigModal, handleCallPanelModal } = require("./callHubHan
 
 async function handleModal(interaction) {
   const { customId } = interaction;
+
+  // /menu: busca de sistemas
+  if (customId === "menu_search_modal") {
+    return handleSearchModal(interaction);
+  }
 
   // Anti-link (listas de domínios, servidores parceiros e mensagem do aviso)
   if (customId.startsWith("ar:al:modal:")) {

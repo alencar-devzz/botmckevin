@@ -18,6 +18,7 @@ const EPHEMERAL = MessageFlags.Ephemeral;
 // então eles continuam respondendo direto (sem confirmação automática). Ao criar um botão novo que
 // abre modal, adicione o customId aqui.
 const MODAL_BUTTONS = [
+  /^menu_search$/, // /menu: botão Buscar
   /^sr:(new|ajn|ajm|pzx|rqpp|dme|cte|mdi|mdt|apc|btm|emo|wnte|wnah|wnai|wnat|wneb)(:|$)/, // /sorteio
   /^ar:al:(domAllow|domBlock|wrap|guilds|msg)$/, // anti-link
   /^apar_(avatar_set|banner_set|prefixo_set|nome_set|status_cfg|status_text)$/, // aparência

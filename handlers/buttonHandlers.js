@@ -1,5 +1,7 @@
 const { MessageFlags } = require("discord.js");
-const { buildMainMenuSelect } = require("../ui/mainMenu");
+const { buildMainMenu } = require("../ui/mainMenu");
+const { getPrefix } = require("../utils/getPrefix");
+const { openSearchModal } = require("./menuSearchHandlers");
 const { buildComunidadePanel } = require("../ui/comunidade");
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { handlePortariaButton } = require("./portariaHandlers");
@@ -81,7 +83,7 @@ async function handleButton(interaction) {
     return handleMessageButton(interaction);
   }
 
-  // Calls temporárias: configuração no n!menu e botões do painel da call
+  // Calls temporárias: configuração no /menu e botões do painel da call
   if (customId.startsWith("chcfg_")) {
     return handleCallHubConfigButton(interaction);
   }
@@ -90,7 +92,7 @@ async function handleButton(interaction) {
     return handleCallPanelButton(interaction);
   }
 
-  // Painel do comando groles e a configuração dele no n!menu
+  // Painel do comando groles e a configuração dele no /menu
   if (customId.startsWith("grl:")) {
     return handleRoleManageButton(interaction);
   }
@@ -99,27 +101,27 @@ async function handleButton(interaction) {
     return handleRoleManageConfigButton(interaction);
   }
 
-  // Bump reminder (n!menu > Moderação)
+  // Bump reminder (/menu > Moderação)
   if (customId.startsWith("bumpcfg_")) {
     return handleBumpButton(interaction);
   }
 
-  // Configuração do comando cl no n!menu
+  // Configuração do comando cl no /menu
   if (customId.startsWith("clcfg_")) {
     return handleClConfigButton(interaction);
   }
 
-  // Configuração do comando /convites no n!menu
+  // Configuração do comando /convites no /menu
   if (customId.startsWith("invcfg_")) {
     return handleInvitesConfigButton(interaction);
   }
 
-  // Configuração do comando spotify no n!menu
+  // Configuração do comando spotify no /menu
   if (customId.startsWith("sptcfg_")) {
     return handleSpotifyConfigButton(interaction);
   }
 
-  // Configuração do comando nnuke no n!menu
+  // Configuração do comando nnuke no /menu
   if (customId.startsWith("nukecfg_")) {
     return handleNukeConfigButton(interaction);
   }
@@ -169,8 +171,16 @@ async function handleButton(interaction) {
   }
 
   switch (customId) {
+    case "menu_search": {
+      return openSearchModal(interaction);
+    }
+
     case "back_main": {
-      return interaction.update({ components: buildMainMenuSelect() });
+      // Volta para o painel principal completo (com as informações e o botão Buscar)
+      const prefix = await getPrefix(interaction.guild.id);
+      return interaction.update({
+        components: buildMainMenu({ guild: interaction.guild, client: interaction.client, prefix }),
+      });
     }
 
     case "back_moderacao": {

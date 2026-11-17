@@ -56,7 +56,7 @@ function tabHeader(title, tabName) {
 
 function buildAparenciaPanel({ prefix, name, statusText, avatarURL, hasAvatar, hasBanner }) {
   const header = new ContainerBuilder().addTextDisplayComponents(
-    text("## Aparência do bot"),
+    text("## <:pencil2:1571767357423095878> Aparência do bot"),
     text("-# Personalize a identidade do bot: avatar, banner, prefixo, nome e status.")
   );
 

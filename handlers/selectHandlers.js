@@ -35,6 +35,74 @@ const {
   handleRoleManageConfigSelect,
 } = require("./roleManageHandlers");
 
+// Abre uma opção do menu principal. Usado pelo select do /menu e pelo resultado da busca.
+async function openMainOption(interaction, value) {
+  // Se já estamos numa mensagem efêmera (o /menu é efêmero), edita no lugar.
+  const alreadyEphemeral = Boolean(interaction.message?.flags?.has(MessageFlags.Ephemeral));
+  const respond = (components) =>
+    alreadyEphemeral
+      ? interaction.update({ components })
+      : interaction.reply({ components, flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral });
+
+  if (value === "aparencia") {
+    return openAparencia(interaction);
+  }
+  if (value === "comunidade") {
+    return respond(buildComunidadePanel());
+  }
+  if (value === "moderacao") {
+    return respond(buildModeracaoPanel());
+  }
+}
+
+// Opções da categoria Moderação (select "moderacao_menu" e busca)
+async function openModeracaoOption(interaction, value) {
+  if (value === "tickets") {
+    return openTicketHome(interaction);
+  }
+  if (value === "logs") {
+    return openLogsPanel(interaction);
+  }
+  if (value === "cargos") {
+    return openRoleManagePanel(interaction);
+  }
+  if (value === "nuke") {
+    return openNukePanel(interaction);
+  }
+  if (value === "bump") {
+    return openBumpPanel(interaction);
+  }
+}
+
+// Opções da categoria Comunidade e interação (select "comunidade_menu" e busca)
+async function openComunidadeOption(interaction, value) {
+  if (value === "portaria") {
+    return openPortaria(interaction);
+  }
+  if (value === "autoroles") {
+    const config = await getGuildConfig(interaction.guild.id);
+    return interaction.update({ components: buildAutoRolesPanel(config) });
+  }
+  if (value === "posts") {
+    return openPostsPanel(interaction);
+  }
+  if (value === "calls") {
+    return openCallHubPanel(interaction);
+  }
+  if (value === "cl") {
+    return openClPanel(interaction);
+  }
+  if (value === "spotify") {
+    return openSpotifyPanel(interaction);
+  }
+  if (value === "convites") {
+    return openInvitesConfigPanel(interaction);
+  }
+  if (value === "sorteios") {
+    return openSorteioMenu(interaction);
+  }
+}
+
 async function handleSelect(interaction) {
   const { customId, values } = interaction;
 
@@ -68,7 +136,7 @@ async function handleSelect(interaction) {
     return handleMessageSelect(interaction);
   }
 
-  // Calls temporárias: configuração no n!menu e seletores do painel da call
+  // Calls temporárias: configuração no /menu e seletores do painel da call
   if (customId.startsWith("chcfg_")) {
     return handleCallHubConfigSelect(interaction);
   }
@@ -77,7 +145,7 @@ async function handleSelect(interaction) {
     return handleCallPanelSelect(interaction);
   }
 
-  // Painel do comando groles e a configuração dele no n!menu
+  // Painel do comando groles e a configuração dele no /menu
   if (customId.startsWith("grl:")) {
     return handleRoleManageSelect(interaction);
   }
@@ -86,27 +154,27 @@ async function handleSelect(interaction) {
     return handleRoleManageConfigSelect(interaction);
   }
 
-  // Bump reminder (n!menu > Moderação)
+  // Bump reminder (/menu > Moderação)
   if (customId.startsWith("bumpcfg_")) {
     return handleBumpSelect(interaction);
   }
 
-  // Configuração do comando /convites no n!menu
+  // Configuração do comando /convites no /menu
   if (customId.startsWith("invcfg_")) {
     return handleInvitesConfigSelect(interaction);
   }
 
-  // Configuração do comando cl no n!menu
+  // Configuração do comando cl no /menu
   if (customId.startsWith("clcfg_")) {
     return handleClConfigSelect(interaction);
   }
 
-  // Configuração do comando spotify no n!menu
+  // Configuração do comando spotify no /menu
   if (customId.startsWith("sptcfg_")) {
     return handleSpotifyConfigSelect(interaction);
   }
 
-  // Configuração do comando nnuke no n!menu
+  // Configuração do comando nnuke no /menu
   if (customId.startsWith("nukecfg_")) {
     return handleNukeConfigSelect(interaction);
   }
@@ -142,75 +210,24 @@ async function handleSelect(interaction) {
 
   switch (customId) {
     case "main_menu": {
-      const value = values[0];
-      // Se já estamos numa mensagem efêmera (voltou e escolheu outra opção), edita no lugar.
-      // Se é a primeira vez (select na mensagem pública do n!menu), abre uma mensagem nova.
-      const alreadyEphemeral = Boolean(interaction.message?.flags?.has(MessageFlags.Ephemeral));
-      const respond = (components) =>
-        alreadyEphemeral
-          ? interaction.update({ components })
-          : interaction.reply({ components, flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral });
+      return openMainOption(interaction, values[0]);
+    }
 
-      if (value === "aparencia") {
-        return openAparencia(interaction);
-      }
-      if (value === "comunidade") {
-        return respond(buildComunidadePanel());
-      }
-      if (value === "moderacao") {
-        return respond(buildModeracaoPanel());
-      }
+    // Resultado da busca do /menu: o valor é "grupo:sistema" (ex.: "comunidade:portaria")
+    case "menu_search_pick": {
+      const [group, value] = String(values[0]).split(":");
+      if (group === "main") return openMainOption(interaction, value);
+      if (group === "moderacao") return openModeracaoOption(interaction, value);
+      if (group === "comunidade") return openComunidadeOption(interaction, value);
       return;
     }
 
     case "moderacao_menu": {
-      const value = values[0];
-      if (value === "tickets") {
-        return openTicketHome(interaction);
-      }
-      if (value === "logs") {
-        return openLogsPanel(interaction);
-      }
-      if (value === "cargos") {
-        return openRoleManagePanel(interaction);
-      }
-      if (value === "nuke") {
-        return openNukePanel(interaction);
-      }
-      if (value === "bump") {
-        return openBumpPanel(interaction);
-      }
-      return;
+      return openModeracaoOption(interaction, values[0]);
     }
 
     case "comunidade_menu": {
-      const value = values[0];
-      if (value === "portaria") {
-        return openPortaria(interaction);
-      }
-      if (value === "autoroles") {
-        const config = await getGuildConfig(interaction.guild.id);
-        return interaction.update({ components: buildAutoRolesPanel(config) });
-      }
-      if (value === "posts") {
-        return openPostsPanel(interaction);
-      }
-      if (value === "calls") {
-        return openCallHubPanel(interaction);
-      }
-      if (value === "cl") {
-        return openClPanel(interaction);
-      }
-      if (value === "spotify") {
-        return openSpotifyPanel(interaction);
-      }
-      if (value === "convites") {
-        return openInvitesConfigPanel(interaction);
-      }
-      if (value === "sorteios") {
-        return openSorteioMenu(interaction);
-      }
-      return;
+      return openComunidadeOption(interaction, values[0]);
     }
 
     case "autoroles_select": {
