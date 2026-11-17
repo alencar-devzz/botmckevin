@@ -62,7 +62,7 @@ async function handleButton(interaction) {
     return handleTagButton(interaction);
   }
 
-  if (customId === "badges:open_modal" || customId.startsWith("badges:add:") || customId.startsWith("badges:remove:")) {
+  if (customId === "badges:open_modal" || customId === "badges:back" || customId.startsWith("badges:add:") || customId.startsWith("badges:remove:")) {
     return handleBadgesButton(interaction);
   }
 

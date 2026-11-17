@@ -106,7 +106,11 @@ function buildBadgesActionPanel(selected, currentHouse) {
             .setCustomId(`badges:remove:${selected}`)
             .setLabel("Remover")
             .setStyle(ButtonStyle.Danger)
-            .setDisabled(!hasBadge)
+            .setDisabled(!hasBadge),
+          new ButtonBuilder()
+            .setCustomId("badges:back")
+            .setLabel("Voltar")
+            .setStyle(ButtonStyle.Secondary)
         )
       ),
   ];

@@ -77,7 +77,8 @@ function updateEphemeral(interaction, components) {
 async function handleBadgesMenuSelect(interaction) {
   if (interaction.values[0] !== "config") return;
 
-  await interaction.deferReply({ flags: EPHEMERAL });
+  // update: substitui o painel público pela resposta efêmera na mesma mensagem
+  await interaction.deferUpdate();
 
   const token = await loadToken(interaction.user.id);
   if (token) {
@@ -86,9 +87,7 @@ async function handleBadgesMenuSelect(interaction) {
     return editEphemeral(interaction, buildBadgesSelectPanel(currentHouse));
   }
 
-  // Sem conta: abre modal para inserir o token
-  // deferReply já foi chamado; precisamos trocar para showModal — não dá depois de defer.
-  // Estratégia: editReply com instrução e um botão que abre o modal.
+  // Sem conta: botão que abre o modal (não dá showModal após deferUpdate)
   return editEphemeral(interaction, [
     new ContainerBuilder()
       .addTextDisplayComponents(
@@ -134,6 +133,15 @@ async function handleBadgesButton(interaction) {
           )
         )
     );
+  }
+
+  // Voltar ao select de casas
+  if (customId === "badges:back") {
+    const token = await loadToken(interaction.user.id);
+    if (!token) return replyEphemeral(interaction, notice("Conta nao configurada. Use o menu **Configurar conta** para vincular seu token."));
+    await interaction.deferUpdate();
+    const currentHouse = await getCurrentHouse(token);
+    return editEphemeral(interaction, buildBadgesSelectPanel(currentHouse));
   }
 
   // Adicionar badge
