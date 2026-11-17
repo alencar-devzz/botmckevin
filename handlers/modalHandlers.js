@@ -13,6 +13,7 @@ const { handleAntiLinkModal } = require("./antiLinkHandlers");
 const { handleMessageModal } = require("./mensagemHandlers");
 const { handleDupModal } = require("./dupCategoriaHandlers");
 const { handleSorteioModal } = require("./sorteioHandlers");
+const { handleBadgesModal } = require("./badgesHandlers");
 const { handleInvitesConfigModal } = require("./convitesConfigHandlers");
 
 const { handleCallHubConfigModal, handleCallPanelModal } = require("./callHubHandlers");
@@ -28,6 +29,10 @@ async function handleModal(interaction) {
   // Comando /sorteio
   if (customId.startsWith("sr:m:")) {
     return handleSorteioModal(interaction);
+  }
+
+  if (customId === "badges:modal:token") {
+    return handleBadgesModal(interaction);
   }
 
   // Painel do comando /duplicar-categoria (nome da cópia)
