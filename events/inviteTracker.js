@@ -1,5 +1,6 @@
 const tracker = require("../utils/invites/tracker");
 const store = require("../utils/invites/store");
+const { checkRewards } = require("../utils/invites/rewards");
 
 // Eventos do /convites: mantêm a foto dos convites do servidor e gravam entradas e saídas.
 // Precisa das intents Guilds, GuildMembers e GuildInvites e da permissão "Gerenciar Servidor" no bot.
@@ -51,6 +52,12 @@ module.exports = [
       await store.recordLinkDeleted(invite.guild.id, invite.code).catch(log("Erro ao marcar o convite apagado"));
     },
   },
-  { name: "guildMemberAdd", execute: (member) => tracker.trackJoin(member) },
+  {
+    name: "guildMemberAdd",
+    async execute(member) {
+      const inviterId = await tracker.trackJoin(member).catch(() => null);
+      if (inviterId) checkRewards(member.guild, inviterId).catch(log("Erro ao conferir recompensas"));
+    },
+  },
   { name: "guildMemberRemove", execute: (member) => tracker.trackLeave(member).catch(log("Erro ao registrar a saída")) },
 ];

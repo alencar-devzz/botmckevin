@@ -1,5 +1,6 @@
 const { PermissionFlagsBits } = require("discord.js");
 const store = require("./store");
+const { getInviteConfig } = require("./configStore");
 
 // Rastreador de convites do /convites. Guarda uma "foto" dos usos de cada convite do servidor
 // e, a cada entrada, compara com a foto nova para descobrir qual convite foi usado.
@@ -99,13 +100,20 @@ async function detect(guild) {
 }
 
 // Processa a entrada de um membro (uma de cada vez por servidor).
+// Devolve o inviterId quando a entrada foi contada (para o painel checar recompensas), ou null.
 function trackJoin(member) {
   const guild = member.guild;
   const run = async () => {
-    if (member.user?.bot) return;
+    if (member.user?.bot) return null;
     const found = await detect(guild);
-    if (!found?.inviterId) return;
-    if (found.inviterId === member.id) return; // entrar pelo próprio convite não vale
+    if (!found?.inviterId) return null;
+    if (found.inviterId === member.id) return null; // entrar pelo próprio convite não vale
+
+    // Sistema desligado no n!menu > Comunidade e interação > Convites: continua detectando
+    // (para a foto não ficar desatualizada), mas não grava a entrada nem conta o convite.
+    const cfg = await getInviteConfig(guild.id).catch(() => null);
+    if (cfg && cfg.enabled === false) return null;
+
     await store.recordJoin({
       guildId: guild.id,
       inviterId: found.inviterId,
@@ -113,11 +121,15 @@ function trackJoin(member) {
       code: found.code,
       accountCreatedAt: member.user.createdTimestamp,
     });
+    return found.inviterId;
   };
 
   const next = (queues.get(guild.id) ?? Promise.resolve())
     .then(run)
-    .catch((err) => console.error("[CONVITES] Erro ao registrar a entrada:", err.message));
+    .catch((err) => {
+      console.error("[CONVITES] Erro ao registrar a entrada:", err.message);
+      return null;
+    });
   queues.set(guild.id, next);
   return next;
 }

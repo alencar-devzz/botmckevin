@@ -27,6 +27,7 @@ const { handleTagButton } = require("./tagHandlers");
 const { handleDupButton } = require("./dupCategoriaHandlers");
 const { handleEmojiButton } = require("./addEmojiHandlers");
 const { handleSorteioButton } = require("./sorteioHandlers");
+const { handleInvitesConfigButton } = require("./convitesConfigHandlers");
 
 const {
   handleCallHubConfigButton,
@@ -107,6 +108,11 @@ async function handleButton(interaction) {
   // Configuração do comando cl no n!menu
   if (customId.startsWith("clcfg_")) {
     return handleClConfigButton(interaction);
+  }
+
+  // Configuração do comando /convites no n!menu
+  if (customId.startsWith("invcfg_")) {
+    return handleInvitesConfigButton(interaction);
   }
 
   // Configuração do comando spotify no n!menu

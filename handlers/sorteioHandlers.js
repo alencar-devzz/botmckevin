@@ -40,6 +40,18 @@ const show = (interaction, components, files) =>
 const warn = (interaction, title, body) =>
   interaction.followUp({ components: ui.noticeView(title, body, 0xed4245), flags: V2 | EPHEMERAL }).catch(() => {});
 
+// Abre a central de sorteios a partir do n!menu (Comunidade e interação > Sorteios).
+async function openSorteioMenu(interaction) {
+  if (!isStaff(interaction)) {
+    return interaction.reply({
+      components: ui.noticeView("Sem permissão", "Só a equipe pode configurar sorteios."),
+      flags: V2 | EPHEMERAL,
+    });
+  }
+  const list = await store.listSorteios(interaction.guild.id);
+  return interaction.update({ components: ui.listView(interaction.guild, list, { fromMenu: true }) });
+}
+
 async function loadDoc(interaction, id) {
   const doc = await store.getSorteio(id);
   if (!doc || doc.guildId !== interaction.guildId) {
@@ -718,4 +730,4 @@ async function handleSorteioModal(interaction) {
   }
 }
 
-module.exports = { handleSorteioButton, handleSorteioSelect, handleSorteioModal };
+module.exports = { handleSorteioButton, handleSorteioSelect, handleSorteioModal, openSorteioMenu };

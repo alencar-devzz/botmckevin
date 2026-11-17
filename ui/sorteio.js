@@ -92,7 +92,7 @@ function noticeView(title, body) {
 
 // ---------- lista ----------
 
-function listView(guild, list) {
+function listView(guild, list, { fromMenu = false } = {}) {
   const count = (status) => list.filter((d) => d.status === status).length;
 
   const head = box().addTextDisplayComponents(
@@ -119,6 +119,13 @@ function listView(guild, list) {
     );
   }
   body.addActionRowComponents(row(btn("sr:new", "Novo sorteio", ButtonStyle.Success, false, EMOJI.more)));
+
+  // Aberto pelo n!menu (Comunidade e interação > Sorteios): ganha um jeito de voltar ao menu.
+  if (fromMenu) {
+    body.addSeparatorComponents(new SeparatorBuilder());
+    body.addActionRowComponents(row(btn("back_comunidade", "Voltar ao menu", ButtonStyle.Secondary)));
+  }
+
   return [head, body];
 }
 

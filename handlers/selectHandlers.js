@@ -12,7 +12,11 @@ const { handleAntiRaidSelect } = require("./antiRaidHandlers");
 const { handleMessageSelect } = require("./mensagemHandlers");
 const { handleMetricsSelect } = require("./metricasHandlers");
 const { handleDupSelect } = require("./dupCategoriaHandlers");
-const { handleSorteioSelect } = require("./sorteioHandlers");
+const { handleSorteioSelect, openSorteioMenu } = require("./sorteioHandlers");
+const {
+  openInvitesConfigPanel,
+  handleInvitesConfigSelect,
+} = require("./convitesConfigHandlers");
 const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHandlers");
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
@@ -85,6 +89,11 @@ async function handleSelect(interaction) {
   // Bump reminder (n!menu > Moderação)
   if (customId.startsWith("bumpcfg_")) {
     return handleBumpSelect(interaction);
+  }
+
+  // Configuração do comando /convites no n!menu
+  if (customId.startsWith("invcfg_")) {
+    return handleInvitesConfigSelect(interaction);
   }
 
   // Configuração do comando cl no n!menu
@@ -192,6 +201,12 @@ async function handleSelect(interaction) {
       }
       if (value === "spotify") {
         return openSpotifyPanel(interaction);
+      }
+      if (value === "convites") {
+        return openInvitesConfigPanel(interaction);
+      }
+      if (value === "sorteios") {
+        return openSorteioMenu(interaction);
       }
       return;
     }

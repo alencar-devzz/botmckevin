@@ -13,6 +13,7 @@ const { handleAntiLinkModal } = require("./antiLinkHandlers");
 const { handleMessageModal } = require("./mensagemHandlers");
 const { handleDupModal } = require("./dupCategoriaHandlers");
 const { handleSorteioModal } = require("./sorteioHandlers");
+const { handleInvitesConfigModal } = require("./convitesConfigHandlers");
 
 const { handleCallHubConfigModal, handleCallPanelModal } = require("./callHubHandlers");
 
@@ -61,6 +62,10 @@ async function handleModal(interaction) {
 
   if (customId.startsWith("clcfg_modal:")) {
     return handleClConfigModal(interaction);
+  }
+
+  if (customId.startsWith("invcfg_modal:")) {
+    return handleInvitesConfigModal(interaction);
   }
 
   if (customId.startsWith("sptcfg_modal:")) {

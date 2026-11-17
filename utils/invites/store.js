@@ -80,8 +80,11 @@ async function reconcileLeft(guild) {
 
 // ---------- Estatísticas ----------
 
-async function getStats(guildId, inviterId) {
-  const limit = FAKE_DAYS * DAY_MS;
+// fakeDaysOverride: idade mínima configurada no servidor (n!menu > Comunidade e interação > Convites).
+// Sem valor, usa o padrão do .env (FAKE_DAYS). 0 = detecção de fake desligada.
+async function getStats(guildId, inviterId, fakeDaysOverride) {
+  const days = Number.isFinite(fakeDaysOverride) ? Math.max(0, fakeDaysOverride) : FAKE_DAYS;
+  const limit = days * DAY_MS;
   const [links, [agg]] = await Promise.all([
     InviteLink.countDocuments({ guildId, inviterId }),
     InviteJoin.aggregate([
@@ -97,7 +100,43 @@ async function getStats(guildId, inviterId) {
     ]),
   ]);
 
-  return { links, joined: agg?.joined ?? 0, left: agg?.left ?? 0, fake: agg?.fake ?? 0, fakeDays: FAKE_DAYS };
+  return { links, joined: agg?.joined ?? 0, left: agg?.left ?? 0, fake: agg?.fake ?? 0, fakeDays: days };
+}
+
+// Estatísticas do servidor inteiro (painel de configuração): entradas válidas, convidadores ativos,
+// fakes e saídas. "Convidador ativo" = tem pelo menos 1 entrada válida (não é fake e ainda está no servidor).
+async function getGuildOverview(guildId, fakeDaysOverride) {
+  const days = Number.isFinite(fakeDaysOverride) ? Math.max(0, fakeDaysOverride) : FAKE_DAYS;
+  const limit = days * DAY_MS;
+
+  const [result] = await InviteJoin.aggregate([
+    { $match: { guildId } },
+    {
+      $facet: {
+        totals: [
+          {
+            $group: {
+              _id: null,
+              joined: { $sum: 1 },
+              left: { $sum: { $cond: [{ $ne: [{ $ifNull: ["$leftAt", null] }, null] }, 1, 0] } },
+              fake: { $sum: { $cond: [{ $lt: ["$accountAgeMs", limit] }, 1, 0] } },
+            },
+          },
+        ],
+        activeInviters: [
+          { $match: { leftAt: null, accountAgeMs: { $gte: limit } } },
+          { $group: { _id: "$inviterId" } },
+          { $count: "n" },
+        ],
+      },
+    },
+  ]);
+
+  const totals = result?.totals?.[0] ?? { joined: 0, left: 0, fake: 0 };
+  const inviters = result?.activeInviters?.[0]?.n ?? 0;
+  const valid = Math.max(0, totals.joined - totals.left - totals.fake);
+
+  return { joined: totals.joined, left: totals.left, fake: totals.fake, valid, inviters, fakeDays: days };
 }
 
 module.exports = {
@@ -109,4 +148,5 @@ module.exports = {
   recordLeave,
   reconcileLeft,
   getStats,
+  getGuildOverview,
 };

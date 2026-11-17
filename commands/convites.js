@@ -1,6 +1,7 @@
 const { MessageFlags, SlashCommandBuilder, InteractionContextType } = require("discord.js");
 const { getStats } = require("../utils/invites/store");
 const { isTracking } = require("../utils/invites/tracker");
+const { getInviteConfig } = require("../utils/invites/configStore");
 const { buildInvitesPanel, buildNotice } = require("../ui/convites");
 
 // /convites [pessoa]: mostra quantos convites a pessoa criou e quantos entraram, saíram e são contas recentes.
@@ -23,7 +24,8 @@ module.exports = {
     try {
       const user = interaction.options.getUser("usuário") ?? interaction.user;
       const member = interaction.options.getMember("usuário") ?? (user.id === interaction.user.id ? interaction.member : null);
-      const stats = await getStats(interaction.guildId, user.id);
+      const cfg = await getInviteConfig(interaction.guildId);
+      const stats = await getStats(interaction.guildId, user.id, cfg.fakeDays);
 
       await interaction.editReply({
         components: buildInvitesPanel({
