@@ -54,7 +54,7 @@ async function handleSelect(interaction) {
     return handleSorteioSelect(interaction);
   }
 
-  if (interaction.customId === "badges:house") {
+  if (interaction.customId === "badges:menu" || interaction.customId === "badges:house") {
     return handleBadgesSelect(interaction);
   }
 

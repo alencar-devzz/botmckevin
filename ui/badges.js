@@ -3,8 +3,6 @@ const {
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   TextDisplayBuilder,
-  SectionBuilder,
-  ThumbnailBuilder,
   SeparatorBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -14,13 +12,20 @@ const {
 const { PANEL_IMAGE } = require("../utils/ticketConfig");
 
 const HYPESQUAD = [
-  { value: "bravery",   label: "HypeSquad Bravery",   desc: "Casa Bravery",   house: 1 },
-  { value: "brilliance", label: "HypeSquad Brilliance", desc: "Casa Brilliance", house: 2 },
-  { value: "balance",   label: "HypeSquad Balance",   desc: "Casa Balance",   house: 3 },
+  { value: "bravery",    label: "HypeSquad Bravery",    desc: "Casa da coragem e determinação",   house: 1 },
+  { value: "brilliance", label: "HypeSquad Brilliance",  desc: "Casa da criatividade e energia",   house: 2 },
+  { value: "balance",    label: "HypeSquad Balance",     desc: "Casa da calma e diplomacia",       house: 3 },
 ];
 
-// Painel público enviado pelo n!badges
+const HOUSE_LABEL = { bravery: "HypeSquad Bravery", brilliance: "HypeSquad Brilliance", balance: "HypeSquad Balance" };
+
+// ─── painel público (n!badges) ────────────────────────────────────────────────
 function buildBadgesPanel() {
+  const select = new StringSelectMenuBuilder()
+    .setCustomId("badges:menu")
+    .setPlaceholder("Selecione uma opção")
+    .addOptions({ label: "Configurar conta", description: "Vincule o token da sua conta", value: "config" });
+
   return [
     new ContainerBuilder()
       .addMediaGalleryComponents(
@@ -28,41 +33,7 @@ function buildBadgesPanel() {
       )
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          "**Badges HypeSquad**\n-# Configure sua conta do Discord e defina sua casa HypeSquad."
-        )
-      )
-      .addSeparatorComponents(new SeparatorBuilder())
-      .addActionRowComponents(
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId("badges:config")
-            .setLabel("Configurar conta")
-            .setStyle(ButtonStyle.Secondary)
-        )
-      ),
-  ];
-}
-
-// Painel de seleção de casa (efêmero, após salvar o token)
-function buildBadgesSelectPanel(currentHouse) {
-  const houseLabel = currentHouse
-    ? (HYPESQUAD.find((h) => h.value === currentHouse)?.label ?? "Desconhecida")
-    : "Nenhuma";
-
-  const select = new StringSelectMenuBuilder()
-    .setCustomId("badges:house")
-    .setPlaceholder("Escolha uma casa HypeSquad")
-    .addOptions(
-      HYPESQUAD.map((h) =>
-        ({ label: h.label, description: h.desc, value: h.value, default: h.value === currentHouse })
-      )
-    );
-
-  return [
-    new ContainerBuilder()
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `**Selecionar casa HypeSquad**\n-# Casa atual: ${houseLabel}`
+          "**Badges HypeSquad**\n-# Escolha sua casa e adicione ou remova a badge do seu perfil do Discord."
         )
       )
       .addSeparatorComponents(new SeparatorBuilder())
@@ -70,9 +41,46 @@ function buildBadgesSelectPanel(currentHouse) {
   ];
 }
 
-// Painel de ação (efêmero, após selecionar a casa)
-function buildBadgesActionPanel(selected, hasBadge) {
-  const house = HYPESQUAD.find((h) => h.value === selected);
+// ─── painel de seleção de casa (efêmero) ──────────────────────────────────────
+function buildBadgesSelectPanel(currentHouse) {
+  const houseLabel = currentHouse ? (HOUSE_LABEL[currentHouse] ?? "Desconhecida") : "Nenhuma";
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId("badges:house")
+    .setPlaceholder("Escolha uma casa HypeSquad")
+    .addOptions(
+      HYPESQUAD.map((h) => ({
+        label: h.label,
+        description: h.desc,
+        value: h.value,
+        default: h.value === currentHouse,
+      }))
+    );
+
+  return [
+    new ContainerBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          [
+            "**Selecionar casa HypeSquad**",
+            `> Casa atual no seu perfil: **${houseLabel}**`,
+            "-# Selecione abaixo a casa que deseja gerenciar.",
+          ].join("\n")
+        )
+      )
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addActionRowComponents(new ActionRowBuilder().addComponents(select)),
+  ];
+}
+
+// ─── painel de ação (efêmero) ─────────────────────────────────────────────────
+function buildBadgesActionPanel(selected, currentHouse) {
+  const house   = HYPESQUAD.find((h) => h.value === selected);
+  const hasBadge = currentHouse === selected;
+
+  const statusLine = hasBadge
+    ? "> Voce ja possui esta badge no seu perfil."
+    : "> Voce ainda nao possui esta badge no seu perfil.";
 
   return [
     new ContainerBuilder()
@@ -82,9 +90,7 @@ function buildBadgesActionPanel(selected, hasBadge) {
             `**${house.label}**`,
             `-# ${house.desc}`,
             "",
-            hasBadge
-              ? "Voce ja possui esta badge no perfil."
-              : "Voce ainda nao possui esta badge.",
+            statusLine,
           ].join("\n")
         )
       )
