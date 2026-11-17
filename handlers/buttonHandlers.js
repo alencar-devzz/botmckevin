@@ -26,7 +26,6 @@ const { handleTagButton } = require("./tagHandlers");
 const { handleDupButton } = require("./dupCategoriaHandlers");
 const { handleEmojiButton } = require("./addEmojiHandlers");
 const { handleSorteioButton } = require("./sorteioHandlers");
-const { handleBadgesButton } = require("./badgesHandlers");
 const { handleInvitesConfigButton } = require("./convitesConfigHandlers");
 
 const {
@@ -60,10 +59,6 @@ async function handleButton(interaction) {
   // Painel do comando tag (cada botão entrega um cargo)
   if (customId.startsWith("tag:")) {
     return handleTagButton(interaction);
-  }
-
-  if (customId === "badges:open_modal" || customId === "badges:back" || customId.startsWith("badges:add:") || customId.startsWith("badges:remove:")) {
-    return handleBadgesButton(interaction);
   }
 
   // Card do comando spotify

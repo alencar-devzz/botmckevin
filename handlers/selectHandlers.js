@@ -13,7 +13,6 @@ const { handleMessageSelect } = require("./mensagemHandlers");
 const { handleMetricsSelect } = require("./metricasHandlers");
 const { handleDupSelect } = require("./dupCategoriaHandlers");
 const { handleSorteioSelect, openSorteioMenu } = require("./sorteioHandlers");
-const { handleBadgesSelect } = require("./badgesHandlers");
 const {
   openInvitesConfigPanel,
   handleInvitesConfigSelect,
@@ -52,10 +51,6 @@ async function handleSelect(interaction) {
   // Painel do comando /sorteio
   if (customId.startsWith("sr:")) {
     return handleSorteioSelect(interaction);
-  }
-
-  if (interaction.customId === "badges:menu" || interaction.customId === "badges:house") {
-    return handleBadgesSelect(interaction);
   }
 
   // Painel do comando /duplicar-categoria
