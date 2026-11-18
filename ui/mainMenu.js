@@ -50,7 +50,6 @@ const OUTROS_SISTEMAS = [
 function buildSearchButton() {
   return new ButtonBuilder()
     .setCustomId("menu_search")
-    .setLabel("Buscar")
     .setEmoji(SEARCH_EMOJI)
     .setStyle(ButtonStyle.Secondary);
 }
