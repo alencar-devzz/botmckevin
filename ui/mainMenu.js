@@ -71,7 +71,7 @@ function buildMainMenu({ guild, client, prefix } = {}) {
   const lines = [
     `## ${MENU_EMOJI} Menu de configurações\n${crumbLine([])}`,
     guild
-      ? `-# Painel de controle do bot em **${guild.name}**.`
+      ? `-# Painel de controle do bot`
       : "-# Painel de controle do bot.",
   ];
 
@@ -101,7 +101,7 @@ function buildMainMenu({ guild, client, prefix } = {}) {
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId("main_btn:sistemas")
-        .setLabel("Sistemas")
+        .setLabel("Funções")
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId("main_btn:outros")
