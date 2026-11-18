@@ -2,6 +2,7 @@ const { ActivityType } = require("discord.js");
 const { DEFAULT_PREFIX } = require("../utils/getPrefix");
 const { getBotConfig, applyPresence } = require("../utils/botPresence");
 const { sweepCalls } = require("../utils/callHub");
+const { startCallKeeper } = require("../utils/callKeeper");
 const { restoreCardTimers } = require("../utils/spotify/autoDelete");
 const { getSpotifyConfig } = require("../utils/spotify/store");
 const { prefetchCardImages } = require("../utils/spotify/card");
@@ -14,6 +15,14 @@ module.exports = {
   once: true,
   async execute(client) {
     console.log(`[BOT] Online como ${client.user.tag}`);
+
+    // n!botcall: volta para a call salva no MongoDB e passa a mantê-la.
+    // Sem isso o bot saía da call a cada reinício e nunca voltava.
+    try {
+      await startCallKeeper(client);
+    } catch (err) {
+      console.error("[BOTCALL] Erro ao iniciar o sistema de call:", err.message);
+    }
 
     // Calls temporárias: apaga as que ficaram vazias enquanto o bot estava off e recarrega as ativas
     try {

@@ -41,7 +41,7 @@ const FALLBACK = {
   booster: { category: "Comunidade", description: "Envia o painel de boosters.", usage: "booster", staffOnly: true },
   botcall: {
     category: "Comunidade",
-    description: "Envia o painel para o bot entrar e ficar em uma call.",
+    description: "Envia o painel de call do bot: ele entra, fica na call e volta sozinho após quedas e reinícios.",
     usage: "botcall",
     staffOnly: true,
   },

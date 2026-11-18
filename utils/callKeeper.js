@@ -1,525 +1,563 @@
-const { AuditLogEvent, MessageFlags } = require("discord.js");
 const {
   joinVoiceChannel,
   getVoiceConnection,
   entersState,
   VoiceConnectionStatus,
+  VoiceConnectionDisconnectReason,
 } = require("@discordjs/voice");
-const CallState = require("../database/models/CallState");
-const { buildBotcallPanel } = require("../ui/botcall");
+const store = require("./botcall/state");
+const audit = require("./botcall/audit");
+const panels = require("./botcall/panels");
 
-// Tempos (em ms). Exportado só para poder ajustar/testar.
+// Sistema de call do bot (n!botcall).
+//
+// O que ele garante:
+//  - o bot entra na call escolhida e FICA nela a qualquer custo;
+//  - se a conexão cair, ele reconecta sozinho (com espera crescente, sem nunca desistir);
+//  - se o bot reiniciar (deploy, Render dormindo, queda), a call salva no MongoDB é restaurada ao ficar online;
+//  - se um membro com permissão desconectar o bot manualmente, ele NÃO volta;
+//  - os painéis do n!botcall mostram sempre a situação real (conectado, reconectando, desconectado).
+//
+// Cada servidor tem uma "sessão" em memória. Todas as operações de voz de um servidor passam por uma fila,
+// então nunca duas operações mexem na conexão ao mesmo tempo.
+
+// Tempos em ms. Exportado só para poder ajustar/testar.
 const TIMINGS = {
-  retryBase: 5_000, // 1ª espera entre tentativas (dobra a cada falha)
+  restoreDelay: 4_000, // espera antes de reconectar ao iniciar (dá tempo de uma instância antiga terminar)
+  reconnectFast: 1_500, // espera antes da 1ª reconexão depois de uma queda
+  retryBase: 3_000, // 1ª espera entre tentativas que falharam (dobra a cada falha)
   retryMax: 60_000, // espera máxima entre tentativas (nunca desiste)
   readyTimeout: 20_000, // tempo máximo para a conexão ficar pronta
-  recoverWindow: 5_000, // tempo que a lib tem para se recuperar sozinha
-  watchdogInterval: 30_000, // verificação periódica
-  stuckLimit: 60_000, // tempo máximo "conectando" antes de forçar nova conexão
-  expectedWindow: 8_000, // janela em que uma saída causada pelo próprio bot é ignorada
-  auditWaits: [1_500, 2_500], // esperas antes de olhar o registro de auditoria
-  auditRecent: 15_000, // quão recente precisa ser uma desconexão no registro de auditoria
-  restoreDelay: 2_000, // espera antes de reconectar ao iniciar
-  panelDebounce: 1_000, // junta várias mudanças seguidas numa só atualização do painel
+  recoverWindow: 5_000, // tempo que a lib tem para se recuperar sozinha (ex.: bot movido de call)
+  watchdogInterval: 20_000, // verificação periódica
+  stuckLimit: 60_000, // tempo máximo "conectando" antes de forçar uma nova conexão
+  expectedLeaveTtl: 10_000, // quanto tempo uma saída causada pelo próprio bot é ignorada
+  voiceStateWait: 3_000, // espera pelo Discord confirmar que o bot está na call
 };
 
+const KICK_CLOSE_CODE = 4014; // o Discord fecha a voz com esse código quando o bot é removido/desconectado
+
+// Erro com código para os handlers explicarem o motivo para a pessoa
+class CallError extends Error {
+  constructor(code, message) {
+    super(message ?? code);
+    this.name = "CallError";
+    this.code = code; // "invalid_channel" | "not_joinable" | "connect_failed"
+  }
+}
+
 let client = null;
-const desired = new Map(); // guildId -> channelId que o bot DEVE manter
-const retries = new Map(); // guildId -> { timer, attempts }
-const locks = new Map(); // guildId -> promise (uma operação de voz por vez)
-const expectedLeaves = new Map(); // guildId -> timestamp da última saída "esperada"
-const deciding = new Set(); // guildIds analisando se foi desconexão manual
-const notReadySince = new Map();
-const mismatches = new Map();
-const auditCounts = new Map(); // entryId -> count (para detectar desconexões novas)
-const lastChannels = new Map(); // guildId -> última call escolhida (mesmo desconectado)
-const panels = new Map(); // guildId -> { channelId, messageId, signature } painel que é atualizado em tempo real
-const panelTimers = new Map(); // guildId -> timer de atualização do painel
-const warnedNoPanel = new Set(); // evita repetir o aviso de "nenhum painel registrado"
+let started = false;
+const sessions = new Map(); // guildId -> sessão
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const guildOf = (guildId) => client?.guilds.cache.get(guildId) ?? null;
 
-// ---------- utilidades ----------
+// ---------- sessão ----------
 
-function getRetry(guildId) {
-  if (!retries.has(guildId)) retries.set(guildId, { timer: null, attempts: 0 });
-  return retries.get(guildId);
-}
-
-function clearRetry(guildId) {
-  const state = retries.get(guildId);
-  if (state?.timer) clearTimeout(state.timer);
-  retries.delete(guildId);
-}
-
-function withLock(guildId, fn) {
-  const previous = locks.get(guildId) ?? Promise.resolve();
-  const next = previous.catch(() => {}).then(fn);
-  locks.set(guildId, next.catch(() => {}));
-  return next;
-}
-
-function markExpectedLeave(guildId) {
-  expectedLeaves.set(guildId, Date.now());
-}
-
-function isExpectedLeave(guildId) {
-  const at = expectedLeaves.get(guildId);
-  return at !== undefined && Date.now() - at < TIMINGS.expectedWindow;
-}
-
-// Destrói a conexão marcando antes que a saída foi causada pelo próprio bot
-function destroyConnection(guildId) {
-  const connection = getVoiceConnection(guildId);
-  if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
-    markExpectedLeave(guildId);
-    connection.destroy();
+function getSession(guildId) {
+  let s = sessions.get(guildId);
+  if (!s) {
+    s = {
+      guildId,
+      channelId: null, // call escolhida (continua guardada mesmo desconectado, para o botão Conectar)
+      active: false, // true = o bot deve estar na call
+      stopReason: null, // por que está inativo: button | member | channel_deleted
+      phase: "stopped", // stopped | connecting | connected | reconnecting
+      connectedAt: null,
+      connection: null,
+      attempts: 0,
+      retryTimer: null,
+      chain: Promise.resolve(), // fila de operações
+      busy: 0, // operações em andamento na fila
+      deciding: false, // analisando se uma saída foi manual ou falha
+      expectedLeaves: [], // saídas causadas pelo próprio bot (timestamps)
+      notReadySince: null,
+      mismatches: 0,
+    };
+    sessions.set(guildId, s);
   }
+  return s;
 }
 
-async function saveState(guildId, fields) {
-  try {
-    await CallState.findOneAndUpdate({ guildId }, { $set: fields }, { upsert: true });
-  } catch (err) {
-    console.error("[CALL] Erro ao salvar no MongoDB:", err.message);
-  }
-}
-
-function isHealthy(guild, channelId) {
-  const connection = getVoiceConnection(guild.id);
-  return (
-    connection?.state.status === VoiceConnectionStatus.Ready &&
-    guild.members.me?.voice?.channelId === channelId
-  );
-}
-
-// ---------- painel em tempo real ----------
-
-const signatureOf = (state) => `${state.selectedId ?? ""}|${state.connected}`;
-
-// Estado que o painel deve mostrar agora, baseado na situação real do bot
-function computePanelState(guildId) {
-  const guild = client?.guilds.cache.get(guildId);
-  const selectedId = desired.get(guildId) ?? lastChannels.get(guildId) ?? null;
-  const connected = Boolean(guild && selectedId && isHealthy(guild, selectedId));
-  return { selectedId, connected };
-}
-
-async function refreshPanel(guildId) {
-  const ref = panels.get(guildId);
-  if (!ref || !client) return;
-
-  const state = computePanelState(guildId);
-  const signature = signatureOf(state);
-  if (ref.signature === signature) return; // painel já está igual, não precisa editar
-
-  console.log(
-    `[CALL] Atualizando painel: call=${state.selectedId ?? "nenhuma"}, status=${
-      state.connected ? "Conectado" : "Desconectado"
-    }`
-  );
-
-  let message = null;
-  try {
-    const channel = await client.channels.fetch(ref.channelId);
-    message = await channel.messages.fetch(ref.messageId);
-  } catch (err) {
-    // Canal ou mensagem apagados: para de acompanhar esse painel. Outros erros: tenta de novo depois.
-    if (err.code === 10003 || err.code === 10008 || err.code === 10013) {
-      panels.delete(guildId);
-      await saveState(guildId, { panelChannelId: null, panelMessageId: null });
-    } else {
-      console.warn(`[CALL] Não consegui buscar o painel (${err.message}).`);
+// Roda a operação depois das anteriores do mesmo servidor
+function enqueue(s, fn) {
+  const run = s.chain.then(async () => {
+    s.busy++;
+    try {
+      return await fn();
+    } finally {
+      s.busy--;
     }
-    return;
-  }
-
-  try {
-    await message.edit({
-      components: buildBotcallPanel(state),
-      flags: MessageFlags.IsComponentsV2,
-    });
-    ref.signature = signature;
-  } catch (err) {
-    console.warn(`[CALL] Não consegui atualizar o painel (${err.message}).`);
-  }
-}
-
-// Agenda a atualização do painel (junta vários eventos seguidos numa única edição)
-function schedulePanelRefresh(guildId, delayMs = TIMINGS.panelDebounce) {
-  if (!panels.has(guildId)) {
-    if (!warnedNoPanel.has(guildId)) {
-      warnedNoPanel.add(guildId);
-      console.warn(
-        "[CALL] Nenhum painel está registrado para atualização em tempo real. " +
-          "Envie o comando botcall de novo (ou clique em um botão do painel) para registrar."
-      );
-    }
-    return;
-  }
-  if (panelTimers.has(guildId)) return;
-  const timer = setTimeout(() => {
-    panelTimers.delete(guildId);
-    refreshPanel(guildId).catch((err) => console.error("[CALL] Erro ao atualizar painel:", err.message));
-  }, delayMs);
-  panelTimers.set(guildId, timer);
-}
-
-// Define qual painel é atualizado em tempo real (o último enviado/usado).
-// Se "rendered" for passado, o painel já está desenhado com esse estado e não precisa de nova edição.
-function registerPanel(discordClient, guildId, channelId, messageId, rendered = null) {
-  client ??= discordClient;
-  const current = panels.get(guildId);
-  const changed = !current || current.channelId !== channelId || current.messageId !== messageId;
-
-  panels.set(guildId, {
-    channelId,
-    messageId,
-    signature: rendered ? signatureOf(rendered) : null,
   });
-  warnedNoPanel.delete(guildId);
-
-  if (changed) {
-    console.log(`[CALL] Painel registrado para atualização em tempo real (mensagem ${messageId}).`);
-    saveState(guildId, { panelChannelId: channelId, panelMessageId: messageId });
-  }
-  if (!rendered) schedulePanelRefresh(guildId);
+  s.chain = run.catch(() => {});
+  return run;
 }
 
-// ---------- detecção de desconexão manual (registro de auditoria) ----------
+function clearRetry(s) {
+  if (s.retryTimer) clearTimeout(s.retryTimer);
+  s.retryTimer = null;
+}
 
-async function fetchDisconnectEntries(guild) {
+// ---------- estado que a interface mostra ----------
+
+function isHealthy(s) {
+  const connection = getVoiceConnection(s.guildId);
+  return Boolean(
+    s.channelId &&
+      connection?.state.status === VoiceConnectionStatus.Ready &&
+      guildOf(s.guildId)?.members.me?.voice?.channelId === s.channelId
+  );
+}
+
+// Estado real do bot para os painéis: { channelId, status, reason, since }
+// status: connected | connecting | reconnecting | disconnected
+function getCallView(guildId) {
+  const s = sessions.get(guildId);
+  if (!s) return { channelId: null, status: "disconnected", reason: null, since: null };
+
+  const base = { channelId: s.channelId, reason: s.stopReason, since: null };
+  if (!s.active) return { ...base, status: "disconnected" };
+  if (isHealthy(s)) return { ...base, reason: null, status: "connected", since: s.connectedAt };
+  if (s.phase === "connecting") return { ...base, reason: null, status: "connecting" };
+  return { ...base, reason: null, status: "reconnecting" };
+}
+
+const getSelectedChannel = (guildId) => sessions.get(guildId)?.channelId ?? null;
+
+// ---------- conexão de voz ----------
+
+// Saídas causadas pelo próprio bot (destruir a conexão, trocar de call) não podem ser tratadas como queda
+function expectLeave(s) {
+  s.expectedLeaves.push(Date.now());
+}
+
+function consumeExpectedLeave(s) {
+  const now = Date.now();
+  s.expectedLeaves = s.expectedLeaves.filter((at) => now - at < TIMINGS.expectedLeaveTtl);
+  return s.expectedLeaves.shift() !== undefined;
+}
+
+// Destrói a conexão atual. Retorna true se existia uma conexão para destruir.
+function dropConnection(s, { expected = true } = {}) {
+  const connection = getVoiceConnection(s.guildId);
+  s.connection = null;
+  if (!connection || connection.state.status === VoiceConnectionStatus.Destroyed) return false;
+
+  // Só espera um evento de saída se o Discord ainda mostra o bot numa call; senão uma marca esquecida
+  // faria uma desconexão manual logo depois ser ignorada.
+  if (expected && guildOf(s.guildId)?.members.me?.voice?.channelId) expectLeave(s);
   try {
-    const logs = await guild.fetchAuditLogs({ type: AuditLogEvent.MemberDisconnect, limit: 10 });
-    return [...logs.entries.values()];
+    connection.destroy();
   } catch (err) {
-    console.warn(
-      `[CALL] Não consegui ler o registro de auditoria (${err.message}). ` +
-        "Dê a permissão 'Ver registro de auditoria' ao bot para detectar desconexões manuais."
-    );
-    return null;
+    console.warn("[BOTCALL] Erro ao destruir a conexão de voz:", err.message);
+  }
+  return true;
+}
+
+// O Discord ainda mostra o bot numa call mas esta instância não tem conexão (estado antigo):
+// entra e destrói a conexão, que é o jeito oficial da lib de mandar a saída para o Discord.
+function forceLeave(s, guild) {
+  const channelId = guild.members.me?.voice?.channelId;
+  if (!channelId) return;
+  try {
+    expectLeave(s);
+    joinVoiceChannel({ channelId, guildId: guild.id, adapterCreator: guild.voiceAdapterCreator }).destroy();
+  } catch (err) {
+    console.warn("[BOTCALL] Não consegui tirar o bot da call:", err.message);
   }
 }
 
-// Guarda a contagem atual para só reagir a desconexões NOVAS depois disso
-async function snapshotAuditCounts(guild) {
-  const entries = await fetchDisconnectEntries(guild);
-  for (const entry of entries ?? []) {
-    auditCounts.set(entry.id, entry.extra?.count ?? 1);
-  }
-}
-
-// true se alguém (que não seja o próprio bot) desconectou membros da call agora há pouco
-async function wasManuallyDisconnected(guild) {
-  for (const wait of TIMINGS.auditWaits) {
-    await sleep(wait); // o registro de auditoria demora um pouco para aparecer
-    const entries = await fetchDisconnectEntries(guild);
-    if (entries === null) return false; // sem como saber: trata como falha de conexão
-
-    for (const entry of entries) {
-      if (entry.executorId === client.user.id) continue;
-
-      const count = entry.extra?.count ?? 1;
-      const previous = auditCounts.get(entry.id);
-      auditCounts.set(entry.id, count);
-
-      const isNew =
-        previous === undefined
-          ? Date.now() - entry.createdTimestamp < TIMINGS.auditRecent
-          : count > previous;
-      if (isNew) return true;
-    }
+async function waitForVoiceState(guild, channelId) {
+  const end = Date.now() + TIMINGS.voiceStateWait;
+  while (Date.now() < end) {
+    if (guild.members.me?.voice?.channelId === channelId) return true;
+    await sleep(100);
   }
   return false;
 }
 
+function attachListeners(s, connection) {
+  connection.on("error", (err) => console.error("[BOTCALL] Erro na conexão de voz:", err.message));
+
+  connection.on("stateChange", (_old, next) => {
+    if (s.connection !== connection) return;
+    if (next.status === VoiceConnectionStatus.Ready && s.active) {
+      // a própria lib se recuperou (ex.: bot movido de call)
+      s.connectedAt ??= Date.now();
+      s.phase = "connected";
+      s.notReadySince = null;
+    }
+    panels.schedule(s.guildId);
+  });
+
+  // Se a conexão cair: a lib tem alguns segundos para se recuperar sozinha; se não recuperar, é perda de conexão
+  connection.on(VoiceConnectionStatus.Disconnected, (_old, next) => {
+    onVoiceDisconnected(s, connection, next).catch((err) =>
+      console.error("[BOTCALL] Erro ao tratar a queda da conexão:", err.message)
+    );
+  });
+}
+
+async function onVoiceDisconnected(s, connection, next) {
+  const kicked =
+    next.reason === VoiceConnectionDisconnectReason.WebSocketClose && next.closeCode === KICK_CLOSE_CODE;
+
+  try {
+    await Promise.race([
+      entersState(connection, VoiceConnectionStatus.Signalling, TIMINGS.recoverWindow),
+      entersState(connection, VoiceConnectionStatus.Connecting, TIMINGS.recoverWindow),
+    ]);
+    return; // a lib se recuperou sozinha
+  } catch {
+    // não recuperou
+  }
+
+  if (s.connection !== connection || !s.active) return; // conexão antiga, já substituída ou parada de propósito
+  dropConnection(s, { expected: false });
+  // Remoção pelo Discord pode ter sido manual: confere o registro de auditoria. Outras falhas só reconectam.
+  triggerLoss(s, { source: "voice", skipAudit: !kicked });
+}
+
+// Cria a conexão e espera ela ficar pronta. Sempre roda dentro da fila do servidor.
+async function establish(s, channel) {
+  const guild = channel.guild;
+
+  dropConnection(s);
+  s.connectedAt = null;
+
+  const connection = joinVoiceChannel({
+    channelId: channel.id,
+    guildId: guild.id,
+    adapterCreator: guild.voiceAdapterCreator,
+    selfDeaf: true,
+    selfMute: false,
+  });
+  s.connection = connection;
+  attachListeners(s, connection);
+
+  try {
+    await entersState(connection, VoiceConnectionStatus.Ready, TIMINGS.readyTimeout);
+  } catch (err) {
+    if (s.connection === connection) dropConnection(s);
+    throw err;
+  }
+
+  await waitForVoiceState(guild, channel.id);
+
+  s.connectedAt = Date.now();
+  s.phase = "connected";
+  s.mismatches = 0;
+  s.notReadySince = null;
+  console.log(`[BOTCALL] Conectado na call ${channel.name}.`);
+
+  audit.snapshot(guild).catch(() => {});
+  panels.schedule(s.guildId);
+}
+
 // ---------- perda de conexão ----------
 
-// Chamado quando o bot saiu da call sem que o próprio código tenha pedido.
-// Decide: foi alguém desconectando manualmente (para) ou foi falha (reconecta).
-async function handleLoss(guildId, { checkExpected = true } = {}) {
-  if (!desired.has(guildId)) return;
-  if (checkExpected && isExpectedLeave(guildId)) return;
-  if (deciding.has(guildId)) return;
+function triggerLoss(s, options) {
+  handleLoss(s, options).catch((err) => console.error("[BOTCALL] Erro ao tratar a perda da call:", err.message));
+}
 
-  deciding.add(guildId);
+// O bot saiu da call sem que o próprio código tenha pedido.
+// Decide: foi um membro desconectando de propósito (para de vez) ou foi falha (reconecta).
+async function handleLoss(s, { source, ignoreExpected = false, skipAudit = false } = {}) {
+  if (!s.active || s.deciding) return;
+  if (!ignoreExpected && source === "gateway" && consumeExpectedLeave(s)) return;
+
+  s.deciding = true;
   try {
-    const guild = client.guilds.cache.get(guildId);
-    const manual = guild ? await wasManuallyDisconnected(guild) : false;
+    s.connectedAt = null;
+    s.phase = "reconnecting";
+    panels.schedule(s.guildId);
 
-    if (manual) {
-      console.log("[CALL] Bot desconectado manualmente por um membro: não vai reconectar.");
-      await stopKeeping(guildId);
-    } else {
-      console.warn("[CALL] Conexão com a call perdida (falha): reconectando...");
-      scheduleReconnect(guildId, TIMINGS.restoreDelay);
-      schedulePanelRefresh(guildId);
+    const guild = guildOf(s.guildId);
+    if (!skipAudit && guild) {
+      const manual = await audit.wasDisconnectedByMember(guild, client.user.id);
+      if (!s.active) return; // mudou durante a espera
+      if (isHealthy(s)) return; // já voltou sozinho
+      if (manual) {
+        console.log("[BOTCALL] Bot desconectado manualmente por um membro: não vai reconectar.");
+        await stopCall(s.guildId, "member");
+        return;
+      }
     }
+
+    console.warn("[BOTCALL] Conexão com a call perdida (falha): reconectando...");
+    scheduleReconnect(s, TIMINGS.reconnectFast);
   } finally {
-    deciding.delete(guildId);
+    s.deciding = false;
   }
 }
 
 // ---------- reconexão ----------
 
-function scheduleReconnect(guildId, delayMs) {
-  if (!desired.has(guildId)) return;
-  const state = getRetry(guildId);
-  if (state.timer) return;
-  state.timer = setTimeout(() => {
-    state.timer = null;
-    attemptReconnect(guildId);
-  }, delayMs);
+function scheduleReconnect(s, delay) {
+  if (!s.active || s.retryTimer) return;
+  s.retryTimer = setTimeout(() => {
+    s.retryTimer = null;
+    attemptReconnect(s).catch((err) => console.error("[BOTCALL] Erro ao reconectar:", err.message));
+  }, delay);
 }
 
-async function attemptReconnect(guildId) {
-  await withLock(guildId, async () => {
-    const channelId = desired.get(guildId);
-    if (!channelId) return;
+function attemptReconnect(s) {
+  return enqueue(s, async () => {
+    if (!s.active || !s.channelId) return;
 
-    const state = getRetry(guildId);
     try {
-      const guild = client.guilds.cache.get(guildId);
+      const guild = guildOf(s.guildId);
       if (!guild || !guild.available) throw new Error("servidor indisponível");
 
-      if (isHealthy(guild, channelId)) {
-        state.attempts = 0;
+      if (isHealthy(s)) {
+        s.attempts = 0;
+        s.phase = "connected";
         return;
       }
 
-      const channel = await guild.channels.fetch(channelId).catch((err) => {
-        if (err.code === 10003) return null; // Unknown Channel (call apagada)
+      s.phase = "reconnecting";
+      const channel = await guild.channels.fetch(s.channelId).catch((err) => {
+        if (err.code === 10003) return null; // Unknown Channel: a call foi apagada
         throw err;
       });
 
       if (!channel || !channel.isVoiceBased()) {
-        console.warn("[CALL] A call salva não existe mais. Parando a reconexão.");
-        desired.delete(guildId);
-        lastChannels.delete(guildId);
-        clearRetry(guildId);
-        await saveState(guildId, { active: false, channelId: null });
-        schedulePanelRefresh(guildId);
+        console.warn("[BOTCALL] A call salva não existe mais. Parando a reconexão.");
+        await stopNow(s, "channel_deleted", { clearChannel: true });
         return;
       }
 
-      if (!channel.joinable) throw new Error("sem permissão para entrar ou call lotada");
+      if (!channel.joinable) throw new CallError("not_joinable", "sem permissão para entrar ou call lotada");
 
-      await connectToChannel(channel);
-      state.attempts = 0;
-      console.log(`[CALL] Reconectado na call ${channel.name}.`);
-      schedulePanelRefresh(guildId);
+      await establish(s, channel);
+      s.attempts = 0;
+      console.log("[BOTCALL] Reconexão concluída.");
     } catch (err) {
-      state.attempts++;
-      const delay = Math.min(TIMINGS.retryBase * 2 ** (state.attempts - 1), TIMINGS.retryMax);
+      if (!s.active) return;
+      s.attempts++;
+      const delay = Math.min(TIMINGS.retryBase * 2 ** (s.attempts - 1), TIMINGS.retryMax);
       console.warn(
-        `[CALL] Falha ao reconectar (tentativa ${state.attempts}): ${err.message}. ` +
+        `[BOTCALL] Falha ao reconectar (tentativa ${s.attempts}): ${err.message}. ` +
           `Nova tentativa em ${Math.round(delay / 1000)}s.`
       );
-      scheduleReconnect(guildId, delay);
-      schedulePanelRefresh(guildId);
+      scheduleReconnect(s, delay);
+      panels.schedule(s.guildId);
     }
   });
 }
 
-// ---------- conexão de voz ----------
+// ---------- API usada pelo painel ----------
 
-async function connectToChannel(channel) {
-  const guildId = channel.guild.id;
-
-  destroyConnection(guildId);
-
-  const connection = joinVoiceChannel({
-    channelId: channel.id,
-    guildId,
-    adapterCreator: channel.guild.voiceAdapterCreator,
-    selfDeaf: true,
-  });
-
-  try {
-    await entersState(connection, VoiceConnectionStatus.Ready, TIMINGS.readyTimeout);
-  } catch (err) {
-    destroyConnection(guildId);
-    throw err;
-  }
-
-  connection.on("error", (err) => console.error("[CALL] Erro na conexão de voz:", err.message));
-  connection.on("stateChange", () => schedulePanelRefresh(guildId));
-  schedulePanelRefresh(guildId);
-
-  // Se a conexão cair: dá uns segundos para a própria lib se recuperar (ex.: bot movido de call);
-  // se não recuperar, trata como perda de conexão.
-  connection.on(VoiceConnectionStatus.Disconnected, async () => {
-    try {
-      await Promise.race([
-        entersState(connection, VoiceConnectionStatus.Signalling, TIMINGS.recoverWindow),
-        entersState(connection, VoiceConnectionStatus.Connecting, TIMINGS.recoverWindow),
-      ]);
-    } catch {
-      if (getVoiceConnection(guildId) !== connection) return; // conexão antiga, já substituída
-      destroyConnection(guildId);
-      handleLoss(guildId, { checkExpected: false });
-    }
-  });
-
-  await snapshotAuditCounts(channel.guild).catch(() => {});
-  return connection;
-}
-
-// ---------- API usada pelo painel do botcall ----------
-
-// Entra na call e passa a mantê-la. Lança erro se não conseguir conectar.
+// Entra na call e passa a mantê-la. Lança CallError se não conseguir.
 function joinCall(channel) {
+  if (!channel || typeof channel.isVoiceBased !== "function" || !channel.isVoiceBased()) {
+    return Promise.reject(new CallError("invalid_channel"));
+  }
+  if (!channel.joinable) return Promise.reject(new CallError("not_joinable"));
+
   client ??= channel.client;
-  const guildId = channel.guild.id;
-  return withLock(guildId, async () => {
-    const previous = desired.get(guildId);
-    clearRetry(guildId);
-    desired.set(guildId, channel.id);
+  const s = getSession(channel.guild.id);
+  clearRetry(s);
+
+  return enqueue(s, async () => {
+    const previous = { channelId: s.channelId, active: s.active, stopReason: s.stopReason, phase: s.phase };
+
+    s.channelId = channel.id;
+    s.active = true;
+    s.stopReason = null;
+    s.phase = "connecting";
+    panels.schedule(s.guildId);
 
     try {
-      await connectToChannel(channel);
+      await establish(s, channel);
     } catch (err) {
       // Volta a manter a call anterior (se havia) e avisa quem chamou
-      if (previous) {
-        desired.set(guildId, previous);
-        scheduleReconnect(guildId, TIMINGS.restoreDelay);
-      } else {
-        desired.delete(guildId);
+      Object.assign(s, previous);
+      if (s.active) {
+        s.phase = "reconnecting";
+        scheduleReconnect(s, TIMINGS.reconnectFast);
       }
-      schedulePanelRefresh(guildId);
-      throw err;
+      panels.schedule(s.guildId);
+      throw new CallError("connect_failed", err.message);
     }
 
-    lastChannels.set(guildId, channel.id);
-    await saveState(guildId, { channelId: channel.id, active: true });
-    schedulePanelRefresh(guildId);
+    s.attempts = 0;
+    await store.save(s.guildId, { channelId: s.channelId, active: true, stopReason: null });
+    panels.schedule(s.guildId);
   });
 }
 
-// Desconexão de propósito (botão Desconectar ou staff): para de manter a call
-async function stopKeeping(guildId) {
-  desired.delete(guildId); // síncrono: já impede novas reconexões
-  clearRetry(guildId);
-  await withLock(guildId, async () => {
-    destroyConnection(guildId);
-    await saveState(guildId, { active: false });
-    schedulePanelRefresh(guildId);
-  });
+// Desconexão de propósito: o bot sai e NÃO volta sozinho.
+// reason: "button" (painel) | "member" (membro desconectou) | "channel_deleted"
+async function stopNow(s, reason, { clearChannel = false } = {}) {
+  s.active = false;
+  s.stopReason = reason;
+  s.phase = "stopped";
+  s.connectedAt = null;
+  s.mismatches = 0;
+  s.notReadySince = null;
+  s.attempts = 0;
+  clearRetry(s);
+  if (clearChannel) s.channelId = null;
+
+  const hadConnection = dropConnection(s);
+  const guild = guildOf(s.guildId);
+  if (!hadConnection && guild) forceLeave(s, guild);
+
+  await store.save(s.guildId, { active: false, stopReason: reason, channelId: s.channelId });
+  panels.schedule(s.guildId, 0);
 }
 
-function getKeptChannel(guildId) {
-  return desired.get(guildId) ?? null;
+function stopCall(guildId, reason = "button", options = {}) {
+  const s = getSession(guildId);
+  s.active = false; // síncrono: já impede novas reconexões
+  clearRetry(s);
+  return enqueue(s, () => stopNow(s, reason, options));
 }
 
-// ---------- eventos / inicialização ----------
+// ---------- eventos ----------
 
 // Chamado pelo evento voiceStateUpdate quando o estado de voz É DO PRÓPRIO BOT
 function onBotVoiceStateUpdate(oldState, newState) {
   client ??= newState.client;
   const guildId = newState.guild.id;
-  console.log(
-    `[CALL] Estado de voz do bot mudou: ${oldState.channelId ?? "fora"} -> ${newState.channelId ?? "fora"}`
-  );
-  schedulePanelRefresh(guildId); // qualquer mudança do bot na call atualiza o painel
-
-  if (!desired.has(guildId)) return;
-
   const from = oldState.channelId;
   const to = newState.channelId;
+  if (from === to) return; // só mudou mute/ensurdecer
+
+  panels.schedule(guildId);
+
+  const s = sessions.get(guildId);
+  if (!s || !s.active) return;
 
   if (from && !to) {
-    handleLoss(guildId); // saiu da call: foi manual ou falha?
-  } else if (from && to && from !== to) {
+    triggerLoss(s, { source: "gateway" }); // saiu da call: foi manual ou falha?
+  } else if (from && to) {
     // Alguém moveu o bot para outra call: passa a manter a nova
-    desired.set(guildId, to);
-    lastChannels.set(guildId, to);
-    saveState(guildId, { channelId: to });
+    s.channelId = to;
+    store.save(guildId, { channelId: to });
+  }
+}
+
+function checkSession(s) {
+  if (!s.active || !s.channelId) return;
+  if (s.busy > 0 || s.deciding || s.retryTimer) return; // já tem algo em andamento
+
+  const guild = guildOf(s.guildId);
+  const connection = getVoiceConnection(s.guildId);
+  const status = connection?.state.status;
+
+  if (!connection || status === VoiceConnectionStatus.Destroyed) {
+    s.phase = "reconnecting";
+    s.connectedAt = null;
+    s.notReadySince = null;
+    scheduleReconnect(s, 0);
+    panels.schedule(s.guildId);
+    return;
+  }
+
+  if (status !== VoiceConnectionStatus.Ready) {
+    const since = s.notReadySince ?? Date.now();
+    s.notReadySince = since;
+    if (Date.now() - since > TIMINGS.stuckLimit) {
+      s.notReadySince = null;
+      dropConnection(s, { expected: false });
+      scheduleReconnect(s, 0);
+    }
+    return;
+  }
+
+  s.notReadySince = null;
+  if (guild?.members.me?.voice?.channelId === s.channelId) {
+    s.mismatches = 0;
+    audit.snapshot(guild).catch(() => {}); // mantém a contagem de desconexões atual
+    panels.schedule(s.guildId); // garante que os painéis estão em dia
+    return;
+  }
+
+  // Conexão "pronta" mas o Discord diz que o bot não está na call (duas checagens seguidas)
+  s.mismatches++;
+  if (s.mismatches >= 2) {
+    s.mismatches = 0;
+    triggerLoss(s, { source: "watchdog", ignoreExpected: true });
   }
 }
 
 function runWatchdog() {
-  const now = Date.now();
-
-  for (const [guildId, channelId] of desired) {
-    const connection = getVoiceConnection(guildId);
-    const status = connection?.state.status;
-
-    if (!connection || status === VoiceConnectionStatus.Destroyed) {
-      notReadySince.delete(guildId);
-      scheduleReconnect(guildId, 0);
-      continue;
-    }
-
-    if (status !== VoiceConnectionStatus.Ready) {
-      const since = notReadySince.get(guildId) ?? now;
-      notReadySince.set(guildId, since);
-      if (now - since > TIMINGS.stuckLimit) {
-        notReadySince.delete(guildId);
-        destroyConnection(guildId);
-        scheduleReconnect(guildId, 0);
-      }
-      continue;
-    }
-
-    notReadySince.delete(guildId);
-    const actual = client.guilds.cache.get(guildId)?.members.me?.voice?.channelId;
-    if (actual === channelId) {
-      mismatches.delete(guildId);
-      continue;
-    }
-
-    // Conexão "pronta" mas o Discord diz que o bot não está na call (duas checagens seguidas)
-    const count = (mismatches.get(guildId) ?? 0) + 1;
-    mismatches.set(guildId, count);
-    if (count >= 2) {
-      mismatches.delete(guildId);
-      handleLoss(guildId, { checkExpected: false });
+  for (const s of sessions.values()) {
+    try {
+      checkSession(s);
+    } catch (err) {
+      console.error("[BOTCALL] Erro na verificação periódica:", err.message);
     }
   }
 }
 
-// Chamado uma vez quando o bot fica online: carrega do MongoDB e reconecta
+// ---------- inicialização ----------
+
+// Chamado UMA vez quando o bot fica online (events/ready.js): carrega o MongoDB e volta para a call salva
 async function startCallKeeper(discordClient) {
+  if (started) return;
+  started = true;
   client = discordClient;
+  panels.init(client, getCallView);
 
+  let saved = [];
   try {
-    const states = await CallState.find({});
-    for (const state of states) {
-      if (state.channelId) lastChannels.set(state.guildId, state.channelId);
-
-      if (state.panelChannelId && state.panelMessageId) {
-        panels.set(state.guildId, {
-          channelId: state.panelChannelId,
-          messageId: state.panelMessageId,
-          signature: null,
-        });
-      }
-
-      if (state.active && state.channelId) {
-        desired.set(state.guildId, state.channelId);
-        scheduleReconnect(state.guildId, TIMINGS.restoreDelay);
-        console.log(`[CALL] Restaurando call salva (${state.channelId}) após reinício.`);
-      }
-
-      // O painel pode estar mostrando "Conectado" de antes do reinício: corrige já
-      schedulePanelRefresh(state.guildId, 0);
-    }
+    saved = await store.loadAll();
   } catch (err) {
-    console.error("[CALL] Erro ao carregar calls salvas:", err.message);
+    console.error("[BOTCALL] Erro ao carregar as calls salvas:", err.message);
   }
 
-  console.log(
-    `[CALL] Sistema de call iniciado. Painel registrado: ${panels.size > 0 ? "sim" : "não"}.`
-  );
+  for (const doc of saved) {
+    const s = getSession(doc.guildId);
+    s.channelId = doc.channelId;
+    s.stopReason = doc.stopReason;
+    s.active = Boolean(doc.active && doc.channelId);
+    panels.load(doc.guildId, doc.panels);
+
+    if (s.active) {
+      s.phase = "reconnecting";
+      scheduleReconnect(s, TIMINGS.restoreDelay);
+      console.log(`[BOTCALL] Restaurando a call salva (${s.channelId}) após o reinício.`);
+    }
+
+    // O painel pode estar mostrando "Conectado" de antes do reinício: corrige já
+    panels.schedule(doc.guildId, 0);
+  }
+
+  // A call foi apagada: para de tentar voltar e libera a seleção
+  client.on("channelDelete", (channel) => {
+    const s = sessions.get(channel.guildId);
+    if (s && s.channelId === channel.id) {
+      console.warn("[BOTCALL] A call selecionada foi apagada.");
+      stopCall(s.guildId, "channel_deleted", { clearChannel: true }).catch(() => {});
+    }
+  });
+
+  // Nova sessão com o gateway do Discord: confere logo se o bot continua na call
+  client.on("shardReady", () => {
+    for (const s of sessions.values()) if (s.active) s.mismatches = 1;
+    setTimeout(runWatchdog, 8_000).unref?.();
+  });
+
   setInterval(runWatchdog, TIMINGS.watchdogInterval).unref?.();
+
+  const active = [...sessions.values()].filter((s) => s.active).length;
+  console.log(`[BOTCALL] Sistema de call iniciado. Calls para restaurar: ${active}.`);
 }
 
 module.exports = {
   TIMINGS,
+  CallError,
   startCallKeeper,
   joinCall,
-  stopKeeping,
-  getKeptChannel,
-  registerPanel,
+  stopCall,
+  getCallView,
+  getSelectedChannel,
   onBotVoiceStateUpdate,
+  registerPanel: panels.register,
+  markPanelRendered: panels.markRendered,
+  refreshPanels: panels.refresh,
 };
