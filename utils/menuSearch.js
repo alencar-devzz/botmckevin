@@ -1,6 +1,7 @@
 const { SISTEMAS } = require("../ui/mainMenu");
 const { COMUNIDADE_OPCOES } = require("../ui/comunidade");
 const { MODERACAO_OPCOES } = require("../ui/moderacao");
+const { OUTROS_OPCOES } = require("../ui/outros");
 
 // ---------------------------------------------------------------------------
 // BUSCA DE SISTEMAS DO /menu
@@ -27,6 +28,7 @@ const KEYWORDS = {
   "moderacao:cargos": ["cargo", "role", "groles", "gerenciar cargos", "permissao", "painel de cargos"],
   "moderacao:nuke": ["nnuke", "nuke", "recriar canal", "limpar canal", "resetar canal", "clonar canal", "comando"],
   "moderacao:bump": ["bump", "disboard", "lembrete", "divulgar", "bump reminder", "agradecimento"],
+  "outros:msg": ["mensagem", "msg", "criador", "embed", "publicar", "enviar mensagem", "montar mensagem", "rascunho", "editor"],
 };
 
 // Todos os sistemas pesquisáveis. group + value = o que o select de resultados devolve.
@@ -40,6 +42,9 @@ function buildRegistry() {
   }
   for (const o of MODERACAO_OPCOES) {
     registry.push({ group: "moderacao", value: o.value, label: o.label, description: o.description, parent: "Moderação" });
+  }
+  for (const o of OUTROS_OPCOES) {
+    registry.push({ group: "outros", value: o.value, label: o.label, description: o.description, parent: "Outros" });
   }
   return registry.map((entry, index) => ({
     ...entry,

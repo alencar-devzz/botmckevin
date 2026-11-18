@@ -4,7 +4,6 @@ const {
   SectionBuilder,
   ThumbnailBuilder,
   SeparatorBuilder,
-  StringSelectMenuBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -18,8 +17,8 @@ const text = (content) => new TextDisplayBuilder().setContent(String(content).sl
 const code = (value) => `\`${String(value ?? "—").replaceAll("`", "'")}\``;
 const unix = (ms) => Math.floor(ms / 1000);
 
-// Lista única de sistemas: alimenta as opções do select e a busca do menu.
-// Para adicionar um sistema novo, basta incluir aqui (e tratar o value em handlers/selectHandlers.js).
+// Lista única de sistemas: alimenta a busca do menu.
+// Para adicionar um sistema novo, inclua aqui (e trate o value em handlers/selectHandlers.js).
 const SISTEMAS = [
   {
     label: "Aparência e prefixo",
@@ -38,11 +37,13 @@ const SISTEMAS = [
   },
 ];
 
-// Botões de atalho (embaixo do select): abrem a mesma tela da opção de mesmo nome
-const ATALHOS = [
-  { label: "Aparência", value: "aparencia" },
-  { label: "Comunidade", value: "comunidade" },
-  { label: "Moderação", value: "moderacao" },
+// Lista de sistemas da categoria "Outros"
+const OUTROS_SISTEMAS = [
+  {
+    label: "Criador de mensagens",
+    description: "Monte, revise e publique mensagens personalizadas.",
+    value: "msg",
+  },
 ];
 
 // Botão "Buscar" (fica FORA do container). Abre o modal de busca de sistemas.
@@ -58,7 +59,7 @@ function buildSearchButtonRow() {
   return new ActionRowBuilder().addComponents(buildSearchButton());
 }
 
-// Painel principal (aberto pelo /menu): um único container compacto + botão Buscar abaixo.
+// Painel principal (aberto pelo /menu): container compacto + 2 botões (Sistemas / Outros) + botão Buscar.
 // guild/client/prefix são opcionais: sem eles o menu aparece sem a parte de informações.
 function buildMainMenu({ guild, client, prefix } = {}) {
   // Miniatura: ícone do servidor -> avatar do bot -> nenhuma (nunca a logo padrão do Discord)
@@ -94,23 +95,22 @@ function buildMainMenu({ guild, client, prefix } = {}) {
   }
 
   container.addSeparatorComponents(new SeparatorBuilder());
+
+  // Dois botões: Sistemas (todo o /menu) e Outros (Criador de mensagens etc.)
   container.addActionRowComponents(
     new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId("main_menu")
-        .setPlaceholder("Selecione o que deseja configurar")
-        .addOptions(SISTEMAS)
-    )
-  );
-  container.addActionRowComponents(
-    new ActionRowBuilder().addComponents(
-      ATALHOS.map((a) =>
-        new ButtonBuilder().setCustomId(`main_btn:${a.value}`).setLabel(a.label).setStyle(ButtonStyle.Secondary)
-      )
+      new ButtonBuilder()
+        .setCustomId("main_btn:sistemas")
+        .setLabel("Sistemas")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId("main_btn:outros")
+        .setLabel("Outros")
+        .setStyle(ButtonStyle.Secondary)
     )
   );
 
   return [container, buildSearchButtonRow()];
 }
 
-module.exports = { buildMainMenu, buildSearchButton, buildSearchButtonRow, SISTEMAS, MENU_EMOJI, SEARCH_EMOJI };
+module.exports = { buildMainMenu, buildSearchButton, buildSearchButtonRow, SISTEMAS, OUTROS_SISTEMAS, MENU_EMOJI, SEARCH_EMOJI };

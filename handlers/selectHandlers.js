@@ -34,8 +34,11 @@ const {
   handleRoleManageSelect,
   handleRoleManageConfigSelect,
 } = require("./roleManageHandlers");
+const { buildOutrosPanel } = require("../ui/outros");
+const { buildSistemasPanel } = require("../ui/sistemas");
+const { buildMessageHome } = require("../ui/mensagemPanels");
 
-// Abre uma opção do menu principal. Usado pelo select do /menu e pelo resultado da busca.
+// Abre uma opção do menu principal. Usado pelo resultado da busca e pelos botões cat:sistemas:open:*.
 async function openMainOption(interaction, value) {
   // Se já estamos numa mensagem efêmera (o /menu é efêmero), edita no lugar.
   const alreadyEphemeral = Boolean(interaction.message?.flags?.has(MessageFlags.Ephemeral));
@@ -55,7 +58,7 @@ async function openMainOption(interaction, value) {
   }
 }
 
-// Opções da categoria Moderação (select "moderacao_menu" e busca)
+// Opções da categoria Moderação (busca e cat:moderacao:open:*)
 async function openModeracaoOption(interaction, value) {
   if (value === "tickets") {
     return openTicketHome(interaction);
@@ -74,7 +77,7 @@ async function openModeracaoOption(interaction, value) {
   }
 }
 
-// Opções da categoria Comunidade e interação (select "comunidade_menu" e busca)
+// Opções da categoria Comunidade e interação (busca e cat:comunidade:open:*)
 async function openComunidadeOption(interaction, value) {
   if (value === "portaria") {
     return openPortaria(interaction);
@@ -103,13 +106,22 @@ async function openComunidadeOption(interaction, value) {
   }
 }
 
+// Opções da categoria Outros (busca e cat:outros:open:*)
+async function openOutrosOption(interaction, value) {
+  if (value === "msg") {
+    return interaction.update({ components: buildMessageHome(interaction.guild) });
+  }
+}
+
 // Abre um sistema pela chave "grupo:valor" (ex.: "moderacao:tickets"). Usado pelo resultado da busca
 // e pela busca que leva direto ao sistema.
 async function openSystem(interaction, key) {
   const [group, value] = String(key).split(":");
   if (group === "main") return openMainOption(interaction, value);
+  if (group === "sistemas") return openMainOption(interaction, value);
   if (group === "moderacao") return openModeracaoOption(interaction, value);
   if (group === "comunidade") return openComunidadeOption(interaction, value);
+  if (group === "outros") return openOutrosOption(interaction, value);
 }
 
 async function handleSelect(interaction) {
@@ -218,10 +230,6 @@ async function handleSelect(interaction) {
   }
 
   switch (customId) {
-    case "main_menu": {
-      return openMainOption(interaction, values[0]);
-    }
-
     // Resultado da busca do /menu: o valor é "grupo:sistema" (ex.: "comunidade:portaria")
     case "menu_search_pick": {
       return openSystem(interaction, values[0]);
@@ -247,4 +255,4 @@ async function handleSelect(interaction) {
   }
 }
 
-module.exports = { handleSelect, openSystem, openMainOption, openModeracaoOption, openComunidadeOption };
+module.exports = { handleSelect, openSystem, openMainOption, openModeracaoOption, openComunidadeOption, openOutrosOption };

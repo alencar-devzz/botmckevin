@@ -5,6 +5,9 @@ const { openSearchModal } = require("./menuSearchHandlers");
 const { rememberCategoryPage, recallCategoryPage } = require("../utils/menuSession");
 const { buildComunidadePanel } = require("../ui/comunidade");
 const { buildModeracaoPanel } = require("../ui/moderacao");
+const { buildOutrosPanel } = require("../ui/outros");
+const { buildSistemasPanel } = require("../ui/sistemas");
+const { buildMessageHome } = require("../ui/mensagemPanels");
 const { handlePortariaButton } = require("./portariaHandlers");
 const { handleAparenciaButton } = require("./aparenciaHandlers");
 const { handleLogsButton } = require("./logsHandlers");
@@ -171,10 +174,18 @@ async function handleButton(interaction) {
     return handleModerationButton(interaction);
   }
 
-  // /menu: botões de atalho do menu principal (Aparência, Comunidade, Moderação)
+  // /menu: botões do menu principal (Sistemas / Outros)
   if (customId.startsWith("main_btn:")) {
+    const btn = customId.split(":")[1];
+    if (btn === "sistemas") {
+      return interaction.update({ components: buildSistemasPanel() });
+    }
+    if (btn === "outros") {
+      return interaction.update({ components: buildOutrosPanel() });
+    }
+    // Compatibilidade: atalhos diretos ainda usados pela busca (aparencia, comunidade, moderacao)
     const { openMainOption } = require("./selectHandlers");
-    return openMainOption(interaction, customId.split(":")[1]);
+    return openMainOption(interaction, btn);
   }
 
   // /menu: lista de sistemas de uma categoria (cat:<categoria>:<ação>:<valor>)
@@ -182,6 +193,22 @@ async function handleButton(interaction) {
     const [, group, action, arg] = customId.split(":");
     const selects = require("./selectHandlers");
     const messageId = interaction.message?.id;
+
+    // Categoria "outros" — abre diretamente o sistema correspondente
+    if (group === "outros") {
+      if (action === "open") {
+        return selects.openOutrosOption(interaction, arg);
+      }
+      return;
+    }
+
+    // Categoria "sistemas" — abre o painel do sistema principal (aparencia/comunidade/moderacao)
+    if (group === "sistemas") {
+      if (action === "open") {
+        return selects.openMainOption(interaction, arg);
+      }
+      return;
+    }
 
     if (action === "prev" || action === "next") {
       const page = Math.max(0, Number(arg) || 0);
