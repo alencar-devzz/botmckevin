@@ -35,7 +35,7 @@ const MODAL_BUTTONS = [
   /^pcfg_(emoji|cdel_edit)(:|$)/, // posts
   /^post_comment(:|$)/,
   /^ticket_open:/, // abre modal quando o painel pede motivo
-  /^uba:(add|search)$/, // unball: banir pessoas e buscar banidos
+  /^uba:(add|search)$/, // unbanall: banir pessoas e buscar banidos
   /^dup:[^:]+:(rename|filter)$/, // /duplicar-categoria: nomes da cópia e filtro por nome
   /^tcfg_(new|a_text|a_color|a_images|m_mode|m_btn|m_ph|o_add|o_edit|o_rmopen|i_text|c_text|i_opttitle|i_images|i_arch|su_text|su_btn|cc_text|lim_text|color|g_limit|x_rename)(:|$)/, // ticket (configuração)
 ];

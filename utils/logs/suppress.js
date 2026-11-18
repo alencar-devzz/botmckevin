@@ -71,7 +71,7 @@ function clearCommandExit(guildId, userId) {
   commandExits.delete(exitKey(guildId, userId));
 }
 
-// Desbanimento em massa (comando unball): os logs individuais de Unban ficam de fora e o comando
+// Desbanimento em massa (comando unbanall): os logs individuais de Unban ficam de fora e o comando
 // envia um único log resumido no final. A marca dura um pouco mais que o trabalho (os eventos chegam atrasados).
 const massUnbans = new Map(); // guildId -> expira em (ms) | Infinity enquanto roda
 const MASS_UNBAN_TAIL = 20_000;

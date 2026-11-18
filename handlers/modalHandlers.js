@@ -15,7 +15,7 @@ const { handleDupModal } = require("./dupCategoriaHandlers");
 const { handleSearchModal } = require("./menuSearchHandlers");
 const { handleSorteioModal } = require("./sorteioHandlers");
 const { handleInvitesConfigModal } = require("./convitesConfigHandlers");
-const { handleUnballModal } = require("./unballHandlers");
+const { handleUnbanallModal } = require("./unbanallHandlers");
 
 const { handleCallHubConfigModal, handleCallPanelModal } = require("./callHubHandlers");
 
@@ -37,9 +37,9 @@ async function handleModal(interaction) {
     return handleSorteioModal(interaction);
   }
 
-  // Painel do comando unball (banir pessoas e buscar banidos)
+  // Painel do comando unbanall (banir pessoas e buscar banidos)
   if (customId.startsWith("uba:m:")) {
-    return handleUnballModal(interaction);
+    return handleUnbanallModal(interaction);
   }
 
   // Painel do comando /duplicar-categoria (nome da cópia)

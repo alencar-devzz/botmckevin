@@ -5,6 +5,7 @@ const {
   LabelBuilder,
   FileUploadBuilder,
   StringSelectMenuBuilder,
+  UserSelectMenuBuilder,
 } = require("discord.js");
 
 // Helpers para montar modais no formato novo (Labels): campo de texto, select e upload
@@ -59,6 +60,17 @@ function selectLabel({
   return wrapper;
 }
 
+// Select de usuários dentro do modal (o Discord devolve só os IDs escolhidos)
+function userSelectLabel({ id, label, description, min = 0, max = 25, required = false, placeholder }) {
+  const menu = new UserSelectMenuBuilder().setCustomId(id).setMinValues(min).setMaxValues(max);
+  if (placeholder) menu.setPlaceholder(clip(placeholder, 100));
+  if (typeof menu.setRequired === "function") menu.setRequired(required);
+
+  const wrapper = new LabelBuilder().setLabel(clip(label, 45)).setUserSelectMenuComponent(menu);
+  if (description) wrapper.setDescription(clip(description, 100));
+  return wrapper;
+}
+
 function uploadLabel({ id, label, description, min = 0, max = 1, required = false }) {
   const upload = new FileUploadBuilder()
     .setCustomId(id)
@@ -76,4 +88,4 @@ function modal(customId, title, ...labels) {
   return new ModalBuilder().setCustomId(customId).setTitle(title).addLabelComponents(...labels);
 }
 
-module.exports = { clip, textLabel, selectLabel, uploadLabel, modal };
+module.exports = { clip, textLabel, selectLabel, userSelectLabel, uploadLabel, modal };
