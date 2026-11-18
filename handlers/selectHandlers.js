@@ -109,7 +109,7 @@ async function openComunidadeOption(interaction, value) {
 // Opções da categoria Outros (busca e cat:outros:open:*)
 async function openOutrosOption(interaction, value) {
   if (value === "msg") {
-    return interaction.update({ components: buildMessageHome(interaction.guild) });
+    return require("./mensagemHandlers").showMenuHome(interaction);
   }
 }
 

@@ -3,8 +3,10 @@ const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
 const store = require("../utils/msgBuilder/store");
 const { renderDraft, textLength, totalTextLength, parseEmoji } = require("../utils/msgBuilder/render");
 const respond = require("../utils/msgBuilder/response");
-const { buildView, buildNotice, VIEWS, NEEDS_REPORT } = require("../ui/mensagemPanels");
+const { buildView, buildNotice, buildMessageHome, VIEWS, NEEDS_REPORT } = require("../ui/mensagemPanels");
 const modals = require("../ui/mensagemModals");
+const { isMenuMessage } = require("../utils/menuSession");
+const menuNav = require("../utils/msgBuilder/menuNav");
 
 const { LIMITS, LAYOUTS, COLORS, BUTTON_STYLES, PLACES, RESPONSE_MODES } = store;
 const V2 = MessageFlags.IsComponentsV2;
@@ -39,13 +41,49 @@ async function guard(interaction) {
   return false;
 }
 
-// Mostra uma tela do editor (atualiza a mensagem do editor)
-async function show(interaction, draft, view, note) {
+// Mostra uma tela do editor (atualiza a mensagem do editor).
+// Aberto pelo /menu, a tela ganha a linha Voltar / Avançar / Home e entra no histórico.
+async function show(interaction, draft, view, note, { record = true } = {}) {
   const { guild } = interaction;
   const report = NEEDS_REPORT.has(view) ? await renderDraft(draft) : null;
   const components = buildView(view, { guild, draft, report, note });
+  if (isMenuMessage(interaction)) {
+    const id = interaction.message.id;
+    if (record) menuNav.record(id, view);
+    components.push(menuNav.navRow(id));
+  }
   if (interaction.deferred || interaction.replied) return interaction.editReply({ components });
   return interaction.update({ components });
+}
+
+// Tela inicial do criador dentro do /menu (a que tem o botão "Abrir editor")
+async function showMenuHome(interaction, { record = true } = {}) {
+  const id = interaction.message.id;
+  if (record) menuNav.record(id, "menuhome");
+  return interaction.update({ components: [...buildMessageHome(interaction.guild), menuNav.navRow(id)] });
+}
+
+// Voltar / Avançar / Home da linha de navegação
+async function handleHistory(interaction, action) {
+  const id = interaction.message?.id;
+  if (action === "home") {
+    menuNav.reset(id);
+    const { getPrefix } = require("../utils/getPrefix");
+    const { buildMainMenu } = require("../ui/mainMenu");
+    const prefix = await getPrefix(interaction.guild.id);
+    return interaction.update({ components: buildMainMenu({ guild: interaction.guild, client: interaction.client, prefix }) });
+  }
+
+  const target = menuNav.move(id, action === "back" ? -1 : 1);
+  if (target === null) {
+    // Voltar na primeira tela: sai do criador e volta para o painel "Outros"
+    menuNav.reset(id);
+    const { buildOutrosPanel } = require("../ui/outros");
+    return interaction.update({ components: buildOutrosPanel() });
+  }
+  if (target === "menuhome") return showMenuHome(interaction, { record: false });
+  const draft = await load(interaction);
+  return show(interaction, draft, VIEWS[target] ? target : "home", undefined, { record: false });
 }
 
 const load = (interaction) => store.getDraft(interaction.guild.id, interaction.user.id);
@@ -154,11 +192,24 @@ async function handleMessageButton(interaction) {
   }
 
   // Botão da mensagem pública do comando: abre o editor só para quem clicou
+  // Pelo /menu: abre o editor na própria mensagem (com Voltar / Avançar / Home) em vez de uma nova resposta
+  if (customId === "msg:open" && isMenuMessage(interaction)) {
+    const draft = await store.getDraft(guild.id, user.id);
+    return show(interaction, draft, "home");
+  }
+
   if (customId === "msg:open") {
     const draft = await store.getDraft(guild.id, user.id);
     const report = await renderDraft(draft);
     return interaction.reply({ components: buildView("home", { guild, draft, report }), flags: V2 | EPHEMERAL });
   }
+
+  if (customId.startsWith("msg:hist:")) {
+    if (!(isMenuMessage(interaction))) return interaction.deferUpdate().catch(() => {});
+    return handleHistory(interaction, customId.slice("msg:hist:".length));
+  }
+
+  if (customId === "msg:close" && isMenuMessage(interaction)) return handleHistory(interaction, "back");
 
   if (customId === "msg:close") {
     return interaction.update({
@@ -582,4 +633,4 @@ async function handleMessageModal(interaction) {
   }
 }
 
-module.exports = { handleMessageButton, handleMessageSelect, handleMessageModal };
+module.exports = { showMenuHome, handleMessageButton, handleMessageSelect, handleMessageModal };

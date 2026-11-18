@@ -74,4 +74,7 @@ function rememberCategoryPage(messageId, group, page) {
 
 const recallCategoryPage = (messageId, group) => categoryPages.get(`${messageId}:${group}`) ?? 0;
 
-module.exports = { startMenuSession, touchMenu, rememberCategoryPage, recallCategoryPage, TIMEOUT_MS };
+// A mensagem é o /menu (ainda ativo)? Usado pelo Criador de mensagens para mostrar a navegação do painel
+const isMenuMessage = (interaction) => Boolean(interaction.message?.id && sessions.has(interaction.message.id));
+
+module.exports = { startMenuSession, touchMenu, isMenuMessage, rememberCategoryPage, recallCategoryPage, TIMEOUT_MS };
