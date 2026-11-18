@@ -101,15 +101,15 @@ async function openComunidadeOption(interaction, value) {
   if (value === "convites") {
     return openInvitesConfigPanel(interaction);
   }
-  if (value === "sorteios") {
-    return openSorteioMenu(interaction);
-  }
 }
 
 // Opções da categoria Outros (busca e cat:outros:open:*)
 async function openOutrosOption(interaction, value) {
   if (value === "msg") {
     return require("./mensagemHandlers").showMenuHome(interaction);
+  }
+  if (value === "sorteios") {
+    return openSorteioMenu(interaction);
   }
 }
 

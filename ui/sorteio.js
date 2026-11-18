@@ -120,10 +120,10 @@ function listView(guild, list, { fromMenu = false } = {}) {
   }
   body.addActionRowComponents(row(btn("sr:new", "Novo sorteio", ButtonStyle.Success, false, EMOJI.more)));
 
-  // Aberto pelo n!menu (Comunidade e interação > Sorteios): ganha um jeito de voltar ao menu.
+  // Aberto pelo n!menu (Outros > Sorteios): ganha um jeito de voltar ao menu.
   if (fromMenu) {
     body.addSeparatorComponents(new SeparatorBuilder());
-    body.addActionRowComponents(row(btn("back_comunidade", "Voltar ao menu", ButtonStyle.Secondary)));
+    body.addActionRowComponents(row(btn("back_outros", "Voltar ao menu", ButtonStyle.Secondary)));
   }
 
   return [head, body];

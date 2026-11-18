@@ -25,11 +25,6 @@ const OPCOES = [
     description: "Recompensas por convite, detecção de fake e canal de conquistas.",
     value: "convites",
   },
-  {
-    label: "Sorteios",
-    description: "Crie, publique e acompanhe sorteios do servidor.",
-    value: "sorteios",
-  },
 ];
 
 function buildComunidadePanel(page = 0) {

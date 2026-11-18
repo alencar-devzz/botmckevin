@@ -27,6 +27,11 @@ const OUTROS_OPCOES = [
     description: "Monte, revise e publique mensagens personalizadas.",
     value: "msg",
   },
+  {
+    label: "Sorteios",
+    description: "Crie, publique e acompanhe sorteios do servidor.",
+    value: "sorteios",
+  },
 ];
 
 function buildOutrosPanel() {

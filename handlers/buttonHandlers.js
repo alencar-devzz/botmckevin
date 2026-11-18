@@ -249,6 +249,10 @@ async function handleButton(interaction) {
       return interaction.update({ components: buildComunidadePanel(recallCategoryPage(interaction.message?.id, "comunidade")) });
     }
 
+    case "back_outros": {
+      return interaction.update({ components: buildOutrosPanel() });
+    }
+
     default:
       return;
   }

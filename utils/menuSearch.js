@@ -22,12 +22,12 @@ const KEYWORDS = {
   "comunidade:cl": ["limpar", "apagar mensagens", "clear", "comando"],
   "comunidade:spotify": ["musica", "som", "card", "letra", "ouvindo", "comando"],
   "comunidade:convites": ["convite", "invite", "invites", "fake", "recompensa", "conquista", "link de convite"],
-  "comunidade:sorteios": ["sorteio", "giveaway", "gw", "premio", "rifa"],
   "moderacao:tickets": ["ticket", "atendimento", "suporte", "denuncia", "painel de ticket", "help desk"],
   "moderacao:logs": ["log", "registro", "auditoria", "historico", "mensagens apagadas", "banimentos", "audit"],
   "moderacao:cargos": ["cargo", "role", "groles", "gerenciar cargos", "permissao", "painel de cargos"],
   "moderacao:nuke": ["nnuke", "nuke", "recriar canal", "limpar canal", "resetar canal", "clonar canal", "comando"],
   "moderacao:bump": ["bump", "disboard", "lembrete", "divulgar", "bump reminder", "agradecimento"],
+  "outros:sorteios": ["sorteio", "giveaway", "gw", "premio", "rifa"],
   "outros:msg": ["mensagem", "msg", "criador", "embed", "publicar", "enviar mensagem", "montar mensagem", "rascunho", "editor"],
 };
 
