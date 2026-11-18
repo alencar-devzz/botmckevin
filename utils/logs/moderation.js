@@ -4,7 +4,7 @@ const { findAudit, executorText, originLabel } = require("./audit");
 const { COLORS, userBrief, unix, code } = require("./format");
 const { consumeRoleChange } = require("./suppress");
 const { aboveBot } = require("./botRole");
-const { getCommandExit } = require("./suppress");
+const { getCommandExit, isMassUnban } = require("./suppress");
 
 module.exports = [
   // Banimento
@@ -33,6 +33,7 @@ module.exports = [
     name: "guildBanRemove",
     async execute(ban) {
       const { guild, user } = ban;
+      if (isMassUnban(guild.id)) return; // desbanimento em massa: o comando envia um log único
       const cfg = await activeCategory(guild, "banimentos", user.bot);
       if (!cfg) return;
 

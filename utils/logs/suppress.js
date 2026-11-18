@@ -71,6 +71,27 @@ function clearCommandExit(guildId, userId) {
   commandExits.delete(exitKey(guildId, userId));
 }
 
+// Desbanimento em massa (comando unball): os logs individuais de Unban ficam de fora e o comando
+// envia um único log resumido no final. A marca dura um pouco mais que o trabalho (os eventos chegam atrasados).
+const massUnbans = new Map(); // guildId -> expira em (ms) | Infinity enquanto roda
+const MASS_UNBAN_TAIL = 20_000;
+
+function markMassUnban(guildId) {
+  massUnbans.set(guildId, Infinity);
+}
+
+function endMassUnban(guildId) {
+  massUnbans.set(guildId, Date.now() + MASS_UNBAN_TAIL);
+  setTimeout(() => {
+    if ((massUnbans.get(guildId) ?? 0) <= Date.now()) massUnbans.delete(guildId);
+  }, MASS_UNBAN_TAIL + 1000);
+}
+
+function isMassUnban(guildId) {
+  const exp = massUnbans.get(guildId);
+  return exp !== undefined && exp > Date.now();
+}
+
 // Canais recriados pelo comando nnuke: os logs automáticos de "canal criado" e "canal excluído" ficam de fora,
 // porque o próprio comando envia um único log (utils/nuke/engine.js).
 const nukedChannels = new Map(); // channelId -> expira em (ms)
@@ -117,4 +138,7 @@ module.exports = {
   suppressRoleChange,
   unsuppressRoleChange,
   consumeRoleChange,
+  markMassUnban,
+  endMassUnban,
+  isMassUnban,
 };

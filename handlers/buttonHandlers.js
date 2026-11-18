@@ -33,6 +33,7 @@ const { handleDupButton } = require("./dupCategoriaHandlers");
 const { handleEmojiButton } = require("./addEmojiHandlers");
 const { handleSorteioButton } = require("./sorteioHandlers");
 const { handleInvitesConfigButton } = require("./convitesConfigHandlers");
+const { handleUnballButton } = require("./unballHandlers");
 
 const {
   handleCallHubConfigButton,
@@ -50,6 +51,11 @@ async function handleButton(interaction) {
   // Painel do comando /sorteio e botões dos sorteios publicados
   if (customId.startsWith("sr:")) {
     return handleSorteioButton(interaction);
+  }
+
+  // Painel do comando unball (desbanimento em massa)
+  if (customId.startsWith("uba:")) {
+    return handleUnballButton(interaction);
   }
 
   // Painel do comando /duplicar-categoria

@@ -12,6 +12,7 @@ const { handleAntiRaidSelect } = require("./antiRaidHandlers");
 const { handleMessageSelect } = require("./mensagemHandlers");
 const { handleMetricsSelect } = require("./metricasHandlers");
 const { handleDupSelect } = require("./dupCategoriaHandlers");
+const { handleUnballSelect } = require("./unballHandlers");
 const { handleSorteioSelect, openSorteioMenu } = require("./sorteioHandlers");
 const {
   openInvitesConfigPanel,
@@ -140,6 +141,11 @@ async function handleSelect(interaction) {
   // Painel do comando /sorteio
   if (customId.startsWith("sr:")) {
     return handleSorteioSelect(interaction);
+  }
+
+  // Painel do comando unball
+  if (customId.startsWith("uba:")) {
+    return handleUnballSelect(interaction);
   }
 
   // Painel do comando /duplicar-categoria
