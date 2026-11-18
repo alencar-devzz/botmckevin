@@ -20,6 +20,7 @@ const {
   DEFAULT_BUTTONS,
   DEFAULT_ORDER,
   DEFAULT_COMMENT_DELETE_PLACEHOLDER,
+  DEFAULT_COMMENT_DELETE_TEXT,
 } = require("../utils/post/store");
 
 const BUTTON_LABELS = {
@@ -50,7 +51,7 @@ const FALLBACK_CFG = {
   buttons: DEFAULT_BUTTONS,
   order: DEFAULT_ORDER,
   rowPosition: "below",
-  commentDelete: { enabled: true, placeholder: null, emoji: null },
+  commentDelete: { enabled: true, placeholder: null, text: null, emoji: null },
 };
 
 const PER_PAGE = 3; // comentários/curtidas por página
@@ -152,9 +153,13 @@ function buildPostsPanel(guild, cfg) {
       text(
         [
           "-# Na aba de comentários, quem tem comentário no post vê um menu só para ele, para apagar o próprio comentário.",
-          `-# Estado: \`${del.enabled ? "Ativo" : "Desativado"}\` · Texto: \`${
+          `-# Estado: \`${del.enabled ? "Ativo" : "Desativado"}\` · Texto do menu: \`${
             del.placeholder || DEFAULT_COMMENT_DELETE_PLACEHOLDER
           }\` · Emoji: ${del.emoji ? emojiMarkup(resolveEmoji(del.emoji)).trim() : "`nenhum`"}`,
+          `-# Texto acima do menu: \`${clip(
+            (del.text || DEFAULT_COMMENT_DELETE_TEXT).replace(/`/g, "'").replace(/\s+/g, " "),
+            120
+          )}\``,
         ].join("\n")
       )
     )
@@ -473,7 +478,7 @@ function buildInteractionsView({
 
     container
       .addSeparatorComponents(new SeparatorBuilder())
-      .addTextDisplayComponents(text("-# Só você vê este menu, porque você comentou neste post."))
+      .addTextDisplayComponents(text(`-# ${clip(deleteCfg.text || DEFAULT_COMMENT_DELETE_TEXT, 200)}`))
       .addActionRowComponents(new ActionRowBuilder().addComponents(select));
   }
 

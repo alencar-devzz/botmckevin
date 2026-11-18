@@ -18,6 +18,9 @@ const client = new Client({
     GatewayIntentBits.GuildInvites, // /sorteio: requisito de convites
   ],
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.Reaction, Partials.User],
+  // Padrão do bot inteiro: menções aparecem como texto, mas ninguém é pingado.
+  // Só envios que passam allowedMentions de propósito (ex.: ticket, sorteio, bump) sobrescrevem isso.
+  allowedMentions: { parse: [], repliedUser: false },
 });
 
 client.commands = new Collection();

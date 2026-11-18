@@ -26,6 +26,7 @@ const postConfigSchema = new Schema({
   commentDelete: {
     enabled: { type: Boolean, default: true },
     placeholder: { type: String, default: null }, // null = texto padrão
+    text: { type: String, default: null }, // texto acima do menu; null = texto padrão
     emoji: { type: String, default: null }, // null = sem emoji
   },
   order: { type: [String], default: undefined }, // ordem dos botões na linha

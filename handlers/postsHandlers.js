@@ -181,6 +181,15 @@ async function handlePostsConfigButton(interaction) {
             placeholder: "Remover meu comentário",
           }),
           textLabel({
+            id: "text",
+            label: "Texto acima do menu",
+            description: "Aviso que aparece em cima do menu. Vazio = padrão.",
+            max: 200,
+            required: false,
+            value: cfg.commentDelete.text ?? undefined,
+            placeholder: "Só você vê este menu, porque você comentou neste post.",
+          }),
+          textLabel({
             id: "emoji",
             label: "Emoji das opções",
             description: "Emoji normal ou personalizado. Vazio = sem emoji.",
@@ -256,6 +265,7 @@ async function handlePostsConfigModal(interaction) {
   // Personalização do menu de remover comentário
   if (field === "cdel") {
     const placeholder = interaction.fields.getTextInputValue("placeholder").trim().slice(0, 100);
+    const aboveText = interaction.fields.getTextInputValue("text").trim().slice(0, 200);
     const rawEmoji = interaction.fields.getTextInputValue("emoji").trim();
     let emoji = null;
     if (rawEmoji) {
@@ -267,6 +277,7 @@ async function handlePostsConfigModal(interaction) {
     }
     await updatePostConfig(guild.id, {
       "commentDelete.placeholder": placeholder || null,
+      "commentDelete.text": aboveText || null,
       "commentDelete.emoji": emoji,
     });
     const components = await panel(guild);

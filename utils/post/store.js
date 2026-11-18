@@ -12,6 +12,7 @@ const DEFAULT_BUTTONS = {
 };
 const DEFAULT_ORDER = ["like", "comment", "view", "delete"];
 const DEFAULT_COMMENT_DELETE_PLACEHOLDER = "Remover meu comentário";
+const DEFAULT_COMMENT_DELETE_TEXT = "Só você vê este menu, porque você comentou neste post.";
 
 // Cache em memória: o evento de mensagens consulta isso a cada mensagem do servidor
 const cache = new Map();
@@ -51,6 +52,7 @@ function toConfig(doc) {
     commentDelete: {
       enabled: doc?.commentDelete?.enabled ?? true,
       placeholder: doc?.commentDelete?.placeholder || null,
+      text: doc?.commentDelete?.text || null,
       emoji: doc?.commentDelete?.emoji || null,
     },
     order: sanitizeOrder(doc?.order),
@@ -95,6 +97,7 @@ module.exports = {
   DEFAULT_BUTTONS,
   DEFAULT_ORDER,
   DEFAULT_COMMENT_DELETE_PLACEHOLDER,
+  DEFAULT_COMMENT_DELETE_TEXT,
   getPostConfig,
   updatePostConfig,
   resetPostConfig,
