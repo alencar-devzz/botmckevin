@@ -1,4 +1,5 @@
-const { getPrefix } = require("../utils/getPrefix");
+const { getPrefix, DEFAULT_PREFIX } = require("../utils/getPrefix");
+const { claimEvent } = require("../utils/claimEvent");
 const { suppressMessage, clearSuppressed } = require("../utils/logs/suppress");
 const { track } = require("../utils/metrics");
 const { getAfk, removeAfk } = require("../utils/afk/store");
@@ -12,10 +13,13 @@ async function handleAfk(message, prefix) {
 
   if (!isAfkCommand && (await getAfk(guildId, message.author.id))) {
     await removeAfk(guildId, message.author.id);
-    message.channel
-      .send({ content: `Bem-vindo de volta <@${message.author.id}>, seu AFK foi removido!` })
-      .then((sent) => setTimeout(() => sent.delete().catch(() => {}), 5000))
-      .catch(() => {});
+    // Durante um deploy duas instâncias estão online: só uma envia o aviso
+    if (await claimEvent(`afk-back:${message.id}`)) {
+      message.channel
+        .send({ content: `Bem-vindo de volta <@${message.author.id}>, seu AFK foi removido!` })
+        .then((sent) => setTimeout(() => sent.delete().catch(() => {}), 5000))
+        .catch(() => {});
+    }
   }
 
   // Aviso de AFK só em mensagens comuns: comandos por prefixo (ex.: n!ban @fulano) não mostram o aviso
@@ -27,7 +31,7 @@ async function handleAfk(message, prefix) {
     const entry = await getAfk(guildId, user.id);
     if (entry) lines.push(`<@${user.id}> está ausente no momento: ${entry.reason ?? "AFK"}`);
   }
-  if (lines.length) {
+  if (lines.length && (await claimEvent(`afk-warn:${message.id}`))) {
     message.channel
       .send({ content: lines.join("\n"), allowedMentions: { parse: [] } })
       .catch(() => {});
@@ -39,7 +43,13 @@ module.exports = {
   async execute(message) {
     if (message.author.bot || !message.guild) return;
 
-    const prefix = await getPrefix(message.guild.id);
+    // Se o banco falhar, usa o prefixo padrão em vez de ignorar a mensagem (ou derrubar o bot)
+    let prefix = DEFAULT_PREFIX;
+    try {
+      prefix = await getPrefix(message.guild.id);
+    } catch (err) {
+      console.error("[PREFIXO] Erro ao buscar o prefixo, usando o padrão:", err?.message ?? err);
+    }
 
     try {
       await handleAfk(message, prefix);
@@ -51,6 +61,7 @@ module.exports = {
     if (message.content.trim().toLowerCase() === "cl") {
       const cl = message.client.commands.get("cl");
       if (!cl) return;
+      if (!(await claimEvent(`cmd:${message.id}`))) return; // outra instância já cuidou desta mensagem
       track("prefixo");
       try {
         return await cl.execute(message, []);
@@ -69,6 +80,9 @@ module.exports = {
 
     const command = message.client.commands.get(commandName);
     if (!command || typeof command.execute !== "function") return; // comandos só-slash (ex.: /help)
+
+    // Durante um deploy duas instâncias estão online: só uma executa o comando
+    if (!(await claimEvent(`cmd:${message.id}`))) return;
 
     // Apaga a mensagem do comando assim que ele é reconhecido.
     // Marca como "suprimida" para o sistema de logs não registrar como mensagem apagada.
