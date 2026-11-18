@@ -70,7 +70,7 @@ module.exports = {
     return sendConfirm(interaction, {
       action: "ban",
       title: `Banimento · ${user.tag ?? user.username}`,
-      question: `Deseja realmente banir <@${user.id}> do servidor?`,
+      question: `Deseja realmente banir ${user.tag ?? user.username} do servidor?`,
       user,
       member,
       reason,
@@ -98,13 +98,14 @@ module.exports = {
       return;
     }
 
-    const mention = `<@${user.id}>`;
     const avatarUrl = user.displayAvatarURL({ extension: "png", size: 256 });
     const panelMsg = await message.channel.send({
       components: buildConfirmPanel({
         title: `Banimento · ${user.tag ?? user.username}`,
-        question: `Deseja realmente banir ${mention} do servidor?`,
+        question: `Deseja realmente banir ${user.tag ?? user.username} do servidor?`,
         reason,
+        userId: user.id,
+        executorId: message.author.id,
         avatarUrl,
       }),
       flags: MessageFlags.IsComponentsV2,

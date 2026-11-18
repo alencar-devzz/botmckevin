@@ -53,7 +53,7 @@ module.exports = {
     return sendConfirm(interaction, {
       action: "kick",
       title: `Expulsão · ${user.tag ?? user.username}`,
-      question: `Deseja realmente expulsar <@${user.id}> do servidor?`,
+      question: `Deseja realmente expulsar ${user.tag ?? user.username} do servidor?`,
       user,
       member,
       reason,
@@ -80,13 +80,14 @@ module.exports = {
       return;
     }
 
-    const mention = `<@${user.id}>`;
     const avatarUrl = user.displayAvatarURL({ extension: "png", size: 256 });
     const panelMsg = await message.channel.send({
       components: buildConfirmPanel({
         title: `Expulsão · ${user.tag ?? user.username}`,
-        question: `Deseja realmente expulsar ${mention} do servidor?`,
+        question: `Deseja realmente expulsar ${user.tag ?? user.username} do servidor?`,
         reason,
+        userId: user.id,
+        executorId: message.author.id,
         avatarUrl,
       }),
       flags: MessageFlags.IsComponentsV2,

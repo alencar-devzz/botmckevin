@@ -61,7 +61,7 @@ module.exports = {
     return sendConfirm(interaction, {
       action: "unmute",
       title: `Unmute · ${user.tag ?? user.username}`,
-      question: `Deseja realmente desmutar <@${user.id}>?`,
+      question: `Deseja realmente desmutar ${user.tag ?? user.username}?`,
       user,
       member,
       reason,
@@ -98,13 +98,14 @@ module.exports = {
       return;
     }
 
-    const mention = `<@${user.id}>`;
     const avatarUrl = user.displayAvatarURL({ extension: "png", size: 256 });
     const panelMsg = await message.channel.send({
       components: buildConfirmPanel({
         title: `Unmute · ${user.tag ?? user.username}`,
-        question: `Deseja realmente desmutar ${mention}?`,
+        question: `Deseja realmente desmutar ${user.tag ?? user.username}?`,
         reason,
+        userId: user.id,
+        executorId: message.author.id,
         avatarUrl,
       }),
       flags: MessageFlags.IsComponentsV2,

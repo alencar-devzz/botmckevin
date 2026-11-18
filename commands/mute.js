@@ -80,7 +80,7 @@ module.exports = {
     return sendConfirm(interaction, {
       action: "mute",
       title: `Mute · ${user.tag ?? user.username}`,
-      question: `Deseja realmente mutar <@${user.id}> por ${formatDuration(duration)}?`,
+      question: `Deseja realmente mutar ${user.tag ?? user.username} por ${formatDuration(duration)}?`,
       user,
       member,
       reason,
@@ -112,13 +112,14 @@ module.exports = {
       return;
     }
 
-    const mention = `<@${user.id}>`;
     const avatarUrl = user.displayAvatarURL({ extension: "png", size: 256 });
     const panelMsg = await message.channel.send({
       components: buildConfirmPanel({
         title: `Mute · ${user.tag ?? user.username}`,
-        question: `Deseja realmente mutar ${mention} por ${formatDuration(duration)}?`,
+        question: `Deseja realmente mutar ${user.tag ?? user.username} por ${formatDuration(duration)}?`,
         reason,
+        userId: user.id,
+        executorId: message.author.id,
         avatarUrl,
       }),
       flags: MessageFlags.IsComponentsV2,

@@ -64,8 +64,17 @@ async function sendConfirm(interaction, { action, title, question, user, member,
   const avatarUrl = user.displayAvatarURL({ extension: "png", size: 256 });
 
   await interaction.reply({
-    components: buildConfirmPanel({ title, question, reason, avatarUrl, expires: false }),
+    components: buildConfirmPanel({
+      title,
+      question,
+      reason,
+      userId: user.id,
+      executorId: interaction.user.id,
+      avatarUrl,
+      expires: false,
+    }),
     flags: EPHEMERAL_V2,
+    allowedMentions: { parse: [] },
   });
 
   const panelMsg = await interaction.fetchReply();

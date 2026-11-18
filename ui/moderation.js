@@ -25,16 +25,44 @@ function addTexts(container, texts, avatarUrl) {
   container.addSectionComponents(section);
 }
 
-// avatarUrl: foto do usuário alvo (opcional).
+// Painel de confirmação (sem cor de destaque).
+// userId/avatarUrl: usuário alvo (menção + foto no canto) | executorId: staff que usou o comando.
 // expires: false remove o aviso "expira em 1 minuto" (usado pelos slash commands).
-function buildConfirmPanel({ title, question, reason, avatarUrl = null, expires = true }) {
+function buildConfirmPanel({
+  title,
+  question,
+  reason,
+  userId = null,
+  executorId = null,
+  avatarUrl = null,
+  expires = true,
+}) {
   const container = new ContainerBuilder();
+  const display = (content) => new TextDisplayBuilder().setContent(content);
 
-  addTexts(
-    container,
-    [`### ${title}`, question, `Motivo: \`${reason ?? "Não inserido"}\``],
-    avatarUrl
-  );
+  // Título e pergunta
+  container.addTextDisplayComponents(display(`## ${title}`), display(`-# ${question}`));
+  container.addSeparatorComponents(new SeparatorBuilder());
+  container.addTextDisplayComponents(display("Ação realizada com sucesso"));
+
+  // Usuário (menção que não pinga, por causa do allowedMentions) + ID, com a foto no canto
+  if (userId) {
+    addTexts(container, [`**Usuário**\n<@${userId}>\n-# **ID:** ${userId}`], avatarUrl);
+  }
+
+  // Motivo em citação
+  const motivo = String(reason ?? "").trim() || "Não inserido";
+  const quoted = motivo
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+  container.addTextDisplayComponents(display(`**Motivo**\n${quoted}`));
+
+  // Executor + horário atual no formato nativo do Discord
+  if (executorId) {
+    const now = Math.floor(Date.now() / 1000);
+    container.addTextDisplayComponents(display(`**Executor**\n<@${executorId}> · <t:${now}:f>`));
+  }
 
   container.addSeparatorComponents(new SeparatorBuilder());
 
@@ -53,9 +81,7 @@ function buildConfirmPanel({ title, question, reason, avatarUrl = null, expires 
   );
 
   if (expires) {
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("-# Esta confirmação expira em 1 minuto.")
-    );
+    container.addTextDisplayComponents(display("-# Esta confirmação expira em 1 minuto."));
   }
 
   return [container];
