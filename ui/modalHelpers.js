@@ -62,7 +62,8 @@ function selectLabel({
 function uploadLabel({ id, label, description, min = 0, max = 1, required = false }) {
   const upload = new FileUploadBuilder()
     .setCustomId(id)
-    .setMinValues(min)
+    // O Discord rejeita campo obrigatório com min_values 0
+    .setMinValues(required ? Math.max(1, min) : min)
     .setMaxValues(max)
     .setRequired(required);
 
