@@ -46,7 +46,7 @@ function buildConfirmPanel({
 
   // Usuário (menção que não pinga, por causa do allowedMentions) + ID, com a foto no canto
   if (userId) {
-    addTexts(container, [`**Usuário**\n<@${userId}>\n-# **ID:** ${userId}`], avatarUrl);
+    addTexts(container, [`<:less:1572725706381729993> **Usuário**\n<@${userId}>\n-# **ID:** ${userId}`], avatarUrl);
   }
 
   // Motivo em citação
@@ -55,7 +55,7 @@ function buildConfirmPanel({
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
-  container.addTextDisplayComponents(display(`**Motivo**\n${quoted}`));
+  container.addTextDisplayComponents(display(`<:search:1569386560107970755> **Motivo**\n${quoted}`));
 
   // Executor + horário atual no formato nativo do Discord
   if (executorId) {
@@ -106,14 +106,14 @@ function buildDonePanel({ action, userId, executorId, reason, avatarUrl = null, 
   );
   container.addSeparatorComponents(new SeparatorBuilder());
 
-  addTexts(container, [`**Usuário**\n<@${userId}>\n-# **ID:** ${userId}`], avatarUrl);
+  addTexts(container, [`<:less:1572725706381729993> **Usuário**\n<@${userId}>\n-# **ID:** ${userId}`], avatarUrl);
 
   const motivo = String(reason ?? "").trim() || "Não inserido";
   const quoted = motivo
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
-  container.addTextDisplayComponents(display(`**Motivo**\n${quoted}`));
+  container.addTextDisplayComponents(display(`<:search:1569386560107970755> **Motivo**\n${quoted}`));
 
   const now = Math.floor(Date.now() / 1000);
   container.addTextDisplayComponents(display(`**Executor**\n<@${executorId}> · <t:${now}:f>`));
