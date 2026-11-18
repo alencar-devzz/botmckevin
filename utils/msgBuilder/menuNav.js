@@ -1,9 +1,13 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 
 // Navegação do Criador de mensagens quando ele é aberto pelo /menu (Outros > Criador de mensagens).
-// Linha fora do container: [Voltar] [Avançar] [Home]. Voltar/Avançar andam pelas telas já visitadas;
+// Linha fora do container: [Home] [Anterior] [Próximo], igual às categorias de Sistemas. Voltar/Avançar andam pelas telas já visitadas;
 // o Voltar da primeira tela leva para o painel "Outros" e o Home leva para o painel principal.
-const HOME_EMOJI = { name: "home", id: "1570991310612201482" };
+const EMOJI = {
+  home: { name: "home", id: "1570991310612201482" },
+  prev: { name: "left2", id: "1572401579221590127" },
+  next: { name: "right2", id: "1572401550977007666" },
+};
 const MAX_HISTORY = 40;
 const MAX_MESSAGES = 300;
 
@@ -40,16 +44,17 @@ function move(messageId, delta) {
 
 const reset = (messageId) => histories.delete(messageId);
 
+// Mesmo estilo da navegação das categorias de Sistemas: início, anterior e próximo (só emojis)
 function navRow(messageId) {
   const h = get(messageId);
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("msg:hist:back").setLabel("Voltar").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("msg:hist:home").setEmoji(EMOJI.home).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("msg:hist:back").setEmoji(EMOJI.prev).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId("msg:hist:fwd")
-      .setLabel("Avançar")
+      .setEmoji(EMOJI.next)
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(h.index >= h.stack.length - 1),
-    new ButtonBuilder().setCustomId("msg:hist:home").setEmoji(HOME_EMOJI).setStyle(ButtonStyle.Secondary)
+      .setDisabled(h.index >= h.stack.length - 1)
   );
 }
 

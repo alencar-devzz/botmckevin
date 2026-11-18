@@ -33,6 +33,8 @@ const ROOTS = [
   { prefix: "rmcfg_", trail: [MODERACAO, "Cargos"], home: ["Gerenciamento de cargos"] },
   { prefix: "nukecfg_", trail: [MODERACAO, "nnuke"], home: ["Comando nnuke"] },
   { prefix: "bumpcfg_", trail: [MODERACAO, "Bump"], home: ["Bump reminder"] },
+  // Criador de mensagens aberto pelo /menu (só ele tem a linha de navegação msg:hist:*)
+  { prefix: "msg:hist:", trail: ["Outros", "Criador de mensagens"], home: ["Criador de mensagens"] },
   { prefix: "cat:comunidade:", trail: [COMUNIDADE], home: ["Comunidade e interação"] },
   { prefix: "cat:moderacao:", trail: [MODERACAO] },
 ];
