@@ -11,6 +11,7 @@ const DEFAULT_BUTTONS = {
   delete: { emoji: null, style: "secondary", position: "bottom" },
 };
 const DEFAULT_ORDER = ["like", "comment", "view", "delete"];
+const DEFAULT_COMMENT_DELETE_PLACEHOLDER = "Remover meu comentário";
 
 // Cache em memória: o evento de mensagens consulta isso a cada mensagem do servidor
 const cache = new Map();
@@ -47,6 +48,11 @@ function toConfig(doc) {
     channelId: doc?.channelId ?? null,
     enabled: doc?.enabled ?? true,
     buttons,
+    commentDelete: {
+      enabled: doc?.commentDelete?.enabled ?? true,
+      placeholder: doc?.commentDelete?.placeholder || null,
+      emoji: doc?.commentDelete?.emoji || null,
+    },
     order: sanitizeOrder(doc?.order),
     rowPosition: doc?.rowPosition === "above" ? "above" : "below",
   };
@@ -88,6 +94,7 @@ module.exports = {
   POSITIONS,
   DEFAULT_BUTTONS,
   DEFAULT_ORDER,
+  DEFAULT_COMMENT_DELETE_PLACEHOLDER,
   getPostConfig,
   updatePostConfig,
   resetPostConfig,

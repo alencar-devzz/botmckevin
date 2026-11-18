@@ -15,7 +15,12 @@ const {
 } = require("discord.js");
 const { addBackButton } = require("./backButton");
 const { EMOJIS, emojiMarkup, resolveEmoji } = require("../utils/post/emojis");
-const { KEYS, DEFAULT_BUTTONS, DEFAULT_ORDER } = require("../utils/post/store");
+const {
+  KEYS,
+  DEFAULT_BUTTONS,
+  DEFAULT_ORDER,
+  DEFAULT_COMMENT_DELETE_PLACEHOLDER,
+} = require("../utils/post/store");
 
 const BUTTON_LABELS = {
   like: "Curtir",
@@ -45,6 +50,7 @@ const FALLBACK_CFG = {
   buttons: DEFAULT_BUTTONS,
   order: DEFAULT_ORDER,
   rowPosition: "below",
+  commentDelete: { enabled: true, placeholder: null, emoji: null },
 };
 
 const PER_PAGE = 3; // comentários/curtidas por página
@@ -139,6 +145,36 @@ function buildPostsPanel(guild, cfg) {
       )
     );
 
+  const del = cfg.commentDelete;
+  const delPanel = new ContainerBuilder()
+    .addTextDisplayComponents(
+      text("**Menu de remover comentário**"),
+      text(
+        [
+          "-# Na aba de comentários, quem tem comentário no post vê um menu só para ele, para apagar o próprio comentário.",
+          `-# Estado: \`${del.enabled ? "Ativo" : "Desativado"}\` · Texto: \`${
+            del.placeholder || DEFAULT_COMMENT_DELETE_PLACEHOLDER
+          }\` · Emoji: ${del.emoji ? emojiMarkup(resolveEmoji(del.emoji)).trim() : "`nenhum`"}`,
+        ].join("\n")
+      )
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("pcfg_cdel_toggle")
+          .setLabel(del.enabled ? "Desativar menu" : "Ativar menu")
+          .setStyle(del.enabled ? ButtonStyle.Danger : ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId("pcfg_cdel_edit")
+          .setLabel("Personalizar")
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId("pcfg_cdel_reset")
+          .setLabel("Restaurar")
+          .setStyle(ButtonStyle.Secondary)
+      )
+    );
+
   const info = new ContainerBuilder().addTextDisplayComponents(
     text("### Como funciona"),
     text(
@@ -146,13 +182,14 @@ function buildPostsPanel(guild, cfg) {
         "• Quando alguém envia uma foto ou vídeo no canal, o bot apaga a mensagem e posta de novo via webhook, com o nome e a foto da pessoa.",
         "• O texto enviado junto da mídia aparece abaixo da menção.",
         "• Os botões permitem curtir, comentar, ver comentários/curtidas e excluir (só o autor).",
+        "• Quem comentou pode remover o próprio comentário pelo menu da aba de comentários.",
       ].join("\n")
     ),
     text("-# O bot precisa das permissões Gerenciar Webhooks, Gerenciar Mensagens e Anexar Arquivos no canal.")
   );
   addBackButton(info, "back_comunidade");
 
-  return [header, config, buttonsPanel, info];
+  return [header, config, buttonsPanel, delPanel, info];
 }
 
 // ---------- Painel de um botão (emoji / cor / posição) ----------
@@ -321,7 +358,18 @@ function paginate(list, page) {
 
 // view: "c" = comentários, "l" = curtidas
 // avatars: Map(userId -> url da foto)
-function buildInteractionsView({ messageId, post, view, page, pages, items, avatars }) {
+// own: comentários de quem está vendo (para o menu de remover); deleteCfg: cfg.commentDelete
+function buildInteractionsView({
+  messageId,
+  post,
+  view,
+  page,
+  pages,
+  items,
+  avatars,
+  own = [],
+  deleteCfg = FALLBACK_CFG.commentDelete,
+}) {
   const isLikes = view === "l";
   const total = isLikes ? post.likes.length : post.comments.length;
 
@@ -392,6 +440,42 @@ function buildInteractionsView({ messageId, post, view, page, pages, items, avat
           .setDisabled(page >= pages)
       )
     );
+
+  // Menu de remover o próprio comentário: só aparece para quem tem comentário neste post
+  if (!isLikes && deleteCfg.enabled && own.length) {
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`post_delcmt:${messageId}:${page}`)
+      .setPlaceholder(clip(deleteCfg.placeholder || DEFAULT_COMMENT_DELETE_PLACEHOLDER, 150))
+      .setMinValues(1)
+      .setMaxValues(1);
+    // Opções de select aceitam só o formato { name, id, animated }
+    const resolved = deleteCfg.emoji ? resolveEmoji(deleteCfg.emoji) : null;
+    const emoji = typeof resolved === "string" ? { name: resolved } : resolved;
+
+    select.addOptions(
+      own.slice(-25).map((comment) => {
+        const option = {
+          label: clip(String(comment.text).replace(/\s+/g, " ").trim() || "Comentário", 100),
+          description: clip(
+            new Date(comment.createdAt).toLocaleString("pt-BR", {
+              timeZone: "America/Sao_Paulo",
+              dateStyle: "short",
+              timeStyle: "short",
+            }),
+            100
+          ),
+          value: String(new Date(comment.createdAt).getTime()),
+        };
+        if (emoji) option.emoji = emoji;
+        return option;
+      })
+    );
+
+    container
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(text("-# Só você vê este menu, porque você comentou neste post."))
+      .addActionRowComponents(new ActionRowBuilder().addComponents(select));
+  }
 
   return [container];
 }

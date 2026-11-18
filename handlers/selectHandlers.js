@@ -20,7 +20,7 @@ const {
 const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHandlers");
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
-const { openPostsPanel, handlePostsConfigSelect } = require("./postsHandlers");
+const { openPostsPanel, handlePostsConfigSelect, handlePostSelect } = require("./postsHandlers");
 const { openClPanel, handleClConfigSelect } = require("./clHandlers");
 const { openSpotifyPanel, handleSpotifyConfigSelect } = require("./spotifyConfigHandlers");
 const { openNukePanel, handleNukeConfigSelect } = require("./nukeHandlers");
@@ -227,6 +227,10 @@ async function handleSelect(interaction) {
 
   if (customId.startsWith("pcfg_")) {
     return handlePostsConfigSelect(interaction);
+  }
+
+  if (customId.startsWith("post_")) {
+    return handlePostSelect(interaction);
   }
 
   switch (customId) {

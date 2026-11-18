@@ -153,9 +153,47 @@ async function handlePostsConfigButton(interaction) {
       return interaction.update({ components: await panel(guild) });
     }
 
-    // Volta tudo (emojis, cores, posições e ordem) ao padrão
+    // Volta tudo (emojis, cores, posições, ordem e menu de remover comentário) ao padrão
     case "pcfg_reset_all": {
-      await resetPostConfig(guild.id, ["buttons", "order", "rowPosition"]);
+      await resetPostConfig(guild.id, ["buttons", "order", "rowPosition", "commentDelete"]);
+      return interaction.update({ components: await panel(guild) });
+    }
+
+    // Menu de remover o próprio comentário: ativar/desativar, personalizar e restaurar
+    case "pcfg_cdel_toggle": {
+      const cfg = await getPostConfig(guild.id);
+      await updatePostConfig(guild.id, { "commentDelete.enabled": !cfg.commentDelete.enabled });
+      return interaction.update({ components: await panel(guild) });
+    }
+    case "pcfg_cdel_edit": {
+      const cfg = await getPostConfig(guild.id);
+      return interaction.showModal(
+        modal(
+          "pcfg_modal:cdel",
+          "Menu de remover comentário",
+          textLabel({
+            id: "placeholder",
+            label: "Texto do menu",
+            description: "Texto que aparece no menu fechado. Vazio = padrão.",
+            max: 100,
+            required: false,
+            value: cfg.commentDelete.placeholder ?? undefined,
+            placeholder: "Remover meu comentário",
+          }),
+          textLabel({
+            id: "emoji",
+            label: "Emoji das opções",
+            description: "Emoji normal ou personalizado. Vazio = sem emoji.",
+            max: 60,
+            required: false,
+            value: cfg.commentDelete.emoji ?? undefined,
+            placeholder: "Ex.: <:nome:123456789012345678>",
+          })
+        )
+      );
+    }
+    case "pcfg_cdel_reset": {
+      await resetPostConfig(guild.id, ["commentDelete"]);
       return interaction.update({ components: await panel(guild) });
     }
 
@@ -214,6 +252,28 @@ async function handlePostsConfigModal(interaction) {
   if (!(await guard(interaction))) return;
   const { guild } = interaction;
   const [, field, key] = interaction.customId.split(":");
+
+  // Personalização do menu de remover comentário
+  if (field === "cdel") {
+    const placeholder = interaction.fields.getTextInputValue("placeholder").trim().slice(0, 100);
+    const rawEmoji = interaction.fields.getTextInputValue("emoji").trim();
+    let emoji = null;
+    if (rawEmoji) {
+      const parsed = await parseEmojiInput(rawEmoji, interaction.client);
+      if (!parsed.ok) {
+        return interaction.reply({ content: parsed.error, flags: EPHEMERAL });
+      }
+      emoji = parsed.value;
+    }
+    await updatePostConfig(guild.id, {
+      "commentDelete.placeholder": placeholder || null,
+      "commentDelete.emoji": emoji,
+    });
+    const components = await panel(guild);
+    if (interaction.isFromMessage()) return interaction.update({ components });
+    return interaction.reply({ components, flags: V2 | EPHEMERAL });
+  }
+
   if (field !== "emoji" || !KEYS.includes(key)) return;
 
   const raw = interaction.fields.getTextInputValue("emoji").trim();
@@ -271,9 +331,11 @@ async function resolveAvatars(guild, ids) {
 }
 
 // Monta a visão de comentários ("c") ou curtidas ("l") de um post
-async function viewComponents(guild, messageId, view, page) {
+// viewerId: quem está vendo (define se o menu de remover comentário aparece)
+async function viewComponents(guild, messageId, view, page, viewerId) {
   const post = await Post.findOne({ messageId }).lean();
   if (!post) return buildPostMissing();
+  const cfg = await getPostConfig(guild.id);
 
   const list = view === "l" ? post.likes : post.comments;
   const pg = paginate(list, page);
@@ -281,7 +343,16 @@ async function viewComponents(guild, messageId, view, page) {
     guild,
     pg.items.map((item) => (view === "l" ? item : item.userId))
   );
-  return buildInteractionsView({ messageId, post, view, ...pg, avatars });
+  const own = view === "c" ? post.comments.filter((comment) => comment.userId === viewerId) : [];
+  return buildInteractionsView({
+    messageId,
+    post,
+    view,
+    ...pg,
+    avatars,
+    own,
+    deleteCfg: cfg.commentDelete,
+  });
 }
 
 const notFound = (interaction) =>
@@ -323,20 +394,32 @@ async function handlePostButton(interaction) {
 
     case "post_view": {
       return interaction.reply({
-        components: await viewComponents(interaction.guild, interaction.message.id, "c", 1),
+        components: await viewComponents(
+          interaction.guild,
+          interaction.message.id,
+          "c",
+          1,
+          interaction.user.id
+        ),
         flags: V2 | EPHEMERAL,
       });
     }
 
     case "post_switch": {
       return interaction.update({
-        components: await viewComponents(interaction.guild, messageId, view, 1),
+        components: await viewComponents(interaction.guild, messageId, view, 1, interaction.user.id),
       });
     }
 
     case "post_nav": {
       return interaction.update({
-        components: await viewComponents(interaction.guild, messageId, view, Number(page)),
+        components: await viewComponents(
+          interaction.guild,
+          messageId,
+          view,
+          Number(page),
+          interaction.user.id
+        ),
       });
     }
 
@@ -394,11 +477,72 @@ async function handlePostModal(interaction) {
   return interaction.reply({ content: "Seu comentário foi enviado!", flags: EPHEMERAL });
 }
 
+// Atualiza o contador de comentários no post original (mensagem de webhook do bot)
+async function refreshPostMessage(interaction, post) {
+  const channel =
+    interaction.guild.channels.cache.get(post.channelId) ??
+    (await interaction.guild.channels.fetch(post.channelId).catch(() => null));
+  const message = await channel?.messages.fetch(post.messageId).catch(() => null);
+  if (!message?.webhookId) return;
+
+  const webhook = await interaction.client.fetchWebhook(message.webhookId);
+  await webhook.editMessage(message.id, {
+    components: await postComponents(message, post),
+    flags: V2,
+    allowedMentions: { parse: [] },
+    withComponents: true,
+  });
+}
+
+// Select do post: remover o próprio comentário (menu da aba de comentários)
+async function handlePostSelect(interaction) {
+  const [action, messageId, page] = interaction.customId.split(":");
+  if (action !== "post_delcmt") return;
+
+  await interaction.deferUpdate();
+
+  const cfg = await getPostConfig(interaction.guildId);
+  if (!cfg.commentDelete.enabled) {
+    return interaction.followUp({
+      content: "A remoção de comentários está desativada neste servidor.",
+      flags: EPHEMERAL,
+    });
+  }
+
+  const createdAt = new Date(Number(interaction.values[0]));
+  if (Number.isNaN(createdAt.getTime())) return;
+
+  // O filtro por userId garante que ninguém remova comentário de outra pessoa
+  const post = await Post.findOneAndUpdate(
+    { messageId },
+    { $pull: { comments: { userId: interaction.user.id, createdAt } } },
+    { new: true }
+  ).lean();
+  if (!post) {
+    return interaction.followUp({ content: "Não encontrei os dados deste post.", flags: EPHEMERAL });
+  }
+
+  await interaction.editReply({
+    components: await viewComponents(
+      interaction.guild,
+      messageId,
+      "c",
+      Number(page),
+      interaction.user.id
+    ),
+  });
+
+  await refreshPostMessage(interaction, post).catch((err) =>
+    console.error("[POSTS] Erro ao atualizar o contador de comentários:", err)
+  );
+}
+
 module.exports = {
   openPostsPanel,
   handlePostsConfigSelect,
   handlePostsConfigButton,
   handlePostsConfigModal,
   handlePostButton,
+  handlePostSelect,
   handlePostModal,
 };

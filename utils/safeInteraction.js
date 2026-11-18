@@ -32,7 +32,7 @@ const MODAL_BUTTONS = [
   /^msg:rsp:(txt|img|thumb|hex)(:|$)/,
   /^msg:rbtn:(add|edit)(:|$)/,
   /^port_(msg|color|img|thumb|delay|age)(:|$)/, // portaria
-  /^pcfg_emoji(:|$)/, // posts
+  /^pcfg_(emoji|cdel_edit)(:|$)/, // posts
   /^post_comment(:|$)/,
   /^ticket_open:/, // abre modal quando o painel pede motivo
   /^dup:[^:]+:(rename|filter)$/, // /duplicar-categoria: nomes da cópia e filtro por nome

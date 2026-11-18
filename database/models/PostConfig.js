@@ -22,6 +22,12 @@ const postConfigSchema = new Schema({
     view: { ...buttonSchema, position: { type: String, default: "top" } },
     delete: { ...buttonSchema },
   },
+  // Menu de remover o próprio comentário (aparece só para quem tem comentário no post)
+  commentDelete: {
+    enabled: { type: Boolean, default: true },
+    placeholder: { type: String, default: null }, // null = texto padrão
+    emoji: { type: String, default: null }, // null = sem emoji
+  },
   order: { type: [String], default: undefined }, // ordem dos botões na linha
   rowPosition: { type: String, default: "below" }, // linha "above" ou "below" da mídia
 });
