@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// SUBTÍTULO "Painel > Opção" E BOTÃO VOLTAR FORA DO CONTAINER (tudo do /menu)
+// SUBTÍTULO "Painel › Opção" E BOTÃO VOLTAR FORA DO CONTAINER (tudo do /menu)
 //
 // Duas coisas são feitas aqui, para TODAS as telas do /menu de uma vez:
-//   1. Logo abaixo do título entra o caminho da tela:  Painel > Moderação > **Sistema de tickets**
+//   1. Logo abaixo do título entra o caminho da tela:  Painel › Moderação › **Sistema de tickets**
 //   2. O botão "Voltar" sai de dentro do container e fica numa linha própria, embaixo dele
 //      (igual ao botão Buscar do menu principal).
 //
@@ -14,27 +14,27 @@
 
 const TYPE = { ActionRow: 1, Button: 2, Section: 9, TextDisplay: 10, Separator: 14, Container: 17 };
 
-const CAT_COMUNIDADE = "Comunidade e interação";
-const CAT_MODERACAO = "Moderação";
+const COMUNIDADE = "Comunidade";
+const MODERACAO = "Moderação";
 
-// prefix/exact = id dos componentes da tela · trail = caminho depois de "Painel"
-// home = outros títulos que a tela inicial do sistema pode ter (para não repetir o nome no caminho)
+// prefix/exact = id dos componentes da tela · trail = caminho depois de "Painel" (nomes curtos, só o essencial)
+// home = nomes completos que o título da tela inicial do sistema pode ter (para não repetir no caminho)
 const ROOTS = [
-  { prefix: "apar_", trail: ["Aparência e prefixo"], home: ["Aparência do bot"] },
-  { prefix: "port_", trail: [CAT_COMUNIDADE, "Portaria"] },
-  { prefix: "autoroles_", trail: [CAT_COMUNIDADE, "Auto-roles"] },
-  { prefix: "pcfg_", trail: [CAT_COMUNIDADE, "Posts e Instagram"] },
-  { prefix: "chcfg_", trail: [CAT_COMUNIDADE, "Calls temporárias"] },
-  { prefix: "clcfg_", trail: [CAT_COMUNIDADE, "Comando cl"] },
-  { prefix: "sptcfg_", trail: [CAT_COMUNIDADE, "Comando spotify"] },
-  { prefix: "invcfg_", trail: [CAT_COMUNIDADE, "Convites"] },
-  { prefix: "tcfg_", trail: [CAT_MODERACAO, "Sistema de tickets"] },
-  { prefix: "logs_", trail: [CAT_MODERACAO, "Logs e registros"] },
-  { prefix: "rmcfg_", trail: [CAT_MODERACAO, "Gerenciamento de cargos"] },
-  { prefix: "nukecfg_", trail: [CAT_MODERACAO, "Comando nnuke"] },
-  { prefix: "bumpcfg_", trail: [CAT_MODERACAO, "Bump reminder"] },
-  { exact: "comunidade_menu", trail: [CAT_COMUNIDADE] },
-  { exact: "moderacao_menu", trail: [CAT_MODERACAO] },
+  { prefix: "apar_", trail: ["Aparência"], home: ["Aparência e prefixo", "Aparência do bot"] },
+  { prefix: "port_", trail: [COMUNIDADE, "Portaria"] },
+  { prefix: "autoroles_", trail: [COMUNIDADE, "Auto-roles"] },
+  { prefix: "pcfg_", trail: [COMUNIDADE, "Posts"], home: ["Posts e Instagram"] },
+  { prefix: "chcfg_", trail: [COMUNIDADE, "Calls"], home: ["Calls temporárias"] },
+  { prefix: "clcfg_", trail: [COMUNIDADE, "cl"], home: ["Comando cl"] },
+  { prefix: "sptcfg_", trail: [COMUNIDADE, "Spotify"], home: ["Comando spotify"] },
+  { prefix: "invcfg_", trail: [COMUNIDADE, "Convites"] },
+  { prefix: "tcfg_", trail: [MODERACAO, "Tickets"], home: ["Sistema de tickets"] },
+  { prefix: "logs_", trail: [MODERACAO, "Logs"], home: ["Logs e registros"] },
+  { prefix: "rmcfg_", trail: [MODERACAO, "Cargos"], home: ["Gerenciamento de cargos"] },
+  { prefix: "nukecfg_", trail: [MODERACAO, "nnuke"], home: ["Comando nnuke"] },
+  { prefix: "bumpcfg_", trail: [MODERACAO, "Bump"], home: ["Bump reminder"] },
+  { prefix: "cat:comunidade:", trail: [COMUNIDADE], home: ["Comunidade e interação"] },
+  { prefix: "cat:moderacao:", trail: [MODERACAO] },
 ];
 
 const MAX_CRUMB = 45;
@@ -46,7 +46,7 @@ function cleanTitle(value) {
   const s = String(value ?? "")
     .replace(/<a?:\w+:\d+>/g, "")
     .replace(/<[@#&!][^>]*>/g, "")
-    .replace(/[*_~`|>\\]/g, "")
+    .replace(/[*_~`|>›\\]/g, "")
     .replace(/\s+/g, " ")
     .trim();
   return s.length > MAX_CRUMB ? `${s.slice(0, MAX_CRUMB - 1)}…` : s;
@@ -62,20 +62,20 @@ const norm = (value) =>
     .toLowerCase()
     .trim();
 
-// trail = [] -> "Painel" · ["Moderação"] -> "Painel > **Moderação**" · só o último fica em negrito
+// trail = [] -> "Painel" · ["Moderação"] -> "Painel › **Moderação**" · só o último fica em negrito
 function crumbLine(trail = []) {
   const list = trail.filter(Boolean);
   if (!list.length) return "-# **Painel**";
-  const head = list.slice(0, -1).map((t) => `${t} > `).join("");
-  return `-# Painel > ${head}**${list[list.length - 1]}**`;
+  const head = list.slice(0, -1).map((t) => `${t} › `).join("");
+  return `-# Painel › ${head}**${list[list.length - 1]}**`;
 }
 
-// Tela de resultados da busca: Painel > **Buscar** ticket
+// Tela de resultados da busca: Painel › **Buscar** ticket
 function searchCrumbLine(query) {
-  return `-# Painel > **Buscar** ${escapeMd(query).slice(0, 60)}`;
+  return `-# Painel › **Buscar** ${escapeMd(query).slice(0, 60)}`;
 }
 
-const CRUMB_MARK = /(^|\n)-# (\*\*Painel\*\*|Painel > )/;
+const CRUMB_MARK = /(^|\n)-# (\*\*Painel\*\*|Painel › )/;
 
 // ---------- detecção do sistema ----------
 

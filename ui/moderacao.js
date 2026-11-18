@@ -1,12 +1,6 @@
-const {
-  ContainerBuilder,
-  TextDisplayBuilder,
-  StringSelectMenuBuilder,
-  ActionRowBuilder,
-} = require("discord.js");
-const { addBackButton } = require("./backButton");
+const { buildCategoryPanel } = require("./categoryPanel");
 
-// Fonte única: alimenta o select abaixo e a busca do menu (utils/menuSearch.js)
+// Fonte única: alimenta a lista do painel e a busca do menu (utils/menuSearch.js)
 const OPCOES = [
   {
     label: "Sistema de tickets",
@@ -32,31 +26,17 @@ const OPCOES = [
     label: "Bump reminder",
     description: "Lembrete de bump, agradecimento, cargos, tempos e embeds.",
     value: "bump",
-  }
+  },
 ];
 
-function buildModeracaoPanel() {
-  const header = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("### <:Shield:1572386860485976136> Moderação"),
-    new TextDisplayBuilder().setContent("-# Configurações de moderação e atendimento do servidor.")
-  );
-
-  const selectContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("**Selecione abaixo**"),
-    new TextDisplayBuilder().setContent("-# Configurações de moderação.")
-  );
-
-  const select = new StringSelectMenuBuilder()
-    .setCustomId("moderacao_menu")
-    .setPlaceholder("Selecione uma opção")
-    .addOptions(
-      ...OPCOES
-    );
-
-  selectContainer.addActionRowComponents(new ActionRowBuilder().addComponents(select));
-  addBackButton(selectContainer, "back_main");
-
-  return [header, selectContainer];
+function buildModeracaoPanel(page = 0) {
+  return buildCategoryPanel({
+    group: "moderacao",
+    title: "### <:Shield:1572386860485976136> Moderação",
+    description: "Configurações de moderação e atendimento do servidor.",
+    options: OPCOES,
+    page,
+  });
 }
 
 module.exports = { buildModeracaoPanel, MODERACAO_OPCOES: OPCOES };

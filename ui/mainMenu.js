@@ -38,6 +38,13 @@ const SISTEMAS = [
   },
 ];
 
+// Botões de atalho (embaixo do select): abrem a mesma tela da opção de mesmo nome
+const ATALHOS = [
+  { label: "Aparência", value: "aparencia" },
+  { label: "Comunidade", value: "comunidade" },
+  { label: "Moderação", value: "moderacao" },
+];
+
 // Botão "Buscar" (fica FORA do container). Abre o modal de busca de sistemas.
 function buildSearchButton() {
   return new ButtonBuilder()
@@ -93,6 +100,13 @@ function buildMainMenu({ guild, client, prefix } = {}) {
         .setCustomId("main_menu")
         .setPlaceholder("Selecione o que deseja configurar")
         .addOptions(SISTEMAS)
+    )
+  );
+  container.addActionRowComponents(
+    new ActionRowBuilder().addComponents(
+      ATALHOS.map((a) =>
+        new ButtonBuilder().setCustomId(`main_btn:${a.value}`).setLabel(a.label).setStyle(ButtonStyle.Secondary)
+      )
     )
   );
 

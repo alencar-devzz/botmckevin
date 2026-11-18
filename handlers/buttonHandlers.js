@@ -2,6 +2,7 @@ const { MessageFlags } = require("discord.js");
 const { buildMainMenu } = require("../ui/mainMenu");
 const { getPrefix } = require("../utils/getPrefix");
 const { openSearchModal } = require("./menuSearchHandlers");
+const { rememberCategoryPage, recallCategoryPage } = require("../utils/menuSession");
 const { buildComunidadePanel } = require("../ui/comunidade");
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { handlePortariaButton } = require("./portariaHandlers");
@@ -170,6 +171,36 @@ async function handleButton(interaction) {
     return handleModerationButton(interaction);
   }
 
+  // /menu: botões de atalho do menu principal (Aparência, Comunidade, Moderação)
+  if (customId.startsWith("main_btn:")) {
+    const { openMainOption } = require("./selectHandlers");
+    return openMainOption(interaction, customId.split(":")[1]);
+  }
+
+  // /menu: lista de sistemas de uma categoria (cat:<categoria>:<ação>:<valor>)
+  if (customId.startsWith("cat:")) {
+    const [, group, action, arg] = customId.split(":");
+    const selects = require("./selectHandlers");
+    const messageId = interaction.message?.id;
+
+    if (action === "prev" || action === "next") {
+      const page = Math.max(0, Number(arg) || 0);
+      rememberCategoryPage(messageId, group, page);
+      const build = group === "moderacao" ? buildModeracaoPanel : buildComunidadePanel;
+      return interaction.update({ components: build(page) });
+    }
+
+    if (action === "open") {
+      const options = group === "moderacao" ? require("../ui/moderacao").MODERACAO_OPCOES : require("../ui/comunidade").COMUNIDADE_OPCOES;
+      const { PAGE_SIZE } = require("../ui/categoryPanel");
+      rememberCategoryPage(messageId, group, Math.floor(Math.max(0, options.findIndex((o) => o.value === arg)) / PAGE_SIZE));
+      return group === "moderacao"
+        ? selects.openModeracaoOption(interaction, arg)
+        : selects.openComunidadeOption(interaction, arg);
+    }
+    return; // "idx" (indicador de página) está sempre desativado
+  }
+
   switch (customId) {
     case "menu_search": {
       return openSearchModal(interaction);
@@ -184,11 +215,11 @@ async function handleButton(interaction) {
     }
 
     case "back_moderacao": {
-      return interaction.update({ components: buildModeracaoPanel() });
+      return interaction.update({ components: buildModeracaoPanel(recallCategoryPage(interaction.message?.id, "moderacao")) });
     }
 
     case "back_comunidade": {
-      return interaction.update({ components: buildComunidadePanel() });
+      return interaction.update({ components: buildComunidadePanel(recallCategoryPage(interaction.message?.id, "comunidade")) });
     }
 
     default:

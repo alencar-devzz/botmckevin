@@ -60,4 +60,18 @@ function touchMenu(interaction) {
   }
 }
 
-module.exports = { startMenuSession, touchMenu, TIMEOUT_MS };
+// Página da lista de sistemas (Comunidade/Moderação) em que a pessoa estava, para o Voltar cair nela
+const categoryPages = new Map(); // `${messageId}:${group}` -> página
+const MAX_REMEMBERED = 500;
+
+function rememberCategoryPage(messageId, group, page) {
+  if (!messageId) return;
+  const key = `${messageId}:${group}`;
+  categoryPages.delete(key);
+  categoryPages.set(key, page);
+  if (categoryPages.size > MAX_REMEMBERED) categoryPages.delete(categoryPages.keys().next().value);
+}
+
+const recallCategoryPage = (messageId, group) => categoryPages.get(`${messageId}:${group}`) ?? 0;
+
+module.exports = { startMenuSession, touchMenu, rememberCategoryPage, recallCategoryPage, TIMEOUT_MS };

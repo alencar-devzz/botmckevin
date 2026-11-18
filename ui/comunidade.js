@@ -1,12 +1,6 @@
-const {
-  ContainerBuilder,
-  TextDisplayBuilder,
-  StringSelectMenuBuilder,
-  ActionRowBuilder,
-} = require("discord.js");
-const { addBackButton } = require("./backButton");
+const { buildCategoryPanel } = require("./categoryPanel");
 
-// Fonte única: alimenta o select abaixo e a busca do menu (utils/menuSearch.js)
+// Fonte única: alimenta a lista do painel e a busca do menu (utils/menuSearch.js)
 const OPCOES = [
   { label: "Portaria", description: "Boas-vindas, saídas, DM de entrada e filtro de contas.", value: "portaria" },
   { label: "Auto-roles", description: "Configure os cargos automáticos.", value: "autoroles" },
@@ -35,33 +29,17 @@ const OPCOES = [
     label: "Sorteios",
     description: "Crie, publique e acompanhe sorteios do servidor.",
     value: "sorteios",
-  }
+  },
 ];
 
-function buildComunidadePanel() {
-  const header = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("### <:member2:1572386159882014762> Comunidade e interação"),
-    new TextDisplayBuilder().setContent("-# Configurações da comunidade e interações.")
-  );
-
-  const selectContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("**Selecione abaixo**"),
-    new TextDisplayBuilder().setContent("-# Configurações de comunidade.")
-  );
-
-  const select = new StringSelectMenuBuilder()
-    .setCustomId("comunidade_menu")
-    .setPlaceholder("Selecione uma opção")
-    .addOptions(
-      ...OPCOES
-    );
-
-  const selectRow = new ActionRowBuilder().addComponents(select);
-  selectContainer.addActionRowComponents(selectRow);
-
-  addBackButton(selectContainer, "back_main");
-
-  return [header, selectContainer];
+function buildComunidadePanel(page = 0) {
+  return buildCategoryPanel({
+    group: "comunidade",
+    title: "### <:member2:1572386159882014762> Comunidade e interação",
+    description: "Configurações da comunidade e interações.",
+    options: OPCOES,
+    page,
+  });
 }
 
 module.exports = { buildComunidadePanel, COMUNIDADE_OPCOES: OPCOES };

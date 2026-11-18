@@ -247,4 +247,4 @@ async function handleSelect(interaction) {
   }
 }
 
-module.exports = { handleSelect, openSystem };
+module.exports = { handleSelect, openSystem, openMainOption, openModeracaoOption, openComunidadeOption };
