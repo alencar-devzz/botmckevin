@@ -1,6 +1,7 @@
+const crypto = require("node:crypto");
 const { ActivityType } = require("discord.js");
 const { DEFAULT_PREFIX } = require("../utils/getPrefix");
-const { getBotConfig, applyPresence } = require("../utils/botPresence");
+const { getBotConfig, saveBotConfig, applyPresence } = require("../utils/botPresence");
 const { sweepCalls } = require("../utils/callHub");
 const { startCallKeeper } = require("../utils/callKeeper");
 const { restoreCardTimers } = require("../utils/spotify/autoDelete");
@@ -45,20 +46,45 @@ module.exports = {
         .catch(() => {});
     }
 
-    // Registra os slash commands direto no servidor (aparecem na hora).
+    // Registra os slash commands direto no servidor (aparecem na hora), mas só quando algo mudou:
+    // o hash da lista fica salvo no MongoDB e, se for igual ao do último registro, o bot pula esta etapa.
+    // Para forçar o registro (ex.: apagou um comando à mão no Discord), defina FORCE_SLASH=1 na Render.
     // Os aliases apontam para o mesmo comando, então o Set remove as repetições.
     try {
       const slashCommands = [...new Set(client.commands.values())]
         .filter((command) => command.data)
         .map((command) => command.data.toJSON());
 
-      const guild =
-        client.guilds.cache.get(GUILD_ID) ?? (await client.guilds.fetch(GUILD_ID));
-      await guild.commands.set(slashCommands);
-      console.log(`[SLASH] ${slashCommands.length} comandos registrados em ${guild.name}.`);
+      const hash = crypto
+        .createHash("sha256")
+        .update(JSON.stringify({ guild: GUILD_ID, commands: slashCommands }))
+        .digest("hex");
 
-      // Limpa os comandos globais antigos para não aparecerem duplicados.
-      await client.application.commands.set([]);
+      let savedHash = null;
+      try {
+        savedHash = (await getBotConfig()).slashHash ?? null;
+      } catch (err) {
+        console.error("[SLASH] Não consegui ler o hash salvo (vou registrar normalmente):", err.message);
+      }
+
+      if (savedHash === hash && process.env.FORCE_SLASH !== "1") {
+        console.log(`[SLASH] ${slashCommands.length} comandos sem mudanças, registro ignorado.`);
+      } else {
+        const guild =
+          client.guilds.cache.get(GUILD_ID) ?? (await client.guilds.fetch(GUILD_ID));
+        await guild.commands.set(slashCommands);
+        console.log(`[SLASH] ${slashCommands.length} comandos registrados em ${guild.name}.`);
+
+        // Limpa os comandos globais antigos para não aparecerem duplicados.
+        await client.application.commands.set([]);
+
+        // Só salva o hash depois do registro dar certo: se falhar, tenta de novo no próximo início
+        try {
+          await saveBotConfig({ slashHash: hash });
+        } catch (err) {
+          console.error("[SLASH] Não consegui salvar o hash (vai registrar de novo no próximo início):", err.message);
+        }
+      }
     } catch (err) {
       console.error("[SLASH] Erro ao registrar os comandos:", err.message);
     }

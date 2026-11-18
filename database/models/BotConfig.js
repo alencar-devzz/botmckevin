@@ -14,6 +14,9 @@ const botConfigSchema = new Schema({
   presenceState: { type: String, default: null },
   presenceUrl: { type: String, default: null },
   presenceStatus: { type: String, default: "online" }, // online, idle, dnd ou invisible
+
+  // Hash dos slash commands registrados da última vez (events/ready.js): se não mudou, o registro é pulado
+  slashHash: { type: String, default: null },
 });
 
 module.exports = model("BotConfig", botConfigSchema);
