@@ -1,6 +1,6 @@
 const { MessageFlags } = require("discord.js");
 const { clearPendingModeration } = require("../utils/pendingModeration");
-const { buildResultPanel } = require("../ui/moderation");
+const { buildResultPanel, buildDonePanel } = require("../ui/moderation");
 const { formatDuration } = require("../utils/formatDuration");
 const { markCommandExit, clearCommandExit } = require("../utils/logs/suppress");
 
@@ -14,20 +14,6 @@ function scheduleSelfDelete(interaction, ms) {
       interaction.message?.delete().catch(() => {});
     }
   }, ms);
-}
-
-function successText(action, targetTag, targetId, duration) {
-  if (action === "mute") {
-    return `**${targetTag}** · \`${targetId}\` Foi mutado com sucesso por ${formatDuration(duration)}!`;
-  }
-
-  const verbos = {
-    ban: "Foi banido com sucesso!",
-    unban: "Foi desbanido com sucesso!",
-    kick: "Foi expulso com sucesso!",
-    unmute: "Foi desmutado com sucesso!",
-  };
-  return `**${targetTag}** · \`${targetId}\` ${verbos[action]}`;
 }
 
 async function handleModerationButton(interaction) {
@@ -51,7 +37,7 @@ async function handleModerationButton(interaction) {
     return;
   }
 
-  const { action, targetId, targetTag, reason, guild, member, duration, avatarUrl } = pending;
+  const { action, targetId, reason, guild, member, duration, avatarUrl, authorId } = pending;
 
   // Kick e ban pelo comando: só o log de Expulsão/Banimento é enviado (ver utils/logs/suppress.js)
   if (action === "ban" || action === "kick") markCommandExit(guild.id, targetId, action);
@@ -89,11 +75,16 @@ async function handleModerationButton(interaction) {
   }
 
   await interaction.update({
-    components: buildResultPanel(
-      successText(action, targetTag, targetId, duration),
-      avatarUrl
-    ),
+    components: buildDonePanel({
+      action,
+      userId: targetId,
+      executorId: interaction.user.id ?? authorId,
+      reason,
+      avatarUrl,
+      extra: action === "mute" ? `Duração: ${formatDuration(duration)}` : null,
+    }),
     flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [] },
   });
   scheduleSelfDelete(interaction, 5000);
 }

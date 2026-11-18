@@ -43,7 +43,6 @@ function buildConfirmPanel({
   // Título e pergunta
   container.addTextDisplayComponents(display(`## ${title}`), display(`-# ${question}`));
   container.addSeparatorComponents(new SeparatorBuilder());
-  container.addTextDisplayComponents(display("Ação realizada com sucesso"));
 
   // Usuário (menção que não pinga, por causa do allowedMentions) + ID, com a foto no canto
   if (userId) {
@@ -87,6 +86,41 @@ function buildConfirmPanel({
   return [container];
 }
 
+const DONE_TITLES = {
+  ban: "Banimento concluído",
+  unban: "Unban concluído",
+  kick: "Expulsão concluída",
+  mute: "Mute concluído",
+  unmute: "Unmute concluído",
+};
+
+// Painel mostrado só depois que a ação foi concluída (sem cor, sem botões).
+// executorId: staff que confirmou | extra: linha opcional (ex.: duração do mute)
+function buildDonePanel({ action, userId, executorId, reason, avatarUrl = null, extra = null }) {
+  const container = new ContainerBuilder();
+  const display = (content) => new TextDisplayBuilder().setContent(content);
+
+  container.addTextDisplayComponents(
+    display(`## ${DONE_TITLES[action] ?? "Ação concluída"}`),
+    display(extra ? `Ação realizada com sucesso\n-# ${extra}` : "Ação realizada com sucesso")
+  );
+  container.addSeparatorComponents(new SeparatorBuilder());
+
+  addTexts(container, [`**Usuário**\n<@${userId}>\n-# **ID:** ${userId}`], avatarUrl);
+
+  const motivo = String(reason ?? "").trim() || "Não inserido";
+  const quoted = motivo
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+  container.addTextDisplayComponents(display(`**Motivo**\n${quoted}`));
+
+  const now = Math.floor(Date.now() / 1000);
+  container.addTextDisplayComponents(display(`**Executor**\n<@${executorId}> · <t:${now}:f>`));
+
+  return [container];
+}
+
 // avatarUrl: foto do usuário alvo (opcional).
 function buildResultPanel(text, avatarUrl = null) {
   const container = new ContainerBuilder();
@@ -94,4 +128,4 @@ function buildResultPanel(text, avatarUrl = null) {
   return [container];
 }
 
-module.exports = { buildConfirmPanel, buildResultPanel };
+module.exports = { buildConfirmPanel, buildDonePanel, buildResultPanel };
