@@ -309,7 +309,7 @@ async function handleCallHubConfigModal(interaction) {
 // Todos os textos abaixo vêm de utils/callHubMessages.js e são editáveis em n!menu → Mensagens e respostas.
 
 // Botões de painéis antigos (enviados antes do gerenciador de calls)
-const LEGACY_ACTIONS = { owner: "info" };
+const LEGACY_ACTIONS = { info: "owner" };
 const REMOVED_ACTIONS = new Set(["transfer"]);
 
 // Retorna { channel } ou responde com um aviso e retorna null
@@ -435,10 +435,12 @@ async function runPanelAction(interaction, rawAction, cfg) {
         })
       );
 
-    case "info":
+    case "owner":
+      // Quem está na call é o dono dela: mostra a menção de quem clicou
       return reply(
         interaction,
-        say(cfg, "callInfo", {
+        say(cfg, "ownerInfo", {
+          dono: `<@${member.id}>`,
           canal: `<#${channel.id}>`,
           acesso: accessWord(cfg, channel),
           limite: channel.userLimit ? say(cfg, "limitValue", { n: channel.userLimit }) : say(cfg, "limitNone"),

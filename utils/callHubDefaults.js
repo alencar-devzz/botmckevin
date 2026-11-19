@@ -4,7 +4,7 @@
 
 // Seções do painel de gerenciamento da call (mesma ordem da tela)
 const SECTIONS = [
-  { id: "access", titleKey: "accessTitle", descKey: "accessDesc", keys: ["lock", "unlock", "limit", "info"] },
+  { id: "access", titleKey: "accessTitle", descKey: "accessDesc", keys: ["lock", "unlock", "limit", "owner"] },
   { id: "members", titleKey: "membersTitle", descKey: "membersDesc", keys: ["add", "remove", "kick", "move"] },
   { id: "tools", titleKey: "toolsTitle", descKey: "toolsDesc", keys: ["blacklist", "save", "load"] },
 ];
@@ -14,7 +14,7 @@ const DEFAULT_BUTTONS = {
   lock: ["Privar", "fecha a call e escolhe quem pode continuar entrando"],
   unlock: ["Desprivar", "devolve o acesso público à call"],
   limit: ["Limite", "define o máximo de pessoas que cabem na call"],
-  info: ["Informações", "mostra os dados da call em que você está"],
+  owner: ["Ver Dono", "mostra quem é o dono da call em que você está"],
   add: ["Adicionar", "libera a entrada de um usuário específico"],
   remove: ["Remover", "tira a permissão de entrada de alguém"],
   kick: ["Desconectar", "expulsa um usuário que está na call agora"],
@@ -31,7 +31,7 @@ const DEFAULT_STYLES = {
   lock: "blue",
   unlock: "blue",
   limit: "blue",
-  info: "gray",
+  owner: "gray",
   add: "gray",
   remove: "gray",
   kick: "red",
