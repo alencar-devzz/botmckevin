@@ -70,7 +70,7 @@ function reasonOf(err) {
   const code = err?.code;
   if (code === 30008) return "limite de emojis do servidor atingido";
   if (code === 50013 || code === 50001) return "o bot não tem permissão para criar emojis";
-  if (code === 50035) return "imagem ou nome inválido (a imagem deve ter até 256 KB)";
+  if (code === 50035) return err?.rawError?.errors ? `recusado pelo Discord: ${JSON.stringify(err.rawError.errors).slice(0, 70)}` : "imagem ou nome inválido (a imagem deve ter até 256 KB)";
   return String(err?.message || err?.name || "erro desconhecido").slice(0, 90);
 }
 
@@ -178,8 +178,8 @@ async function runJob(state, job) {
         const left = state.expiresAt - Date.now();
         if (state.closed) throw Object.assign(new Error("encerrado durante o limite do Discord"), { code: "STOPPED" });
         if (attempt >= MAX_RATE_RETRIES || ms > left - 5000) {
-          const min = Math.max(1, Math.ceil(ms / 60_000));
-          throw Object.assign(new Error(`limite do Discord para criar emojis, tente de novo em cerca de ${min} min`), { code: "RATE" });
+          const volta = Math.ceil((Date.now() + ms) / 1000);
+          throw Object.assign(new Error(`limite do Discord para criar emojis, libera <t:${volta}:R>`), { code: "RATE" });
         }
         state.waitUntil = Date.now() + ms;
         scheduleFlush(state);
@@ -189,6 +189,7 @@ async function runJob(state, job) {
     }
     state.ok.push(emoji.toString());
   } catch (err) {
+    console.error(`[ADDEMOJI] Falha ao criar "${job.name}":`, err?.code ?? "", err?.name ?? "", err?.message ?? "", err?.rawError ? JSON.stringify(err.rawError).slice(0, 300) : "");
     state.failed.push({ name: job.name, reason: reasonOf(err) });
   }
   state.waitUntil = 0;

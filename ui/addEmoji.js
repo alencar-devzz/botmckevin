@@ -62,6 +62,11 @@ function buildActive(state) {
       )
     );
 
+  if (state.failed.length) {
+    const lines = state.failed.slice(-3).map((f) => `• \`${clip(f.name, 32)}\`: ${clip(f.reason, 110)}`);
+    container.addTextDisplayComponents(text(`**Últimas falhas**\n${lines.join("\n")}`));
+  }
+
   if (state.ok.length) {
     const shown = state.ok.slice(-24);
     container.addTextDisplayComponents(
