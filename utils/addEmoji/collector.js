@@ -11,6 +11,9 @@ const FLUSH_MS = 900; // junta várias atualizações do painel em uma só (limi
 const MAX_PER_INPUT = 50;
 const MAX_FILE_BYTES = 256 * 1024;
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+const DOWNLOAD_TIMEOUT_MS = 15_000; // baixar a imagem nunca pode prender a fila
+const CREATE_TIMEOUT_MS = 60_000; // criar o emoji nunca pode prender a fila
+const MAX_RATE_RETRIES = 3;
 
 const sessions = new Map(); // sid -> state
 const byKey = new Map(); // guildId:channelId:userId -> sid
@@ -68,10 +71,51 @@ function reasonOf(err) {
   if (code === 30008) return "limite de emojis do servidor atingido";
   if (code === 50013 || code === 50001) return "o bot não tem permissão para criar emojis";
   if (code === 50035) return "imagem ou nome inválido (a imagem deve ter até 256 KB)";
-  return String(err?.message ?? "erro desconhecido").slice(0, 80);
+  return String(err?.message ?? "erro desconhecido").slice(0, 90);
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error(message), { code: "TIMEOUT" })), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+// Baixa a imagem aqui (com tempo limite) em vez de deixar o discord.js baixar sem limite nenhum
+async function downloadImage(url) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`não consegui baixar a imagem (HTTP ${res.status})`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.length > MAX_FILE_BYTES) throw Object.assign(new Error("imagem maior que 256 KB"), { code: 50035 });
+  return buffer;
+}
+
+// O discord.js, ao bater no limite de criação de emojis, espera em silêncio (às vezes por muitos minutos) e o
+// painel parecia travado. Aqui o limite de emojis passa a gerar um erro na hora e a fila espera de forma visível.
+function installRateLimitGuard(client) {
+  const rest = client?.rest;
+  if (!rest?.options || rest.options.__emojiGuard) return;
+  const previous = rest.options.rejectOnRateLimit;
+  rest.options.rejectOnRateLimit = async (data) => {
+    if (!data?.global && /\/emojis/i.test(String(data?.route ?? "")) && String(data?.method).toUpperCase() === "POST") return true;
+    if (typeof previous === "function") return previous(data);
+    if (Array.isArray(previous)) return previous.some((route) => String(data?.route ?? "").startsWith(route.toLowerCase()));
+    return Boolean(previous);
+  };
+  rest.options.__emojiGuard = true;
+}
+
+// Espera o limite acabar, mas acorda na hora se a sessão for encerrada
+async function waitForReset(state, ms) {
+  await Promise.race([wait(ms), new Promise((resolve) => (state.wake = resolve))]);
+  state.wake = null;
 }
 
 function createSession({ interaction }) {
+  installRateLimitGuard(interaction.client);
   const sid = crypto.randomBytes(4).toString("hex");
   const state = {
     sid,
@@ -84,6 +128,8 @@ function createSession({ interaction }) {
     ok: [], // marcação dos emojis criados
     failed: [], // { name, reason }
     current: null,
+    waitUntil: 0, // enquanto o Discord limita a criação de emojis, quando a fila volta
+    wake: null,
     chain: Promise.resolve(),
     closed: false,
     reason: null,
@@ -108,16 +154,41 @@ const findSession = (guildId, channelId, userId) => sessions.get(byKey.get(keyOf
 
 // ---------- Fila ----------
 
+async function createEmoji(state, job) {
+  const attachment = job.size && job.size > MAX_FILE_BYTES
+    ? (() => { throw Object.assign(new Error("imagem maior que 256 KB"), { code: 50035 }); })()
+    : await downloadImage(job.url);
+  return withTimeout(state.guild.emojis.create({ attachment, name: job.name }), CREATE_TIMEOUT_MS, "o Discord demorou demais para responder");
+}
+
 async function runJob(state, job) {
   state.current = job.name;
   scheduleFlush(state);
   try {
-    if (job.size && job.size > MAX_FILE_BYTES) throw Object.assign(new Error("imagem maior que 256 KB"), { code: 50035 });
-    const emoji = await state.guild.emojis.create({ attachment: job.url, name: job.name });
+    let emoji = null;
+    for (let attempt = 0; !emoji; attempt++) {
+      try {
+        emoji = await createEmoji(state, job);
+      } catch (err) {
+        if (err?.name !== "RateLimitError") throw err;
+        const ms = Math.max(Number(err.timeToReset ?? err.retryAfter) || 0, 1000) + 500;
+        const left = state.expiresAt - Date.now();
+        if (state.closed) throw Object.assign(new Error("encerrado durante o limite do Discord"), { code: "STOPPED" });
+        if (attempt >= MAX_RATE_RETRIES || ms > left - 5000) {
+          const min = Math.max(1, Math.ceil(ms / 60_000));
+          throw Object.assign(new Error(`limite do Discord para criar emojis, tente de novo em cerca de ${min} min`), { code: "RATE" });
+        }
+        state.waitUntil = Date.now() + ms;
+        scheduleFlush(state);
+        await waitForReset(state, ms);
+        state.waitUntil = 0;
+      }
+    }
     state.ok.push(emoji.toString());
   } catch (err) {
     state.failed.push({ name: job.name, reason: reasonOf(err) });
   }
+  state.waitUntil = 0;
   state.done += 1;
   state.current = null;
   scheduleFlush(state);
@@ -152,6 +223,7 @@ async function finalize(state, reason) {
     clearTimeout(state.expireTimer);
     state.flushTimer = null;
   }
+  state.wake?.(); // se a fila estiver esperando o limite do Discord, não prende o encerramento
   await state.chain;
   sessions.delete(state.sid);
   if (byKey.get(state.key) === state.sid) byKey.delete(state.key);

@@ -51,7 +51,11 @@ function buildActive(state) {
         [
           dots(state.done, state.total),
           `**Processados:** ${state.done}/${state.total} · **Adicionados:** ${state.ok.length} · **Falhas:** ${state.failed.length}`,
-          state.current ? `-# Adicionando agora: ${clip(state.current, 60)}` : null,
+          state.waitUntil > Date.now()
+            ? `-# O Discord limitou a criação de emojis. Continuo sozinho <t:${Math.ceil(state.waitUntil / 1000)}:R>: ${clip(state.current, 60)}`
+            : state.current
+              ? `-# Adicionando agora: ${clip(state.current, 60)}`
+              : null,
         ]
           .filter(Boolean)
           .join("\n")
