@@ -71,8 +71,11 @@ function reasonOf(err) {
   if (code === 30008) return "limite de emojis do servidor atingido";
   if (code === 50013 || code === 50001) return "o bot não tem permissão para criar emojis";
   if (code === 50035) return "imagem ou nome inválido (a imagem deve ter até 256 KB)";
-  return String(err?.message ?? "erro desconhecido").slice(0, 90);
+  return String(err?.message || err?.name || "erro desconhecido").slice(0, 90);
 }
+
+// O nome do erro do discord.js vem como "RateLimitError[/guilds/:id/emojis]" e a mensagem vem vazia
+const isRateLimit = (err) => String(err?.name ?? "").startsWith("RateLimitError") || (err?.timeToReset != null && err?.route != null);
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -170,7 +173,7 @@ async function runJob(state, job) {
       try {
         emoji = await createEmoji(state, job);
       } catch (err) {
-        if (err?.name !== "RateLimitError") throw err;
+        if (!isRateLimit(err)) throw err;
         const ms = Math.max(Number(err.timeToReset ?? err.retryAfter) || 0, 1000) + 500;
         const left = state.expiresAt - Date.now();
         if (state.closed) throw Object.assign(new Error("encerrado durante o limite do Discord"), { code: "STOPPED" });
