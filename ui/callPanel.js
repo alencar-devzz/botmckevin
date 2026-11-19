@@ -168,6 +168,29 @@ function buildPicker({ action, title, hint, placeholder = "Selecione", min = 1, 
   return [container];
 }
 
+// Seletor com uma lista fixa de pessoas (só quem está na call). members = [{ id, name, username }] (até 25)
+function buildMemberPicker({ action, title, hint, placeholder = "Selecione", members }) {
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`cpn_pick:${action}`)
+    .setPlaceholder(clip(placeholder, 100))
+    .setMinValues(1)
+    .setMaxValues(1)
+    .addOptions(
+      members.slice(0, 25).map((m) => ({
+        label: clip(m.name, 100) || m.id,
+        description: clip(`@${m.username}`, 100),
+        value: m.id,
+      }))
+    );
+
+  const container = new ContainerBuilder().addTextDisplayComponents(
+    text(`## ${clip(title, 100)}`),
+    text(`-# ${clip(hint, 300)}`)
+  );
+  container.addActionRowComponents(new ActionRowBuilder().addComponents(select));
+  return [container];
+}
+
 // texts: { title, label, desc, placeholder } vindos de n!menu → Mensagens e respostas
 function buildLimitModal(current, texts = {}) {
   const input = new TextInputBuilder()
@@ -189,4 +212,4 @@ function buildLimitModal(current, texts = {}) {
     );
 }
 
-module.exports = { buildCallPanel, buildNotice, buildPicker, buildLimitModal };
+module.exports = { buildCallPanel, buildNotice, buildPicker, buildMemberPicker, buildLimitModal };

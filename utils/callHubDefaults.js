@@ -6,7 +6,7 @@
 const SECTIONS = [
   { id: "access", titleKey: "accessTitle", descKey: "accessDesc", keys: ["lock", "unlock", "limit", "owner"] },
   { id: "members", titleKey: "membersTitle", descKey: "membersDesc", keys: ["add", "remove", "kick", "move"] },
-  { id: "tools", titleKey: "toolsTitle", descKey: "toolsDesc", keys: ["blacklist", "save", "load"] },
+  { id: "tools", titleKey: "toolsTitle", descKey: "toolsDesc", keys: ["transfer", "blacklist", "save", "load"] },
 ];
 
 // [nome do botão, descrição]
@@ -19,6 +19,7 @@ const DEFAULT_BUTTONS = {
   remove: ["Remover", "tira a permissão de entrada de alguém"],
   kick: ["Desconectar", "expulsa um usuário que está na call agora"],
   move: ["Mover", "puxa alguém de outro canal direto pra esta call"],
+  transfer: ["Transferir", "passa o controle da call pra outro membro"],
   blacklist: ["Blacklist", "bloqueia um usuário de entrar nesta call"],
   save: ["Salvar Config", "grava as configurações atuais da call"],
   load: ["Usar Config", "aplica nesta call a configuração que você salvou antes"],
@@ -36,6 +37,7 @@ const DEFAULT_STYLES = {
   remove: "gray",
   kick: "red",
   move: "gray",
+  transfer: "gray",
   blacklist: "red",
   save: "green",
   load: "green",
