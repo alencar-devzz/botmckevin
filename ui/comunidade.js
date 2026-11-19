@@ -6,8 +6,8 @@ const OPCOES = [
   { label: "Auto-roles", description: "Configure os cargos automáticos.", value: "autoroles" },
   { label: "Posts e Instagram", description: "Fotos e vídeos com curtidas e comentários.", value: "posts" },
   {
-    label: "Calls temporárias",
-    description: "Call própria para quem entra no gatilho e painel de gerenciamento.",
+    label: "Gerenciador de calls",
+    description: "Quem está em qualquer call gerencia ela pelo painel. Acesso, cargos e visual.",
     value: "calls",
   },
   {

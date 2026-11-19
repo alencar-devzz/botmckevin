@@ -18,7 +18,7 @@ const KEYWORDS = {
   "comunidade:portaria": ["boas vindas", "bem vindo", "bem vindos", "welcome", "entrada", "saida", "dm", "filtro", "conta", "idade", "recepcao", "join"],
   "comunidade:autoroles": ["autorole", "auto role", "cargo automatico", "cargos automaticos", "cargo ao entrar"],
   "comunidade:posts": ["post", "instagram", "insta", "foto", "video", "curtida", "comentario", "feed", "rede social"],
-  "comunidade:calls": ["call", "voz", "voice", "temporaria", "sala", "canal de voz", "gatilho", "painel da call"],
+  "comunidade:calls": ["call", "calls", "voz", "voice", "gerenciar", "gerenciador", "sala", "canal de voz", "painel da call", "privar", "limite"],
   "comunidade:cl": ["limpar", "apagar mensagens", "clear", "comando"],
   "comunidade:spotify": ["musica", "som", "card", "letra", "ouvindo", "comando"],
   "comunidade:convites": ["convite", "invite", "invites", "fake", "recompensa", "conquista", "link de convite"],
@@ -122,7 +122,7 @@ function scoreEntry(entry, queryWords, queryNormalized) {
   let score = sum / queryWords.length;
   if (best < 0.65 || score < 0.4) return 0;
 
-  // frase inteira dentro do nome do sistema ("calls temp" em "Calls temporárias")
+  // frase inteira dentro do nome do sistema ("gerenciador" em "Gerenciador de calls")
   const label = normalize(entry.label);
   if (queryNormalized === label) score += 0.3;
   else if (label.includes(queryNormalized)) score += 0.15;

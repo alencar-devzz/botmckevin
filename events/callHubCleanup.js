@@ -1,9 +1,10 @@
-const { forgetRoom, getRoom } = require("../utils/callHub");
+const CallRoom = require("../database/models/CallRoom");
 
-// Se alguém apagar uma call automática na mão, limpa o registro dela
+// Resto do sistema antigo de calls temporárias: se um canal que ainda estava registrado for apagado,
+// o registro some do banco. (O gerenciador de calls novo não usa mais esse registro.)
 module.exports = {
   name: "channelDelete",
   async execute(channel) {
-    if (getRoom(channel.id)) await forgetRoom(channel.id);
+    await CallRoom.deleteOne({ channelId: channel.id }).catch(() => {});
   },
 };

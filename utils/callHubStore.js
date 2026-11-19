@@ -1,6 +1,5 @@
 const CallHubConfig = require("../database/models/CallHubConfig");
 const {
-  DEFAULT_NAME_TEMPLATE,
   DEFAULT_TEXTS,
   TEXT_KEYS,
   BUTTON_KEYS,
@@ -13,10 +12,6 @@ const TTL = 60_000;
 const cache = new Map(); // guildId -> { cfg, at }
 
 const ids = (list) => [...new Set((Array.isArray(list) ? list : []).map(String))];
-const int = (value, fallback, min, max) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.floor(n))) : fallback;
-};
 
 function toConfig(doc) {
   const saved = doc?.texts ?? {};
@@ -39,15 +34,7 @@ function toConfig(doc) {
 
   return {
     enabled: doc?.enabled ?? true,
-    triggerChannelId: doc?.triggerChannelId || null,
-    categoryId: doc?.categoryId || null,
-    nameTemplate: doc?.nameTemplate || DEFAULT_NAME_TEMPLATE,
-    defaultLimit: int(doc?.defaultLimit, 0, 0, 99),
-    defaultPrivate: doc?.defaultPrivate ?? false,
-    deleteDelay: int(doc?.deleteDelay, 0, 0, 300),
-    autoTransfer: doc?.autoTransfer ?? true,
-    sendPanel: doc?.sendPanel ?? true,
-    cooldown: int(doc?.cooldown, 0, 0, 3600),
+    ignoredChannels: ids(doc?.ignoredChannels),
     allowedRoles: ids(doc?.allowedRoles),
     blockedRoles: ids(doc?.blockedRoles),
     staffRoles: ids(doc?.staffRoles),

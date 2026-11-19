@@ -1,5 +1,4 @@
 const { onBotVoiceStateUpdate } = require("../utils/callKeeper");
-const { onVoiceStateUpdate: onCallHubVoiceState } = require("../utils/callHub");
 
 module.exports = {
   name: "voiceStateUpdate",
@@ -12,8 +11,5 @@ module.exports = {
         console.error("[BOTCALL] Erro no evento de voz do bot:", err);
       }
     }
-
-    // Calls temporárias (cria ao entrar no canal gatilho e apaga quando esvazia)
-    onCallHubVoiceState(oldState, newState).catch((err) => console.error("[CALLS] Erro no evento de voz:", err));
   },
 };

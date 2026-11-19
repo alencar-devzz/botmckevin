@@ -15,8 +15,8 @@ async function warn(message, content) {
 
 // Envia o painel de gerenciamento de call como painel fixo no canal.
 // QUEM ENVIA: só a moderação (Administrador, cargos da equipe ou cargos de staff configurados nas calls).
-// QUEM USA OS BOTÕES: só o dono de uma call (ver requireRoom em handlers/callHubHandlers.js).
-// A aparência é configurada em n!menu → Comunidade e interação → Calls temporárias → Painel da call.
+// QUEM USA OS BOTÕES: quem estiver em uma call de voz (ver requireCall em handlers/callHubHandlers.js).
+// A aparência é configurada em n!menu → Comunidade e interação → Gerenciador de calls → Painel da call.
 module.exports = {
   name: "painel",
   async execute(message) {

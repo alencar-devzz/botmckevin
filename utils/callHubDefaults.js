@@ -1,30 +1,27 @@
-// Valores padrão do sistema "Calls temporárias" (call criada quando alguém entra no canal gatilho).
-// Tudo aqui pode ser alterado depois pelo menu: Comunidade e interação → Calls temporárias.
+// Valores padrão do "Gerenciador de calls" (quem está em qualquer call de voz do servidor gerencia ela pelo painel).
+// Tudo aqui pode ser alterado depois pelo menu: Comunidade e interação → Gerenciador de calls.
 // Estes valores só valem enquanto o servidor não editou o texto correspondente.
-
-const DEFAULT_NAME_TEMPLATE = "{nametag}";
 
 // Seções do painel de gerenciamento da call (mesma ordem da tela)
 const SECTIONS = [
-  { id: "access", titleKey: "accessTitle", descKey: "accessDesc", keys: ["lock", "unlock", "limit", "owner"] },
+  { id: "access", titleKey: "accessTitle", descKey: "accessDesc", keys: ["lock", "unlock", "limit", "info"] },
   { id: "members", titleKey: "membersTitle", descKey: "membersDesc", keys: ["add", "remove", "kick", "move"] },
-  { id: "tools", titleKey: "toolsTitle", descKey: "toolsDesc", keys: ["transfer", "blacklist", "save", "load"] },
+  { id: "tools", titleKey: "toolsTitle", descKey: "toolsDesc", keys: ["blacklist", "save", "load"] },
 ];
 
 // [nome do botão, descrição]
 const DEFAULT_BUTTONS = {
   lock: ["Privar", "fecha a call e escolhe quem pode continuar entrando"],
-  unlock: ["Desprivar", "devolve o acesso público ao canal"],
+  unlock: ["Desprivar", "devolve o acesso público à call"],
   limit: ["Limite", "define o máximo de pessoas que cabem na call"],
-  owner: ["Ver Dono", "exibe quem está no controle do canal"],
+  info: ["Informações", "mostra os dados da call em que você está"],
   add: ["Adicionar", "libera a entrada de um usuário específico"],
   remove: ["Remover", "tira a permissão de entrada de alguém"],
   kick: ["Desconectar", "expulsa um usuário que está na call agora"],
-  move: ["Mover", "puxa alguém de outro canal direto pra sua call"],
-  transfer: ["Transferir", "passa o controle da call pra outro membro"],
-  blacklist: ["Blacklist", "bloqueia um usuário de entrar na sua call"],
+  move: ["Mover", "puxa alguém de outro canal direto pra esta call"],
+  blacklist: ["Blacklist", "bloqueia um usuário de entrar nesta call"],
   save: ["Salvar Config", "grava as configurações atuais da call"],
-  load: ["Usar Config", "aplica uma configuração que você salvou antes"],
+  load: ["Usar Config", "aplica nesta call a configuração que você salvou antes"],
 };
 
 const BUTTON_KEYS = Object.keys(DEFAULT_BUTTONS);
@@ -34,12 +31,11 @@ const DEFAULT_STYLES = {
   lock: "blue",
   unlock: "blue",
   limit: "blue",
-  owner: "gray",
+  info: "gray",
   add: "gray",
   remove: "gray",
   kick: "red",
   move: "gray",
-  transfer: "gray",
   blacklist: "red",
   save: "green",
   load: "green",
@@ -56,8 +52,8 @@ const DEFAULT_TEXTS = {
   // Os textos abaixo aceitam formatação livre do Discord: # título, ## subtítulo, -# texto pequeno,
   // > citação, **negrito**, *itálico*, `código`. O painel mostra exatamente o que estiver escrito.
   title: "# Gerenciamento de Call",
-  desc: "> Utilize os botões abaixo para gerenciar sua call.",
-  footer: "-# Só o dono da call consegue usar os botões.", // "nenhum" = sem rodapé
+  desc: "> Entre em uma call e utilize os botões abaixo para gerenciá-la.",
+  footer: "-# Os botões funcionam na call de voz em que você está agora.", // "nenhum" = sem rodapé
   accessTitle: "**ACESSO E PRIVACIDADE**",
   membersTitle: "**GERENCIAR MEMBROS**",
   toolsTitle: "**FERRAMENTAS**",
@@ -74,7 +70,6 @@ for (const key of BUTTON_KEYS) {
 const TEXT_KEYS = Object.keys(DEFAULT_TEXTS);
 
 module.exports = {
-  DEFAULT_NAME_TEMPLATE,
   SECTIONS,
   DEFAULT_BUTTONS,
   BUTTON_KEYS,

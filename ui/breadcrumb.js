@@ -24,7 +24,7 @@ const ROOTS = [
   { prefix: "port_", trail: [COMUNIDADE, "Portaria"] },
   { prefix: "autoroles_", trail: [COMUNIDADE, "Auto-roles"] },
   { prefix: "pcfg_", trail: [COMUNIDADE, "Posts"], home: ["Posts e Instagram"] },
-  { prefix: "chcfg_", trail: [COMUNIDADE, "Calls"], home: ["Calls temporárias"] },
+  { prefix: "chcfg_", trail: [COMUNIDADE, "Calls"], home: ["Gerenciador de calls"] },
   { prefix: "clcfg_", trail: [COMUNIDADE, "cl"], home: ["Comando cl"] },
   { prefix: "sptcfg_", trail: [COMUNIDADE, "Spotify"], home: ["Comando spotify"] },
   { prefix: "invcfg_", trail: [COMUNIDADE, "Convites"] },

@@ -47,7 +47,7 @@ const FALLBACK = {
   },
   painel: {
     category: "Comunidade",
-    description: "Envia o painel de gerenciamento das calls temporárias.",
+    description: "Envia o painel de gerenciamento de calls: quem estiver em uma call gerencia ela pelo painel.",
     usage: "painel",
     staffOnly: true,
   },

@@ -17,7 +17,7 @@ const { textLabel, selectLabel, modal } = require("./modalHelpers");
 const { SECTIONS, DEFAULT_TEXTS, STYLE_LABELS } = require("../utils/callHubDefaults");
 const { GROUPS, MESSAGES, DEFAULT_MESSAGES } = require("../utils/callHubMessages");
 
-// Painéis do menu: Comunidade e interação → Calls temporárias
+// Painéis do menu: Comunidade e interação → Gerenciador de calls
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3000));
 const clip = (value, max) => String(value ?? "").slice(0, max);
@@ -54,67 +54,43 @@ function thumbLabel(value) {
 // ---------- Painel principal ----------
 
 function buildCallHubHome(guild, cfg, prefix) {
-  const trigger = cfg.triggerChannelId && guild.channels.cache.has(cfg.triggerChannelId) ? cfg.triggerChannelId : null;
-  const category = cfg.categoryId && guild.channels.cache.has(cfg.categoryId) ? cfg.categoryId : null;
+  const ignored = cfg.ignoredChannels.filter((id) => guild.channels.cache.has(id));
   const missing = missingPerms(guild);
 
   const header = new ContainerBuilder().addTextDisplayComponents(
-    text("### Calls temporárias"),
-    text("-# Quem entra no canal gatilho ganha uma call só dele, com o nome dele. Quando todo mundo sai, a call é apagada."),
-    text(`-# Sistema: **${cfg.enabled ? "ativado" : "desativado"}**${trigger ? "" : " · escolha o canal gatilho abaixo para funcionar"}`)
+    text("### Gerenciador de calls"),
+    text("-# Quem estiver em qualquer call de voz do servidor gerencia ela pelo painel. Quem não estiver em uma call recebe um aviso só para ele."),
+    text(`-# Sistema: **${cfg.enabled ? "ativado" : "desativado"}**`)
   );
 
-  const example = cfg.nameTemplate.replace(/\{(nametag|username|globalname)\}/gi, "Fulano");
   const status = new ContainerBuilder().addTextDisplayComponents(
     text("**Situação atual**"),
     text(
       [
-        `**Canal gatilho:** ${trigger ? `<#${trigger}>` : "`Nenhum`"}`,
-        `**Categoria das calls:** ${category ? `<#${category}>` : "mesma categoria do gatilho"}`,
-        `**Nome da call:** \`${cfg.nameTemplate}\` (ex.: \`${example}\`)`,
-        `**Limite padrão:** ${cfg.defaultLimit ? `\`${cfg.defaultLimit}\` pessoas` : "`sem limite`"} · **Nasce privada:** ${yesNo(cfg.defaultPrivate)}`,
-        `**Apagar quando vazia:** ${cfg.deleteDelay ? `após \`${cfg.deleteDelay}s\`` : "na hora"} · **Espera entre criações:** ${cfg.cooldown ? `\`${cfg.cooldown}s\`` : "`nenhuma`"}`,
-        `**Dono saiu:** ${cfg.autoTransfer ? "passa o controle para quem ficou" : "a call continua com o mesmo dono"}`,
-        `**Painel no chat da call:** ${yesNo(cfg.sendPanel)} · **Comando do painel:** \`${prefix}painel\``,
-        `**Quem pode criar:** ${cfg.allowedRoles.length ? mentionRoles(guild, cfg.allowedRoles) : "todos"} · **Bloqueados:** ${mentionRoles(guild, cfg.blockedRoles)}`,
-        `**Moderação (envia o painel fixo):** ${mentionRoles(guild, cfg.staffRoles)}`,
+        "**Funciona em:** qualquer call de voz do servidor, menos as ignoradas",
+        `**Calls ignoradas:** ${ignored.length ? ignored.map((id) => `<#${id}>`).join(" ") : "`Nenhuma`"}`,
+        `**Quem pode usar:** ${cfg.allowedRoles.length ? mentionRoles(guild, cfg.allowedRoles) : "todos"} · **Bloqueados:** ${mentionRoles(guild, cfg.blockedRoles)}`,
+        `**Comando do painel fixo:** \`${prefix}painel\` · **Moderação (envia o painel fixo):** ${mentionRoles(guild, cfg.staffRoles)}`,
         missing.length ? `**Permissões que faltam ao bot:** ${missing.join(", ")}` : "**Permissões do bot:** tudo certo",
       ].join("\n")
     )
   );
 
-  const triggerSelect = new ChannelSelectMenuBuilder()
-    .setCustomId("chcfg_trigger")
-    .setPlaceholder("Canal de voz gatilho (quem entra cria a call)")
+  const ignoredSelect = new ChannelSelectMenuBuilder()
+    .setCustomId("chcfg_ignored")
+    .setPlaceholder("Calls onde o painel não funciona (opcional)")
     .setChannelTypes(ChannelType.GuildVoice)
     .setMinValues(0)
-    .setMaxValues(1);
-  if (trigger) triggerSelect.setDefaultChannels(trigger);
-
-  const categorySelect = new ChannelSelectMenuBuilder()
-    .setCustomId("chcfg_category")
-    .setPlaceholder("Categoria onde as calls são criadas (opcional)")
-    .setChannelTypes(ChannelType.GuildCategory)
-    .setMinValues(0)
-    .setMaxValues(1);
-  if (category) categorySelect.setDefaultChannels(category);
+    .setMaxValues(25);
+  if (ignored.length) ignoredSelect.setDefaultChannels(...ignored.slice(0, 25));
 
   const controls = new ContainerBuilder()
     .addTextDisplayComponents(text("**Ajustes rápidos**"))
-    .addActionRowComponents(row(triggerSelect))
-    .addActionRowComponents(row(categorySelect))
+    .addActionRowComponents(row(ignoredSelect))
     .addActionRowComponents(
       row(
         btn("chcfg_toggle", cfg.enabled ? "Desativar" : "Ativar", cfg.enabled ? ButtonStyle.Danger : ButtonStyle.Success),
-        btn("chcfg_sendpanel", `Painel no chat: ${yesNo(cfg.sendPanel)}`),
-        btn("chcfg_private", `Nasce privada: ${yesNo(cfg.defaultPrivate)}`),
-        btn("chcfg_transfer", `Passar controle: ${yesNo(cfg.autoTransfer)}`)
-      )
-    )
-    .addActionRowComponents(
-      row(
-        btn("chcfg_edit:values", "Nome e limites"),
-        btn("chcfg_page:access", "Cargos e acesso"),
+        btn("chcfg_page:access", "Quem pode usar"),
         btn("chcfg_page:look", "Painel da call"),
         btn("chcfg_reset", "Restaurar tudo", ButtonStyle.Danger)
       )
@@ -135,20 +111,20 @@ function roleSelect(id, placeholder, list, guild) {
 
 function buildCallHubAccess(guild, cfg) {
   const header = new ContainerBuilder().addTextDisplayComponents(
-    text("### Cargos e acesso"),
-    text("-# Quem pode criar call e quem faz parte da moderação das calls.")
+    text("### Quem pode usar"),
+    text("-# Quais cargos usam o painel de gerenciamento e quais fazem parte da moderação das calls.")
   );
 
   const body = new ContainerBuilder()
     .addTextDisplayComponents(
-      text("**Quem pode criar call**"),
-      text("-# Vazio = todos podem. Se escolher cargos, só eles criam. Os bloqueados nunca criam.")
+      text("**Quem pode usar o painel**"),
+      text("-# Vazio = todos que estiverem em uma call podem. Se escolher cargos, só eles usam. Os bloqueados nunca usam.")
     )
-    .addActionRowComponents(roleSelect("chcfg_allowed", "Cargos que podem criar call", cfg.allowedRoles, guild))
-    .addActionRowComponents(roleSelect("chcfg_blocked", "Cargos que NÃO podem criar call", cfg.blockedRoles, guild))
+    .addActionRowComponents(roleSelect("chcfg_allowed", "Cargos que podem usar o painel", cfg.allowedRoles, guild))
+    .addActionRowComponents(roleSelect("chcfg_blocked", "Cargos que NÃO podem usar o painel", cfg.blockedRoles, guild))
     .addTextDisplayComponents(
       text("**Moderação**"),
-      text("-# Esses cargos (e quem tem Administrador) podem enviar o painel fixo com o comando do painel. Os botões do painel são só do dono da call.")
+      text("-# Esses cargos (e quem tem Administrador) podem enviar o painel fixo com o comando do painel. Os botões do painel valem para quem estiver na call.")
     )
     .addActionRowComponents(roleSelect("chcfg_staff", "Cargos da moderação", cfg.staffRoles, guild));
   body.addSeparatorComponents(new SeparatorBuilder());
@@ -164,7 +140,7 @@ function buildCallHubLook(guild, cfg, prefix) {
     text("### Painel da call"),
     text(`-# Tudo do painel de gerenciamento é ajustável aqui. Para deixar um painel fixo em um canal use \`${prefix}painel\` (só a moderação).`),
     text(
-      `-# Cor lateral: ${cfg.color === null ? "sem cor" : `\`#${cfg.color.toString(16).padStart(6, "0")}\``} · Miniatura: ${thumbLabel(cfg.thumbnail)} · Enviado no chat da call: ${yesNo(cfg.sendPanel)}`
+      `-# Cor lateral: ${cfg.color === null ? "sem cor" : `\`#${cfg.color.toString(16).padStart(6, "0")}\``} · Miniatura: ${thumbLabel(cfg.thumbnail)}`
     )
   );
 
@@ -370,45 +346,6 @@ function buildMessageModal(key, cfg) {
 const SHORT = TextInputStyle.Short;
 const PARAGRAPH = TextInputStyle.Paragraph;
 
-function buildValuesModal(cfg) {
-  return modal(
-    "chcfg_modal:values",
-    "Nome e limites",
-    textLabel({
-      id: "nameTemplate",
-      label: "Nome da call",
-      description: "Variáveis: {nametag} (apelido ou nome), {username}, {globalname}",
-      max: 100,
-      required: false,
-      value: cfg.nameTemplate,
-    }),
-    textLabel({
-      id: "defaultLimit",
-      label: "Limite de pessoas ao criar",
-      description: "0 = sem limite. Máximo 99.",
-      max: 2,
-      required: false,
-      value: String(cfg.defaultLimit),
-    }),
-    textLabel({
-      id: "deleteDelay",
-      label: "Segundos até apagar a call vazia",
-      description: "0 = apaga na hora. Máximo 300.",
-      max: 3,
-      required: false,
-      value: String(cfg.deleteDelay),
-    }),
-    textLabel({
-      id: "cooldown",
-      label: "Espera entre criações (segundos)",
-      description: "Evita spam de entrar e sair. 0 = sem espera. Máximo 3600.",
-      max: 4,
-      required: false,
-      value: String(cfg.cooldown),
-    })
-  );
-}
-
 function buildMainModal(cfg) {
   const colorNow = cfg.color === null ? undefined : `#${cfg.color.toString(16).padStart(6, "0")}`;
   const footerNow = cfg.texts.footer === DEFAULT_TEXTS.footer ? undefined : cfg.texts.footer;
@@ -471,7 +408,6 @@ module.exports = {
   buildCallHubHome,
   buildCallHubAccess,
   buildCallHubLook,
-  buildValuesModal,
   buildMainModal,
   buildSectionModal,
   buildCallHubButtons,
