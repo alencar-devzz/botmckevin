@@ -10,6 +10,8 @@ const {
 } = require("../utils/callHubStore");
 const {
   humansIn,
+  getOwner,
+  setOwner,
   getProfile,
   updateProfile,
   isLocked,
@@ -33,7 +35,7 @@ const {
   buildCallHubButtons,
   buildButtonModal,
 } = require("../ui/callHubConfig");
-const { buildCallPanel, buildNotice, buildPicker, buildLimitModal } = require("../ui/callPanel");
+const { buildCallPanel, buildNotice, buildPicker, buildMemberPicker, buildLimitModal } = require("../ui/callPanel");
 const { say, MESSAGES, MESSAGE_KEYS, DEFAULT_MESSAGES } = require("../utils/callHubMessages");
 
 const V2 = MessageFlags.IsComponentsV2;
@@ -308,9 +310,8 @@ async function handleCallHubConfigModal(interaction) {
 // Cargos permitidos/bloqueados e calls ignoradas são configurados em n!menu → Gerenciador de calls.
 // Todos os textos abaixo vêm de utils/callHubMessages.js e são editáveis em n!menu → Mensagens e respostas.
 
-// Botões de painéis antigos (enviados antes do gerenciador de calls)
+// Botões de painéis enviados na versão anterior (o "Ver Dono" chamava-se "Informações")
 const LEGACY_ACTIONS = { info: "owner" };
-const REMOVED_ACTIONS = new Set(["transfer"]);
 
 // Retorna { channel } ou responde com um aviso e retorna null
 async function requireCall(interaction, cfg, { update = false } = {}) {
@@ -347,7 +348,7 @@ async function requireCall(interaction, cfg, { update = false } = {}) {
   return { channel };
 }
 
-const PICKER_ACTIONS = { add: 5, remove: 5, kick: 5, move: 5, blacklist: 5 }; // action -> máx. de pessoas
+const PICKER_ACTIONS = { add: 5, remove: 5, kick: 5, move: 5, transfer: 1, blacklist: 5 }; // action -> máx. de pessoas
 
 const mentions = (ids) => ids.map((id) => `<@${id}>`).join(" ");
 
@@ -365,7 +366,7 @@ async function handlePanelMenu(interaction) {
   const { guild } = interaction;
   const cfg = await getCallHubConfig(guild.id);
   const action = interaction.values[0];
-  if (!BUTTON_KEYS.includes(action) && !LEGACY_ACTIONS[action] && !REMOVED_ACTIONS.has(action)) return;
+  if (!BUTTON_KEYS.includes(action) && !LEGACY_ACTIONS[action]) return;
 
   await runPanelAction(interaction, action, cfg);
 
@@ -381,8 +382,6 @@ async function handlePanelMenu(interaction) {
 async function runPanelAction(interaction, rawAction, cfg) {
   const { guild, member } = interaction;
   const action = LEGACY_ACTIONS[rawAction] ?? rawAction;
-
-  if (REMOVED_ACTIONS.has(action)) return reply(interaction, say(cfg, "legacyButton"));
 
   // "Privar mantendo todos" vem do seletor efêmero: a mensagem é atualizada em vez de criar outra
   if (action === "lockkeep") {
@@ -436,11 +435,11 @@ async function runPanelAction(interaction, rawAction, cfg) {
       );
 
     case "owner":
-      // Quem está na call é o dono dela: mostra a menção de quem clicou
+      // Sem transferência, quem está na call é o dono dela (mostra a menção de quem clicou)
       return reply(
         interaction,
         say(cfg, "ownerInfo", {
-          dono: `<@${member.id}>`,
+          dono: `<@${getOwner(channel) ?? member.id}>`,
           canal: `<#${channel.id}>`,
           acesso: accessWord(cfg, channel),
           limite: channel.userLimit ? say(cfg, "limitValue", { n: channel.userLimit }) : say(cfg, "limitNone"),
@@ -464,6 +463,25 @@ async function runPanelAction(interaction, rawAction, cfg) {
         }),
         flags: V2 | EPHEMERAL,
       });
+
+    case "transfer": {
+      const owner = getOwner(channel);
+      if (owner && owner !== member.id) return reply(interaction, say(cfg, "transferNotOwner", { dono: `<@${owner}>` }));
+
+      const others = humansIn(channel).filter((m) => m.id !== member.id);
+      if (others.size === 0) return reply(interaction, say(cfg, "transferAlone"));
+
+      return interaction.reply({
+        components: buildMemberPicker({
+          action: "transfer",
+          title: say(cfg, "transferTitle"),
+          hint: say(cfg, "transferHint"),
+          placeholder: say(cfg, "pickPlaceholder"),
+          members: others.map((m) => ({ id: m.id, name: m.displayName, username: m.user.username })),
+        }),
+        flags: V2 | EPHEMERAL,
+      });
+    }
 
     case "save": {
       const allowed = allowedMemberIds(channel, member.id);
@@ -594,6 +612,22 @@ async function runPick(action, ids, { guild, channel, actor, cfg }) {
         done.length ? say(cfg, "moveDone", { pessoas: done.join(" ") }) : null,
         skipped.length ? say(cfg, "moveFail", { pessoas: skipped.join(", ") }) : null
       );
+    }
+
+    case "transfer": {
+      const owner = getOwner(channel);
+      if (owner && owner !== actor.id) return say(cfg, "transferNotOwner", { dono: `<@${owner}>` });
+
+      const id = targets[0];
+      const member = await fetchMember(id);
+      if (!member || member.user.bot) return say(cfg, "transferInvalid");
+      if (id === actor.id) return say(cfg, "transferSelf");
+      if (member.voice.channelId !== channel.id) return say(cfg, "transferNotIn");
+      if (blocked.includes(id)) return why(id, "reasonBlacklist");
+
+      await setOwner(channel, id);
+      if (isLocked(channel)) await allowUser(channel, id); // continua entrando mesmo se a call for privada
+      return say(cfg, "transferDone", { pessoa: `<@${id}>` });
     }
 
     case "blacklist": {

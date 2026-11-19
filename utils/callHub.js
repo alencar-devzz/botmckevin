@@ -1,11 +1,49 @@
 const { OverwriteType, PermissionFlagsBits: P, PermissionsBitField } = require("discord.js");
 const CallRoom = require("../database/models/CallRoom");
+const CallOwner = require("../database/models/CallOwner");
 const CallProfile = require("../database/models/CallProfile");
 
 // Gerenciador de calls: quem está em QUALQUER call de voz do servidor gerencia ela pelo painel.
 // Não existe mais dono nem criação automática de call. Este arquivo só tem as ações sobre o canal.
 
 const humansIn = (channel) => channel.members.filter((m) => !m.user.bot);
+
+// ======================= Posse da call =======================
+// Por padrão quem está na call é o dono dela. Depois de um "Transferir", a posse fica com a pessoa escolhida
+// (guardada no MongoDB, coleção CallOwner, e em memória) enquanto ela continuar na call;
+// se ela sair, a posse volta a ser de quem está na call.
+const owners = new Map(); // channelId -> userId
+
+function getOwner(channel) {
+  const id = owners.get(channel.id);
+  if (id && channel.members.has(id)) return id;
+  if (id) forgetOwner(channel.id);
+  return null;
+}
+
+async function setOwner(channel, userId) {
+  owners.set(channel.id, userId);
+  await CallOwner.updateOne(
+    { channelId: channel.id },
+    { $set: { guildId: channel.guild.id, ownerId: userId, updatedAt: new Date() } },
+    { upsert: true }
+  ).catch((err) => console.error("[CALLS] Não consegui salvar o dono da call:", err.message));
+}
+
+function forgetOwner(channelId) {
+  owners.delete(channelId);
+  CallOwner.deleteOne({ channelId }).catch(() => {});
+}
+
+// Ao ligar o bot: recarrega os donos salvos. Registro de call que não existe mais, ou cujo dono já saiu, é apagado.
+async function loadOwners(client) {
+  const docs = await CallOwner.find({}).lean();
+  for (const doc of docs) {
+    const channel = client.guilds.cache.get(doc.guildId)?.channels.cache.get(doc.channelId);
+    if (channel?.members?.has(doc.ownerId)) owners.set(doc.channelId, doc.ownerId);
+    else await CallOwner.deleteOne({ channelId: doc.channelId }).catch(() => {});
+  }
+}
 
 // ======================= Perfil pessoal (Salvar Config / Usar Config) =======================
 
@@ -115,20 +153,23 @@ async function applyLock(channel, actorId, selectedIds) {
 // as que ainda têm gente viram calls comuns. Depois disso os registros antigos somem do banco.
 async function sweepCalls(client) {
   const docs = await CallRoom.find({}).lean();
-  if (!docs.length) return;
-
   for (const doc of docs) {
     const channel = client.guilds.cache.get(doc.guildId)?.channels.cache.get(doc.channelId);
     if (channel && humansIn(channel).size === 0) {
       await channel.delete("Call temporária antiga (sistema substituído pelo gerenciador de calls)").catch(() => {});
     }
   }
-  await CallRoom.deleteMany({ channelId: { $in: docs.map((d) => d.channelId) } }).catch(() => {});
+  if (docs.length) await CallRoom.deleteMany({ channelId: { $in: docs.map((d) => d.channelId) } }).catch(() => {});
+
+  await loadOwners(client);
 }
 
 module.exports = {
   sweepCalls,
   humansIn,
+  getOwner,
+  setOwner,
+  forgetOwner,
   getProfile,
   updateProfile,
   isLocked,
