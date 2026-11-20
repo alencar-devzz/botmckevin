@@ -6,7 +6,7 @@
 const SECTIONS = [
   { id: "access", titleKey: "accessTitle", descKey: "accessDesc", keys: ["lock", "unlock", "limit", "owner"] },
   { id: "members", titleKey: "membersTitle", descKey: "membersDesc", keys: ["add", "remove", "kick", "move"] },
-  { id: "tools", titleKey: "toolsTitle", descKey: "toolsDesc", keys: ["transfer", "blacklist", "save", "load", "reset"] },
+  { id: "tools", titleKey: "toolsTitle", descKey: "toolsDesc", keys: ["transfer", "blacklist", "save", "load"] },
 ];
 
 // [nome do botão, descrição]
@@ -23,7 +23,6 @@ const DEFAULT_BUTTONS = {
   blacklist: ["Blacklist", "bloqueia um usuário de entrar nesta call"],
   save: ["Salvar Config", "grava as configurações atuais da call"],
   load: ["Usar Config", "aplica nesta call a configuração que você salvou antes"],
-  reset: ["Resetar", "volta a call ao padrão: pública, sem limite, sem acessos e sem bloqueios"],
 };
 
 const BUTTON_KEYS = Object.keys(DEFAULT_BUTTONS);
@@ -42,7 +41,6 @@ const DEFAULT_STYLES = {
   blacklist: "red",
   save: "green",
   load: "green",
-  reset: "gray",
 };
 const STYLE_LABELS = { blue: "azul", gray: "cinza", green: "verde", red: "vermelho" };
 const STYLE_ALIASES = {

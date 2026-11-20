@@ -205,18 +205,18 @@ function buildCallHubBehavior(guild, cfg) {
       [
         `**Painel automático:** ${yesNo(cfg.autoPanel)} · envia o painel no chat da call quando a primeira pessoa entra`,
         `**Apagar o painel ao esvaziar:** ${yesNo(cfg.autoPanelClean)} · apaga o painel enviado automaticamente quando ninguém mais está na call`,
-        `**Restaurar a call ao esvaziar:** ${yesNo(cfg.resetOnEmpty)} · volta ao padrão (pública, sem limite, sem acessos) só as calls mexidas pelo painel`,
+        `**Restaurar a call ao esvaziar:** ${yesNo(cfg.resetOnEmpty)} · volta ao padrão sozinha (pública, sem limite, sem acessos) só as calls mexidas pelo painel`,
         `**Tempo vazia antes de apagar/restaurar:** ${secs(cfg.emptyDelay, "`na hora`")}`,
         `**Intervalo entre ações:** ${secs(cfg.cooldown, "`nenhum`")} (moderação não espera)`,
         `**Pessoas por seleção:** \`${cfg.pickerMax}\` · **Proteger administradores:** ${yesNo(cfg.protectAdmins)}`,
-        `**Registro das ações:** ${logChannel}`,
+        `**Registro das ações:** ${logChannel} · o principal fica em Logs e registros → Painel de calls`,
       ].join("\n")
     )
   );
 
   const logSelect = new ChannelSelectMenuBuilder()
     .setCustomId("chcfg_logchannel")
-    .setPlaceholder("Canal onde as ações do painel são registradas (opcional)")
+    .setPlaceholder("Canal de registro alternativo (opcional)")
     .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
     .setMinValues(0)
     .setMaxValues(1);

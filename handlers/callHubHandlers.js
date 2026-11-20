@@ -24,8 +24,6 @@ const {
   setLocked,
   applyLock,
   markTouched,
-  resetCall,
-  clearCallState,
 } = require("../utils/callHub");
 const { checkCooldown, logAction } = require("../utils/callHubAuto");
 const {
@@ -411,7 +409,7 @@ async function requireCall(interaction, cfg, { update = false } = {}) {
 
 const PICKER_ACTIONS = new Set(["add", "remove", "kick", "move", "transfer", "blacklist"]); // máx. de pessoas: Comportamento → Tempos e limites
 // Ações que mudam a call: ela passa a contar como "mexida pelo painel" (restaurada ao esvaziar, se ligado)
-const TOUCHING = new Set(["lock", "unlock", "limit", "add", "remove", "blacklist", "load"]);
+const TOUCHING = new Set(["lock", "unlock", "limit", "add", "remove", "blacklist", "move", "load"]);
 
 // Intervalo entre ações (configurável). Responde o aviso e retorna true se a pessoa ainda precisa esperar.
 async function waiting(interaction, cfg, { update = false } = {}) {
@@ -441,7 +439,7 @@ async function handlePanelMenu(interaction) {
   const { guild } = interaction;
   const cfg = await getCallHubConfig(guild.id);
   const action = interaction.values[0];
-  if (!BUTTON_KEYS.includes(action) && !LEGACY_ACTIONS[action]) return;
+  if (!BUTTON_KEYS.includes(action) && !LEGACY_ACTIONS[action] && action !== "reset") return;
 
   await runPanelAction(interaction, action, cfg);
 
@@ -458,10 +456,14 @@ async function runPanelAction(interaction, rawAction, cfg) {
   const { guild, member } = interaction;
   const action = LEGACY_ACTIONS[rawAction] ?? rawAction;
 
+  // O botão Resetar foi removido: a call volta ao padrão sozinha quando esvazia (painéis antigos ainda têm o botão)
+  if (action === "reset") return reply(interaction, say(cfg, "resetRemoved"));
+
   // "Privar mantendo todos" vem do seletor efêmero: a mensagem é atualizada em vez de criar outra
   if (action === "lockkeep") {
     const found = await requireCall(interaction, cfg, { update: true });
     if (!found) return;
+    if (isLocked(found.channel)) return interaction.update({ components: buildNotice(say(cfg, "alreadyPrivate")) });
     if (await waiting(interaction, cfg, { update: true })) return;
     const keep = humansIn(found.channel)
       .map((m) => m.id)
@@ -480,6 +482,7 @@ async function runPanelAction(interaction, rawAction, cfg) {
 
   switch (action) {
     case "lock": {
+      if (isLocked(channel)) return reply(interaction, say(cfg, "alreadyPrivate"));
       const current = humansIn(channel)
         .map((m) => m.id)
         .filter((id) => id !== member.id);
@@ -499,6 +502,7 @@ async function runPanelAction(interaction, rawAction, cfg) {
     }
 
     case "unlock":
+      if (!isLocked(channel)) return reply(interaction, say(cfg, "alreadyPublic"));
       if (await waiting(interaction, cfg)) return;
       await setLocked(channel, false);
       await touch(channel, "unlock");
@@ -565,8 +569,19 @@ async function runPanelAction(interaction, rawAction, cfg) {
     }
 
     case "save": {
-      if (await waiting(interaction, cfg)) return;
       const allowed = allowedMemberIds(channel, member.id);
+      const saved = await getProfile(guild.id, member.id);
+      const savedSet = new Set(saved?.allowed ?? []);
+      const sameAsSaved =
+        saved?.hasSaved &&
+        (saved.limit ?? 0) === (channel.userLimit ?? 0) &&
+        Boolean(saved.locked) === isLocked(channel) &&
+        savedSet.size === Math.min(allowed.length, 25) &&
+        allowed.slice(0, 25).every((id) => savedSet.has(id));
+      if (sameAsSaved) {
+        return reply(interaction, say(cfg, "saveSame", { acesso: accessWord(cfg, channel), limite: limitWord(cfg, channel) }));
+      }
+      if (await waiting(interaction, cfg)) return;
       await updateProfile(guild.id, member.id, {
         hasSaved: true,
         limit: channel.userLimit,
@@ -587,11 +602,27 @@ async function runPanelAction(interaction, rawAction, cfg) {
     case "load": {
       const profile = await getProfile(guild.id, member.id);
       if (!profile?.hasSaved) return reply(interaction, say(cfg, "loadNone"));
+      const blockedNow = blockedMemberIds(channel);
+      const savedAllowed = (profile.allowed ?? []).filter((id) => !blockedNow.includes(id));
+      const nowAllowed = new Set(allowedMemberIds(channel, member.id));
+      const alreadyApplied =
+        (profile.limit ?? 0) === (channel.userLimit ?? 0) &&
+        Boolean(profile.locked) === isLocked(channel) &&
+        savedAllowed.every((id) => nowAllowed.has(id));
+      if (alreadyApplied) {
+        return reply(
+          interaction,
+          say(cfg, "loadSame", {
+            acesso: say(cfg, profile.locked ? "wordPrivate" : "wordPublic"),
+            limite: profile.limit ? say(cfg, "limitShort", { n: profile.limit }) : say(cfg, "limitNone"),
+          })
+        );
+      }
       if (await waiting(interaction, cfg)) return;
 
       await interaction.deferReply({ flags: EPHEMERAL });
-      const blocked = blockedMemberIds(channel);
-      const saved = (profile.allowed ?? []).filter((id) => !blocked.includes(id));
+      const blocked = blockedNow;
+      const saved = savedAllowed;
 
       await channel.setUserLimit(profile.limit ?? 0).catch(() => {});
       if (profile.locked) {
@@ -613,22 +644,16 @@ async function runPanelAction(interaction, rawAction, cfg) {
       });
     }
 
-    case "reset": {
-      if (await waiting(interaction, cfg)) return;
-      const changed = await resetCall(channel);
-      await clearCallState(channel.id, ["touched"]);
-      if (changed) logAction(guild, cfg, { actor: member, key: "reset", channel });
-      return reply(interaction, say(cfg, changed ? "resetDone" : "resetNothing"));
-    }
-
     default:
       return;
   }
 }
 
 // Resultado de cada seletor de pessoas
-async function runPick(action, ids, { guild, channel, actor, cfg }) {
+// track (opcional): recebe os ids realmente afetados, para o registro do painel
+async function runPick(action, ids, { guild, channel, actor, cfg, track = {} }) {
   const done = [];
+  const idsOf = (list) => list.map((value) => value.replace(/\D/g, ""));
   const skipped = [];
   const targets = [...new Set(ids)];
   const why = (id, key) => `<@${id}> ${say(cfg, key)}`;
@@ -645,6 +670,7 @@ async function runPick(action, ids, { guild, channel, actor, cfg }) {
     case "lock": {
       const allowed = targets.filter((id) => !blocked.includes(id));
       await applyLock(channel, actor.id, allowed);
+      track.done = allowed;
       return allowed.length ? say(cfg, "lockDone", { pessoas: mentions(allowed) }) : say(cfg, "lockAlone");
     }
 
@@ -654,9 +680,11 @@ async function runPick(action, ids, { guild, channel, actor, cfg }) {
         if (!member || member.user.bot) skipped.push(why(id, "reasonInvalid"));
         else if (id === actor.id) skipped.push(why(id, "reasonSelf"));
         else if (blocked.includes(id)) skipped.push(why(id, "reasonBlacklist"));
+        else if (allowedMemberIds(channel).includes(id)) skipped.push(why(id, "reasonAlreadyAllowed"));
         else if (await allowUser(channel, id)) done.push(`<@${id}>`);
         else skipped.push(`<@${id}>`);
       }
+      track.done = idsOf(done);
       return join(
         done.length ? say(cfg, "addDone", { pessoas: done.join(" ") }) : null,
         skipped.length ? say(cfg, "addFail", { pessoas: skipped.join(", ") }) : null
@@ -668,6 +696,7 @@ async function runPick(action, ids, { guild, channel, actor, cfg }) {
         else if (await clearUser(channel, id)) done.push(`<@${id}>`);
         else skipped.push(why(id, "reasonNoPermission"));
       }
+      track.done = idsOf(done);
       return join(
         done.length ? say(cfg, "removeDone", { pessoas: done.join(" ") }) : null,
         skipped.length ? say(cfg, "removeFail", { pessoas: skipped.join(", ") }) : null
@@ -682,6 +711,7 @@ async function runPick(action, ids, { guild, channel, actor, cfg }) {
         else if (await member.voice.disconnect(say(cfg, "kickAudit")).then(() => true).catch(() => false)) done.push(`<@${id}>`);
         else skipped.push(`<@${id}>`);
       }
+      track.done = idsOf(done);
       return join(
         done.length ? say(cfg, "kickDone", { pessoas: done.join(" ") }) : null,
         skipped.length ? say(cfg, "kickFail", { pessoas: skipped.join(", ") }) : null
@@ -702,6 +732,7 @@ async function runPick(action, ids, { guild, channel, actor, cfg }) {
           else skipped.push(`<@${id}>`);
         }
       }
+      track.done = idsOf(done);
       return join(
         done.length ? say(cfg, "moveDone", { pessoas: done.join(" ") }) : null,
         skipped.length ? say(cfg, "moveFail", { pessoas: skipped.join(", ") }) : null
@@ -721,6 +752,7 @@ async function runPick(action, ids, { guild, channel, actor, cfg }) {
 
       await setOwner(channel, id);
       if (isLocked(channel)) await allowUser(channel, id); // continua entrando mesmo se a call for privada
+      track.done = [id];
       return say(cfg, "transferDone", { pessoa: `<@${id}>` });
     }
 
@@ -754,6 +786,9 @@ async function runPick(action, ids, { guild, channel, actor, cfg }) {
           added.push(`<@${id}>`);
         }
       }
+      track.added = idsOf(added);
+      track.removed = idsOf(removed);
+      track.done = [...track.added, ...track.removed];
       return join(
         added.length ? say(cfg, "blAdded", { pessoas: added.join(" ") }) : null,
         removed.length ? say(cfg, "blRemoved", { pessoas: removed.join(" ") }) : null,
@@ -780,19 +815,30 @@ async function handleCallPanelSelect(interaction) {
 
   await interaction.deferUpdate();
   let failed = false;
+  const track = {};
   const result = await runPick(action, interaction.values, {
     guild,
     channel: found.channel,
     actor: interaction.member,
     cfg,
+    track,
   }).catch((err) => {
     console.error(`[CALLS] Erro na ação "${action}":`, err);
     failed = true;
     return say(cfg, "errorGeneric");
   });
-  if (!failed) {
+  if (!failed && track.done?.length) {
     await touch(found.channel, action);
-    logAction(guild, cfg, { actor: interaction.member, key: action, channel: found.channel, targets: interaction.values });
+    const base = { actor: interaction.member, channel: found.channel };
+    if (action === "blacklist") {
+      // Bloquear e liberar viram logs separados (cores diferentes)
+      if (track.added?.length) await logAction(guild, cfg, { ...base, key: "blacklist", title: "Blacklist — Bloqueou", targets: track.added });
+      if (track.removed?.length) {
+        await logAction(guild, cfg, { ...base, key: "blacklist", title: "Blacklist — Liberou", tone: "green", targets: track.removed });
+      }
+    } else {
+      await logAction(guild, cfg, { ...base, key: action, targets: track.done });
+    }
   }
 
   return interaction.editReply({ components: buildNotice(result || say(cfg, "nothingChanged")) });
@@ -810,12 +856,20 @@ async function handleCallPanelModal(interaction) {
   const raw = interaction.fields.getTextInputValue("limit").trim();
   if (!/^\d{1,2}$/.test(raw)) return reply(interaction, say(cfg, "limitInvalid"));
 
+  const limit = Number(raw);
+  if (limit === (found.channel.userLimit ?? 0)) {
+    return reply(interaction, say(cfg, "limitSame", { limite: limit ? say(cfg, "limitValue", { n: limit }) : say(cfg, "limitNone") }));
+  }
   if (await waiting(interaction, cfg)) return;
 
-  const limit = Number(raw);
   await found.channel.setUserLimit(limit).catch(() => {});
   await touch(found.channel, "limit");
-  logAction(guild, cfg, { actor: interaction.member, key: "limit", channel: found.channel });
+  logAction(guild, cfg, {
+    actor: interaction.member,
+    key: "limit",
+    channel: found.channel,
+    lines: [`**Limite:** ${limit ? `\`${limit}\` pessoas` : "`sem limite`"}`],
+  });
   return reply(interaction, limit ? say(cfg, "limitSet", { n: limit }) : say(cfg, "limitRemoved"));
 }
 

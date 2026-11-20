@@ -11,7 +11,10 @@ const {
   clearCallState,
   resetCall,
 } = require("./callHub");
-const { buildCallPanel, buildNotice } = require("../ui/callPanel");
+const { buildCallPanel } = require("../ui/callPanel");
+const { activeCategory, deliver } = require("./logs/send");
+const { COLORS, userBlock, channelBlock, code } = require("./logs/format");
+const { isLocked } = require("./callHub");
 
 // Comportamento automático do Gerenciador de calls.
 // NADA aqui é fixo: tudo vem de n!menu → Comunidade e interação → Gerenciador de calls → Comportamento
@@ -73,8 +76,12 @@ async function runEmpty(channel, guildId) {
   if (cfg.autoPanelClean && state?.panelMessageId) await deletePanel(channel, state);
 
   if (cfg.resetOnEmpty && state?.touched) {
-    await resetCall(channel).catch((err) => console.error("[CALLS] Erro ao restaurar a call vazia:", err.message));
+    const changed = await resetCall(channel).catch((err) => {
+      console.error("[CALLS] Erro ao restaurar a call vazia:", err.message);
+      return false;
+    });
     await clearCallState(channel.id, ["touched"]);
+    if (changed) await logAction(channel.guild, cfg, { actor: null, key: "reset", channel });
   }
 }
 
@@ -159,28 +166,59 @@ function checkCooldown(cfg, member) {
 
 // ======================= Registro das ações =======================
 
-const plain = (value) =>
-  String(value ?? "")
-    .replace(/<a?:\w+:\d+>/g, "")
-    .replace(/[*_~`|#>]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+// Mesmo estilo dos outros logs (utils/logs): título, cores (verde = bom, vermelho = ruim, branco = banal),
+// miniatura de quem fez, blocos com as informações e data/hora no fim.
+// Vai para o canal da categoria "Painel de calls" em n!menu → Logs e registros
+// (se ela não tiver canal, usa o canal de registro de Comportamento).
+const LOG_ACTIONS = {
+  lock: ["Privou a call", "white"],
+  unlock: ["Tornou a call pública", "green"],
+  limit: ["Alterou o limite", "white"],
+  add: ["Liberou a entrada", "green"],
+  remove: ["Tirou a permissão de entrada", "red"],
+  kick: ["Desconectou", "red"],
+  move: ["Moveu para a call", "white"],
+  transfer: ["Transferiu a posse", "white"],
+  blacklist: ["Blacklist", "red"],
+  save: ["Salvou a configuração", "white"],
+  load: ["Usou a configuração salva", "white"],
+  reset: ["Call restaurada", "white"],
+};
 
-// Registra no canal configurado (Comportamento → Registro das ações). Sem canal = não registra.
-async function logAction(guild, cfg, { actor, key, channel, targets = [] }) {
-  if (!cfg.logChannelId) return;
-  const target = guild.channels.cache.get(cfg.logChannelId);
-  if (!target?.isTextBased?.()) return;
+// actor = GuildMember (ou null quando foi automático) · targets = ids afetados · lines = linhas extras do 3º bloco
+// tone = força a cor (ex.: blacklist que libera vira verde)
+async function logAction(guild, cfg, { actor, key, channel, targets = [], lines = [], tone = null, title = null }) {
+  try {
+    let dest = await activeCategory(guild, "painelcalls", Boolean(actor?.user?.bot));
+    if (!dest && cfg.logChannelId) dest = { channelId: cfg.logChannelId };
+    if (!dest) return;
 
-  const content = say(cfg, "logAction", {
-    usuario: `<@${actor.id}>`,
-    acao: plain(cfg.texts[`b_${key}`]) || key,
-    canal: `<#${channel.id}>`,
-    alvos: targets.length ? [...new Set(targets)].map((id) => `<@${id}>`).join(" ") : "-",
-  });
-  await target
-    .send({ components: buildNotice(content), flags: V2, allowedMentions: { parse: [] } })
-    .catch((err) => console.error("[CALLS] Não consegui registrar a ação no canal de registro:", err.message));
+    const [label, baseTone] = LOG_ACTIONS[key] ?? [key, "white"];
+    const inCall = [...channel.members.values()].filter((m) => !m.user.bot);
+    const people = inCall.length ? inCall.map((m) => `<@${m.id}>`).join(" ") : code("ninguém");
+
+    const groups = [
+      actor ? [userBlock(actor.user, "Usuário")] : ["**Executado por:** `Sistema` (automático)"],
+      [
+        channelBlock(channel, "Call"),
+        `**Acesso:** ${code(isLocked(channel) ? "privada" : "pública")} · **Limite:** ${code(channel.userLimit ? channel.userLimit : "sem limite")}`,
+        `**Na call (${inCall.length}):** ${people}`,
+      ],
+    ];
+
+    const unique = [...new Set(targets)];
+    const extra = [unique.length ? `**Pessoas afetadas (${unique.length}):** ${unique.map((id) => `<@${id}>`).join(" ")}` : null, ...lines].filter(Boolean);
+    if (extra.length) groups.push(extra);
+
+    await deliver(guild, dest, {
+      title: `Painel de calls — ${title ?? label} — ${guild.name}`,
+      color: COLORS[tone ?? baseTone],
+      thumbnail: actor?.displayAvatarURL?.(),
+      groups,
+    });
+  } catch (err) {
+    console.error("[CALLS] Não consegui registrar a ação do painel:", err.message);
+  }
 }
 
 module.exports = {

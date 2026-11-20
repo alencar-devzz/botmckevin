@@ -54,7 +54,7 @@ function toConfig(doc) {
     dividers: doc?.panelDividers ?? true,
     autoPanel: doc?.autoPanel ?? false,
     autoPanelClean: doc?.autoPanelClean ?? true,
-    resetOnEmpty: doc?.resetOnEmpty ?? false,
+    resetOnEmpty: doc?.resetOnEmpty ?? true,
     logChannelId: doc?.logChannelId || null,
     cooldown: int(doc?.actionCooldown, 0, 300, 0),
     emptyDelay: int(doc?.emptyDelay, 0, 3600, 0),

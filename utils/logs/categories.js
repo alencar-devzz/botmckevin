@@ -61,6 +61,19 @@ const LOG_CATEGORIES = {
       "Várias entradas/saídas/trocas seguidas viram uma embed única",
     ],
   },
+  painelcalls: {
+    label: "Painel de calls",
+    option: "Logs do painel de calls",
+    description: "Ações feitas pelo painel de gerenciamento de calls.",
+    slug: "painel-calls",
+    botsHint: "Ignora ações feitas por bots.",
+    events: [
+      "Privar e desprivar a call, limite de pessoas, adicionar, remover, mover e desconectar",
+      "Blacklist, transferência de posse, salvar e usar configuração",
+      "Call restaurada automaticamente quando ficou vazia",
+      "Cada embed mostra quem fez, a call, o estado dela e as pessoas afetadas",
+    ],
+  },
   canais: {
     label: "Canais",
     option: "Logs de canais",

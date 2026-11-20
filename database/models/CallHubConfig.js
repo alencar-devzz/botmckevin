@@ -34,7 +34,7 @@ const callHubConfigSchema = new Schema({
 
   autoPanel: { type: Boolean, default: false }, // envia o painel no chat do canal de voz quando a primeira pessoa entra
   autoPanelClean: { type: Boolean, default: true }, // apaga o painel enviado quando a call esvazia
-  resetOnEmpty: { type: Boolean, default: false }, // call esvaziou: volta ao padrão (só calls mexidas pelo painel)
+  resetOnEmpty: { type: Boolean, default: true }, // call esvaziou: volta ao padrão sozinha (só calls mexidas pelo painel)
   logChannelId: { type: String, default: null }, // canal onde as ações do painel são registradas
   actionCooldown: { type: Number, default: 0 }, // segundos entre ações do painel (por pessoa)
   emptyDelay: { type: Number, default: 0 }, // segundos que a call precisa ficar vazia antes de apagar o painel / restaurar a call
