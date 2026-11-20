@@ -12,7 +12,6 @@ const {
 } = require("discord.js");
 const { addBackButton } = require("./backButton");
 const { LOG_CATEGORIES, LOG_KEYS } = require("../utils/logs/categories");
-const { COLORS } = require("../utils/logs/format");
 
 const text = (content) => new TextDisplayBuilder().setContent(content);
 
@@ -23,12 +22,6 @@ function button(customId, label, { style = ButtonStyle.Secondary, disabled = fal
 function stateOf(cfg) {
   if (!cfg.channelId) return "Sem canal";
   return cfg.enabled ? "Ativo" : "Desativado";
-}
-
-// Verde = funcionando, vermelho = desativado, sem cor = ainda sem canal
-function colorOf(cfg) {
-  if (!cfg.channelId) return COLORS.white;
-  return cfg.enabled ? COLORS.green : COLORS.red;
 }
 
 function tabHeader(title, tabName) {
@@ -113,7 +106,6 @@ function buildLogCategoryPanel(guild, key, cfg) {
   const info = LOG_CATEGORIES[key];
 
   const config = new ContainerBuilder()
-    .setAccentColor(colorOf(cfg))
     .addTextDisplayComponents(
       text("### Canal de logs"),
       text("-# Escolha o canal onde os registros serão enviados."),

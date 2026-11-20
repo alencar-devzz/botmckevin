@@ -23,7 +23,6 @@ const {
   colorName,
 } = require("../utils/ticketSettings");
 
-const RED = 0xe50000;
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3500));
 
@@ -858,7 +857,6 @@ function buildSecGerenciar(panel) {
 
 function buildDeleteConfirm(panel, open = 0) {
   const container = new ContainerBuilder()
-    .setAccentColor(RED)
     .addTextDisplayComponents(
       text(`### Excluir "${short(panel.name, 40)}"?`),
       text(
