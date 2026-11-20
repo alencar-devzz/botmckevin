@@ -172,6 +172,8 @@ function extractBack(containers) {
 // custa 3 (seção + texto + botão) contra 1 do botão solto, então a conversão vai de cima para baixo e
 // para quando o limite chegaria. Telas muito cheias ficam com as últimas linhas como botões normais.
 const ARROW_EMOJI = { name: "right2", id: "1573414717114810448" };
+const ON_EMOJI = { name: "on3", id: "1573434230690545664" };
+const OFF_EMOJI = { name: "off3", id: "1573434379181621489" };
 const MAX_COMPONENTS = 40;
 
 function countComponents(node) {
@@ -204,30 +206,91 @@ function isArrowRow(row) {
   );
 }
 
+const cleanLabel = (label) => String(label).replace(/[*_~`|]/g, "").replace(/\s+/g, " ").trim();
+const YES = /^(sim|ativad[oa]|ligad[oa]|on)$/i;
+const NO = /^(n[aã]o|desativad[oa]|desligad[oa]|off)$/i;
+
+// Qual emoji o botão mostra: chave ligada/desligada (estado atual) ou a seta.
+//   "Desativar" / "Lembrete: Sim"  -> ligado (on)
+//   "Ativar"    / "Lembrete: Não"  -> desligado (off)
+function stateOf(label) {
+  const clean = cleanLabel(label);
+  if (/^desativar\b/i.test(clean) || /^desligar\b/i.test(clean)) return "on";
+  if (/^ativar\b/i.test(clean) || /^ligar\b/i.test(clean)) return "off";
+  const cut = clean.lastIndexOf(":");
+  if (cut > 0) {
+    const value = clean.slice(cut + 1).trim();
+    if (YES.test(value)) return "on";
+    if (NO.test(value)) return "off";
+  }
+  return null;
+}
+
+const toggleEmoji = (state) => ({ ...(state === "on" ? ON_EMOJI : OFF_EMOJI) });
+
+function makeAccessory(button, emoji) {
+  const accessory = { type: TYPE.Button, style: 2, custom_id: button.custom_id, emoji };
+  if (button.disabled) accessory.disabled = true;
+  return accessory;
+}
+
 // "Lembrete: Sim" -> título "Lembrete" e valor "Sim" na linha de baixo
 function arrowSection(button) {
-  const clean = button.label.replace(/[*_~`|]/g, "").replace(/\s+/g, " ").trim();
+  const clean = cleanLabel(button.label);
   const cut = clean.indexOf(":");
-  const title = cut > 0 && cut < clean.length - 1 ? clean.slice(0, cut).trim() : clean;
-  const value = cut > 0 && cut < clean.length - 1 ? clean.slice(cut + 1).trim() : "";
+  const hasValue = cut > 0 && cut < clean.length - 1;
+  const title = hasValue ? clean.slice(0, cut).trim() : clean;
+  const value = hasValue ? clean.slice(cut + 1).trim() : "";
   const content = `${emojiMarkup(button.emoji)}**${title}**${value ? `\n-# ${value}` : ""}`;
 
-  const accessory = {
-    type: TYPE.Button,
-    style: button.style ?? 2,
-    custom_id: button.custom_id,
-    emoji: { ...ARROW_EMOJI },
+  const state = stateOf(button.label);
+  return {
+    type: TYPE.Section,
+    components: [{ type: TYPE.TextDisplay, content }],
+    accessory: makeAccessory(button, state ? toggleEmoji(state) : { ...ARROW_EMOJI }),
   };
-  if (button.disabled) accessory.disabled = true;
+}
 
-  return { type: TYPE.Section, components: [{ type: TYPE.TextDisplay, content }], accessory };
+// Botão geral de ligar/desligar o sistema (label exata "Ativar" / "Desativar"): vai para o canto do título
+const isMasterToggle = (b) => /^(ativar|desativar|ligar|desligar)$/i.test(cleanLabel(b?.label ?? ""));
+
+function pullMasterToggle(containers) {
+  for (const container of containers) {
+    for (const child of container.components ?? []) {
+      if (!isArrowRow(child)) continue;
+      const found = child.components.find(isMasterToggle);
+      if (!found) continue;
+      child.components = child.components.filter((b) => b !== found);
+      container.components = container.components.filter((c) => c !== child || child.components.length > 0);
+      return found;
+    }
+  }
+  return null;
 }
 
 function applyArrowRows(items) {
+  const containers = items.filter((c) => c.type === TYPE.Container);
+  if (!containers.length) return;
   let total = items.reduce((sum, item) => sum + countComponents(item), 0);
 
-  for (const container of items) {
-    if (container.type !== TYPE.Container) continue;
+  // 1) ligar/desligar do sistema no canto superior direito do título (se o título for texto solto)
+  const head = containers[0];
+  const first = head.components?.[0];
+  if (first?.type === TYPE.TextDisplay && total + 2 <= MAX_COMPONENTS) {
+    const master = pullMasterToggle(containers);
+    if (master) {
+      const state = stateOf(master.label);
+      head.components[0] = {
+        type: TYPE.Section,
+        components: [first],
+        accessory: makeAccessory(master, toggleEmoji(state)),
+      };
+      total += 2;
+    }
+  }
+
+  // 2) o resto dos botões vira lista com seta (ou chave on/off) à direita
+  for (const container of containers) {
     const next = [];
     for (const child of container.components ?? []) {
       if (isArrowRow(child)) {
