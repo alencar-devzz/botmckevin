@@ -34,9 +34,10 @@ const ROOTS = [
   { prefix: "nukecfg_", trail: [MODERACAO, "nnuke"], home: ["Comando nnuke"] },
   { prefix: "bumpcfg_", trail: [MODERACAO, "Bump"], home: ["Bump reminder"] },
   // Criador de mensagens aberto pelo /menu (só ele tem a linha de navegação msg:hist:*)
-  { prefix: "msg:hist:", trail: ["Outros", "Criador de mensagens"], home: ["Criador de mensagens"] },
-  { prefix: "cat:comunidade:", trail: [COMUNIDADE], home: ["Comunidade e interação"] },
-  { prefix: "cat:moderacao:", trail: [MODERACAO] },
+  // noArrows: telas de navegação/editor que NÃO viram lista com setas (só as telas de configuração viram)
+  { prefix: "msg:hist:", trail: ["Outros", "Criador de mensagens"], home: ["Criador de mensagens"], noArrows: true },
+  { prefix: "cat:comunidade:", trail: [COMUNIDADE], home: ["Comunidade e interação"], noArrows: true },
+  { prefix: "cat:moderacao:", trail: [MODERACAO], noArrows: true },
 ];
 
 const MAX_CRUMB = 45;
@@ -160,6 +161,89 @@ function extractBack(containers) {
   return chosen.button;
 }
 
+
+// ---------- botões à direita (estilo lista com seta) ----------
+//
+// Nas telas de CONFIGURAÇÃO, cada linha de botões vira uma lista: o nome da opção à esquerda e, à direita,
+// um botão só com a seta. O custom_id, o estilo (verde, vermelho, azul) e o estado desativado de cada botão
+// são mantidos, então os handlers continuam funcionando sem mudar nada.
+//
+// O Discord só aceita 40 componentes por mensagem (contando tudo que está dentro). Cada opção em lista
+// custa 3 (seção + texto + botão) contra 1 do botão solto, então a conversão vai de cima para baixo e
+// para quando o limite chegaria. Telas muito cheias ficam com as últimas linhas como botões normais.
+const ARROW_EMOJI = { name: "right2", id: "1573414717114810448" };
+const MAX_COMPONENTS = 40;
+
+function countComponents(node) {
+  if (!node || typeof node !== "object") return 0;
+  let total = 1;
+  if (Array.isArray(node.components)) for (const child of node.components) total += countComponents(child);
+  if (node.accessory) total += countComponents(node.accessory);
+  return total;
+}
+
+const emojiMarkup = (emoji) => {
+  if (!emoji) return "";
+  if (emoji.id) return `<${emoji.animated ? "a" : ""}:${emoji.name ?? "e"}:${emoji.id}> `;
+  return emoji.name ? `${emoji.name} ` : "";
+};
+
+// Linha só de botões comuns com texto (sem link, sem botão só de ícone, sem contador de página)
+function isArrowRow(row) {
+  const list = row?.components ?? [];
+  if (row?.type !== TYPE.ActionRow || !list.length) return false;
+  return list.every(
+    (b) =>
+      b?.type === TYPE.Button &&
+      b.style !== 5 &&
+      !b.url &&
+      typeof b.custom_id === "string" &&
+      typeof b.label === "string" &&
+      b.label.trim() &&
+      !/^\d+\s*\/\s*\d+$/.test(b.label.trim())
+  );
+}
+
+// "Lembrete: Sim" -> título "Lembrete" e valor "Sim" na linha de baixo
+function arrowSection(button) {
+  const clean = button.label.replace(/[*_~`|]/g, "").replace(/\s+/g, " ").trim();
+  const cut = clean.indexOf(":");
+  const title = cut > 0 && cut < clean.length - 1 ? clean.slice(0, cut).trim() : clean;
+  const value = cut > 0 && cut < clean.length - 1 ? clean.slice(cut + 1).trim() : "";
+  const content = `${emojiMarkup(button.emoji)}**${title}**${value ? `\n-# ${value}` : ""}`;
+
+  const accessory = {
+    type: TYPE.Button,
+    style: button.style ?? 2,
+    custom_id: button.custom_id,
+    emoji: { ...ARROW_EMOJI },
+  };
+  if (button.disabled) accessory.disabled = true;
+
+  return { type: TYPE.Section, components: [{ type: TYPE.TextDisplay, content }], accessory };
+}
+
+function applyArrowRows(items) {
+  let total = items.reduce((sum, item) => sum + countComponents(item), 0);
+
+  for (const container of items) {
+    if (container.type !== TYPE.Container) continue;
+    const next = [];
+    for (const child of container.components ?? []) {
+      if (isArrowRow(child)) {
+        const delta = 2 * child.components.length - 1; // linha (1 + n) vira n seções (3 cada)
+        if (total + delta <= MAX_COMPONENTS) {
+          total += delta;
+          next.push(...child.components.map(arrowSection));
+          continue;
+        }
+      }
+      next.push(child);
+    }
+    container.components = next;
+  }
+}
+
 // Recebe os components de uma resposta (builders ou JSON) e devolve a versão final.
 // Telas que não são do /menu voltam exatamente como entraram.
 function decorateComponents(components) {
@@ -179,6 +263,8 @@ function decorateComponents(components) {
   const back = extractBack(containers);
   const result = copy.filter((c) => c.type !== TYPE.Container || (c.components ?? []).length > 0);
   if (back) result.push({ type: TYPE.ActionRow, components: [back] });
+
+  if (!root.noArrows) applyArrowRows(result);
   return result;
 }
 
