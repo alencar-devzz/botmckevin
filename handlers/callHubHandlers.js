@@ -25,7 +25,7 @@ const {
   applyLock,
   markTouched,
 } = require("../utils/callHub");
-const { checkCooldown, logAction } = require("../utils/callHubAuto");
+const { checkCooldown, logAction, getLogSettings, setLogChannel } = require("../utils/callHubAuto");
 const {
   buildCallHubHome,
   buildCallHubAccess,
@@ -77,7 +77,10 @@ const homePanel = async (guild) =>
 const accessPanel = async (guild) => buildCallHubAccess(guild, await getCallHubConfig(guild.id));
 const buttonsPanel = async (guild) => buildCallHubButtons(guild, await getCallHubConfig(guild.id));
 const messagesPanel = async (guild) => buildCallHubMessages(guild, await getCallHubConfig(guild.id));
-const behaviorPanel = async (guild) => buildCallHubBehavior(guild, await getCallHubConfig(guild.id));
+const behaviorPanel = async (guild) => {
+  const cfg = await getCallHubConfig(guild.id);
+  return buildCallHubBehavior(guild, cfg, await getLogSettings(guild.id, cfg));
+};
 const lookPanel = async (guild) =>
   buildCallHubLook(guild, await getCallHubConfig(guild.id), await getPrefix(guild.id));
 
@@ -136,7 +139,6 @@ async function handleCallHubConfigButton(interaction) {
         "autoPanel",
         "autoPanelClean",
         "resetOnEmpty",
-        "logChannelId",
         "actionCooldown",
         "emptyDelay",
         "pickerMax",
@@ -228,7 +230,7 @@ async function handleCallHubConfigSelect(interaction) {
 
   // Canal de registro das ações do painel: vazio = não registra
   if (customId === "chcfg_logchannel") {
-    await updateCallHubConfig(guild.id, { logChannelId: values[0] ?? null });
+    await setLogChannel(guild.id, values[0] ?? null); // grava na categoria "Painel de calls" de Logs e registros
     return interaction.update({ components: await behaviorPanel(guild) });
   }
 

@@ -13,6 +13,7 @@ const {
 } = require("./callHub");
 const { buildCallPanel } = require("../ui/callPanel");
 const { activeCategory, deliver } = require("./logs/send");
+const { getCategory, updateCategory } = require("./logs/store");
 const { COLORS, userBlock, channelBlock, code } = require("./logs/format");
 const { isLocked } = require("./callHub");
 
@@ -169,7 +170,7 @@ function checkCooldown(cfg, member) {
 // Mesmo estilo dos outros logs (utils/logs): título, cores (verde = bom, vermelho = ruim, branco = banal),
 // miniatura de quem fez, blocos com as informações e data/hora no fim.
 // Vai para o canal da categoria "Painel de calls" em n!menu → Logs e registros
-// (se ela não tiver canal, usa o canal de registro de Comportamento).
+// (o mesmo canal escolhido em Gerenciador de calls → Comportamento).
 const LOG_ACTIONS = {
   lock: ["Privou a call", "white"],
   unlock: ["Tornou a call pública", "green"],
@@ -185,12 +186,28 @@ const LOG_ACTIONS = {
   reset: ["Call restaurada", "white"],
 };
 
+// O canal de registro é um só: o da categoria "Painel de calls" de Logs e registros.
+// Escolher o canal em Gerenciador de calls → Comportamento grava nela (e vice-versa).
+// Canal que ficou só no campo antigo (logChannelId) é copiado para a categoria na primeira leitura.
+async function getLogSettings(guildId, cfg) {
+  const log = await getCategory(guildId, "painelcalls");
+  if (!log.channelId && cfg.logChannelId) {
+    await updateCategory(guildId, "painelcalls", { channelId: cfg.logChannelId, enabled: true }).catch(() => {});
+    return { ...log, channelId: cfg.logChannelId, enabled: true };
+  }
+  return log;
+}
+
+async function setLogChannel(guildId, channelId) {
+  await updateCategory(guildId, "painelcalls", channelId ? { channelId, enabled: true } : { channelId: null });
+}
+
 // actor = GuildMember (ou null quando foi automático) · targets = ids afetados · lines = linhas extras do 3º bloco
 // tone = força a cor (ex.: blacklist que libera vira verde)
 async function logAction(guild, cfg, { actor, key, channel, targets = [], lines = [], tone = null, title = null }) {
   try {
-    let dest = await activeCategory(guild, "painelcalls", Boolean(actor?.user?.bot));
-    if (!dest && cfg.logChannelId) dest = { channelId: cfg.logChannelId };
+    await getLogSettings(guild.id, cfg); // traz para Logs e registros um canal antigo, se houver
+    const dest = await activeCategory(guild, "painelcalls", Boolean(actor?.user?.bot));
     if (!dest) return;
 
     const [label, baseTone] = LOG_ACTIONS[key] ?? [key, "white"];
@@ -227,4 +244,6 @@ module.exports = {
   cancelEmptyTimer,
   checkCooldown,
   logAction,
+  getLogSettings,
+  setLogChannel,
 };

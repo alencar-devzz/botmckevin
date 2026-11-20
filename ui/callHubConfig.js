@@ -190,13 +190,14 @@ function buildCallHubLook(guild, cfg, prefix) {
 
 // ---------- Comportamento ----------
 
-function buildCallHubBehavior(guild, cfg) {
+function buildCallHubBehavior(guild, cfg, log = {}) {
   const header = new ContainerBuilder().addTextDisplayComponents(
     text("### Comportamento da call"),
     text("-# O que o gerenciador faz sozinho quando alguém entra ou sai de uma call. Tudo é ajustável aqui, nada fica fixo no código.")
   );
 
-  const logChannel = cfg.logChannelId && guild.channels.cache.has(cfg.logChannelId) ? `<#${cfg.logChannelId}>` : "`Nenhum`";
+  const logId = log.channelId && guild.channels.cache.has(log.channelId) ? log.channelId : null;
+  const logChannel = logId ? `<#${logId}>` : "`Nenhum`";
   const secs = (n, none) => (n ? `\`${n}s\`` : none);
 
   const status = new ContainerBuilder().addTextDisplayComponents(
@@ -209,18 +210,18 @@ function buildCallHubBehavior(guild, cfg) {
         `**Tempo vazia antes de apagar/restaurar:** ${secs(cfg.emptyDelay, "`na hora`")}`,
         `**Intervalo entre ações:** ${secs(cfg.cooldown, "`nenhum`")} (moderação não espera)`,
         `**Pessoas por seleção:** \`${cfg.pickerMax}\` · **Proteger administradores:** ${yesNo(cfg.protectAdmins)}`,
-        `**Registro das ações:** ${logChannel} · o principal fica em Logs e registros → Painel de calls`,
+        `**Registro das ações:** ${logChannel} · é o mesmo canal de Logs e registros → Painel de calls`,
       ].join("\n")
     )
   );
 
   const logSelect = new ChannelSelectMenuBuilder()
     .setCustomId("chcfg_logchannel")
-    .setPlaceholder("Canal de registro alternativo (opcional)")
+    .setPlaceholder("Canal onde as ações do painel são registradas (opcional)")
     .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
     .setMinValues(0)
     .setMaxValues(1);
-  if (cfg.logChannelId && guild.channels.cache.has(cfg.logChannelId)) logSelect.setDefaultChannels(cfg.logChannelId);
+  if (logId) logSelect.setDefaultChannels(logId);
 
   const controls = new ContainerBuilder()
     .addTextDisplayComponents(text("**Ajustes**"), text("-# Os botões ligam e desligam; \"Tempos e limites\" abre uma janela com os números."))
