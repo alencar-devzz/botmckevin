@@ -14,7 +14,7 @@ const { buildSearchButton, SISTEMAS } = require("./mainMenu");
 // no mesmo estilo das demais categorias (categoryPanel.js).
 
 const EMOJI = {
-  home: { name: "home", id: "1570991310612201482" },
+  home: { name: "home", id: "1573393029203624197" },
   open: { name: "settings", id: "1570940544614539264" },
 };
 
