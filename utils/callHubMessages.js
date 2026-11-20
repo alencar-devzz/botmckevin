@@ -26,6 +26,7 @@ const GROUPS = [
       { key: "cmdNotMod", label: "Comando do painel sem permissão", vars: ["usuario"], def: "{usuario}, só a moderação pode enviar o painel de calls." },
       { key: "errorGeneric", label: "Erro ao executar uma ação", vars: [], def: "Não consegui concluir. Confira se eu tenho as permissões Gerenciar Canais, Gerenciar Cargos e Mover Membros." },
       { key: "nothingChanged", label: "Nada foi alterado", vars: [], def: "Nada foi alterado." },
+      { key: "cooldown", label: "Intervalo entre ações (espere)", vars: ["s"], def: "Calma, aguarde {s} segundo(s) para usar o painel de novo." },
     ],
   },
   {
@@ -75,6 +76,8 @@ const GROUPS = [
       { key: "saveDone", label: "Configuração salva", vars: ["acesso", "limite", "extra"], def: "Configuração salva: {acesso}, {limite}{extra}." },
       { key: "saveExtra", label: "Configuração salva: pessoas liberadas", vars: ["n"], def: ", {n} pessoa(s) com acesso liberado" },
       { key: "loadNone", label: "Usar Config sem nada salvo", vars: [], def: "Você ainda não salvou nenhuma configuração. Use o botão de salvar primeiro." },
+      { key: "resetDone", label: "Resetar: call restaurada", vars: [], def: "Call restaurada ao padrão: pública, sem limite, sem acessos extras e sem bloqueios." },
+      { key: "resetNothing", label: "Resetar: já estava no padrão", vars: [], def: "Esta call já está no padrão." },
       { key: "loadDone", label: "Configuração aplicada", vars: ["acesso", "limite"], def: "Configuração aplicada: {acesso}, {limite}." },
     ],
   },

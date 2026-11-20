@@ -47,6 +47,11 @@ function toConfig(doc) {
     msgs,
     legend: doc?.panelLegend ?? true,
     dividers: doc?.panelDividers ?? true,
+    autoPanel: doc?.autoPanel ?? false,
+    autoPanelClean: doc?.autoPanelClean ?? true,
+    resetOnEmpty: doc?.resetOnEmpty ?? false,
+    logChannelId: doc?.logChannelId || null,
+    cooldown: Math.max(0, Math.min(300, Number(doc?.actionCooldown) || 0)),
   };
 }
 

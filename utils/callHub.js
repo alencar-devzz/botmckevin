@@ -2,6 +2,7 @@ const { OverwriteType, PermissionFlagsBits: P, PermissionsBitField } = require("
 const CallRoom = require("../database/models/CallRoom");
 const CallOwner = require("../database/models/CallOwner");
 const CallProfile = require("../database/models/CallProfile");
+const CallPanelState = require("../database/models/CallPanelState");
 
 // Gerenciador de calls: quem está em QUALQUER call de voz do servidor gerencia ela pelo painel.
 // Não existe mais dono nem criação automática de call. Este arquivo só tem as ações sobre o canal.
@@ -147,6 +148,55 @@ async function applyLock(channel, actorId, selectedIds) {
   }
 }
 
+// ======================= Estado da call (mexida pelo painel / painel automático) =======================
+
+// Marca a call como "mexida pelo painel": só essas calls são restauradas quando esvaziam
+async function markTouched(channel) {
+  await CallPanelState.updateOne(
+    { channelId: channel.id },
+    { $set: { guildId: channel.guild.id, touched: true } },
+    { upsert: true }
+  ).catch(() => {});
+}
+
+const getCallState = (channelId) => CallPanelState.findOne({ channelId }).lean().catch(() => null);
+
+async function setPanelMessage(channel, messageId) {
+  await CallPanelState.updateOne(
+    { channelId: channel.id },
+    { $set: { guildId: channel.guild.id, panelMessageId: messageId } },
+    { upsert: true }
+  ).catch(() => {});
+}
+
+// Apaga o registro da call (sem painel e sem marca) para não deixar lixo no banco
+async function clearCallState(channelId, fields = null) {
+  if (!fields) return CallPanelState.deleteOne({ channelId }).catch(() => {});
+  await CallPanelState.updateOne({ channelId }, { $unset: Object.fromEntries(fields.map((f) => [f, 1])) }).catch(() => {});
+  await CallPanelState.deleteOne({ channelId, touched: { $ne: true }, panelMessageId: null }).catch(() => {});
+}
+
+// Volta a call ao padrão: pública, sem limite e sem acessos/bloqueios por pessoa. Retorna true se mudou algo.
+async function resetCall(channel) {
+  let changed = false;
+
+  if (isLocked(channel)) {
+    await setLocked(channel, false);
+    changed = true;
+  }
+  if (channel.userLimit) {
+    await channel.setUserLimit(0);
+    changed = true;
+  }
+  for (const overwrite of [...memberOverwrites(channel).values()]) {
+    if (overwrite.id === channel.client.user.id) continue; // nunca mexe nas permissões do próprio bot
+    if (!overwrite.allow.has(P.Connect) && !overwrite.deny.has(P.Connect)) continue;
+    await stripOverwrite(channel, overwrite.id, ["Connect", "ViewChannel"], ["Connect"]);
+    changed = true;
+  }
+  return changed;
+}
+
 // ======================= Limpeza do sistema antigo =======================
 
 // Ao ligar o bot: o sistema antigo criava calls temporárias. Aquelas que ficaram vazias são apagadas uma última vez;
@@ -181,4 +231,9 @@ module.exports = {
   unblockUser,
   setLocked,
   applyLock,
+  markTouched,
+  getCallState,
+  setPanelMessage,
+  clearCallState,
+  resetCall,
 };

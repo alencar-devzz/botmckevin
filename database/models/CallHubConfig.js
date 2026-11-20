@@ -31,6 +31,12 @@ const callHubConfigSchema = new Schema({
   styles: styleFields, // cor de cada botão do painel (null = cor padrão)
   panelLegend: { type: Boolean, default: null }, // mostra a legenda com a descrição dos botões (null = sim)
   panelDividers: { type: Boolean, default: null }, // linhas divisórias entre as seções (null = sim)
+
+  autoPanel: { type: Boolean, default: false }, // envia o painel no chat do canal de voz quando a primeira pessoa entra
+  autoPanelClean: { type: Boolean, default: true }, // apaga o painel enviado quando a call esvazia
+  resetOnEmpty: { type: Boolean, default: false }, // call esvaziou: volta ao padrão (só calls mexidas pelo painel)
+  logChannelId: { type: String, default: null }, // canal onde as ações do painel são registradas
+  actionCooldown: { type: Number, default: 0 }, // segundos entre ações do painel (por pessoa)
 });
 
 module.exports = model("CallHubConfig", callHubConfigSchema);
