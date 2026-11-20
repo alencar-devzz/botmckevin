@@ -11,6 +11,11 @@ const { MESSAGE_KEYS, DEFAULT_MESSAGES } = require("./callHubMessages");
 const TTL = 60_000;
 const cache = new Map(); // guildId -> { cfg, at }
 
+const int = (value, min, max, fallback) => {
+  const n = Math.trunc(Number(value));
+  return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
+};
+
 const ids = (list) => [...new Set((Array.isArray(list) ? list : []).map(String))];
 
 function toConfig(doc) {
@@ -51,7 +56,10 @@ function toConfig(doc) {
     autoPanelClean: doc?.autoPanelClean ?? true,
     resetOnEmpty: doc?.resetOnEmpty ?? false,
     logChannelId: doc?.logChannelId || null,
-    cooldown: Math.max(0, Math.min(300, Number(doc?.actionCooldown) || 0)),
+    cooldown: int(doc?.actionCooldown, 0, 300, 0),
+    emptyDelay: int(doc?.emptyDelay, 0, 3600, 0),
+    pickerMax: int(doc?.pickerMax, 1, 25, 5),
+    protectAdmins: doc?.protectAdmins ?? true,
   };
 }
 

@@ -18,7 +18,7 @@ const KEYWORDS = {
   "comunidade:portaria": ["boas vindas", "bem vindo", "bem vindos", "welcome", "entrada", "saida", "dm", "filtro", "conta", "idade", "recepcao", "join"],
   "comunidade:autoroles": ["autorole", "auto role", "cargo automatico", "cargos automaticos", "cargo ao entrar"],
   "comunidade:posts": ["post", "instagram", "insta", "foto", "video", "curtida", "comentario", "feed", "rede social"],
-  "comunidade:calls": ["call", "calls", "voz", "voice", "gerenciar", "gerenciador", "sala", "canal de voz", "painel da call", "privar", "limite"],
+  "comunidade:calls": ["call", "calls", "voz", "voice", "gerenciar", "gerenciador", "sala", "canal de voz", "painel da call", "privar", "limite", "painel automatico", "apagar painel", "restaurar call", "intervalo", "cooldown", "registro de calls", "comportamento"],
   "comunidade:cl": ["limpar", "apagar mensagens", "clear", "comando"],
   "comunidade:spotify": ["musica", "som", "card", "letra", "ouvindo", "comando"],
   "comunidade:convites": ["convite", "invite", "invites", "fake", "recompensa", "conquista", "link de convite"],

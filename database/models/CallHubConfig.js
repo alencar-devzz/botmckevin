@@ -37,6 +37,9 @@ const callHubConfigSchema = new Schema({
   resetOnEmpty: { type: Boolean, default: false }, // call esvaziou: volta ao padrão (só calls mexidas pelo painel)
   logChannelId: { type: String, default: null }, // canal onde as ações do painel são registradas
   actionCooldown: { type: Number, default: 0 }, // segundos entre ações do painel (por pessoa)
+  emptyDelay: { type: Number, default: 0 }, // segundos que a call precisa ficar vazia antes de apagar o painel / restaurar a call
+  pickerMax: { type: Number, default: 5 }, // máximo de pessoas por seleção (adicionar, remover, desconectar, mover, blacklist)
+  protectAdmins: { type: Boolean, default: true }, // administradores não podem ser desconectados nem bloqueados por quem não é admin
 });
 
 module.exports = model("CallHubConfig", callHubConfigSchema);

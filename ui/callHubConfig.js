@@ -71,6 +71,7 @@ function buildCallHubHome(guild, cfg, prefix) {
         `**Calls ignoradas:** ${ignored.length ? ignored.map((id) => `<#${id}>`).join(" ") : "`Nenhuma`"}`,
         `**Quem pode usar:** ${cfg.allowedRoles.length ? mentionRoles(guild, cfg.allowedRoles) : "todos"} · **Bloqueados:** ${mentionRoles(guild, cfg.blockedRoles)}`,
         `**Comando do painel fixo:** \`${prefix}painel\` · **Moderação (envia o painel fixo):** ${mentionRoles(guild, cfg.staffRoles)}`,
+        `**Automático:** painel automático ${yesNo(cfg.autoPanel)} · apagar painel ao esvaziar ${yesNo(cfg.autoPanelClean)} · restaurar call ao esvaziar ${yesNo(cfg.resetOnEmpty)}`,
         missing.length ? `**Permissões que faltam ao bot:** ${missing.join(", ")}` : "**Permissões do bot:** tudo certo",
       ].join("\n")
     )
@@ -92,6 +93,7 @@ function buildCallHubHome(guild, cfg, prefix) {
         btn("chcfg_toggle", cfg.enabled ? "Desativar" : "Ativar", cfg.enabled ? ButtonStyle.Danger : ButtonStyle.Success),
         btn("chcfg_page:access", "Quem pode usar"),
         btn("chcfg_page:look", "Painel da call"),
+        btn("chcfg_page:behavior", "Comportamento"),
         btn("chcfg_reset", "Restaurar tudo", ButtonStyle.Danger)
       )
     );
@@ -184,6 +186,93 @@ function buildCallHubLook(guild, cfg, prefix) {
   body.addActionRowComponents(row(btn("chcfg_home", "Voltar")));
 
   return [header, body];
+}
+
+// ---------- Comportamento ----------
+
+function buildCallHubBehavior(guild, cfg) {
+  const header = new ContainerBuilder().addTextDisplayComponents(
+    text("### Comportamento da call"),
+    text("-# O que o gerenciador faz sozinho quando alguém entra ou sai de uma call. Tudo é ajustável aqui, nada fica fixo no código.")
+  );
+
+  const logChannel = cfg.logChannelId && guild.channels.cache.has(cfg.logChannelId) ? `<#${cfg.logChannelId}>` : "`Nenhum`";
+  const secs = (n, none) => (n ? `\`${n}s\`` : none);
+
+  const status = new ContainerBuilder().addTextDisplayComponents(
+    text("**Situação atual**"),
+    text(
+      [
+        `**Painel automático:** ${yesNo(cfg.autoPanel)} · envia o painel no chat da call quando a primeira pessoa entra`,
+        `**Apagar o painel ao esvaziar:** ${yesNo(cfg.autoPanelClean)} · apaga o painel enviado automaticamente quando ninguém mais está na call`,
+        `**Restaurar a call ao esvaziar:** ${yesNo(cfg.resetOnEmpty)} · volta ao padrão (pública, sem limite, sem acessos) só as calls mexidas pelo painel`,
+        `**Tempo vazia antes de apagar/restaurar:** ${secs(cfg.emptyDelay, "`na hora`")}`,
+        `**Intervalo entre ações:** ${secs(cfg.cooldown, "`nenhum`")} (moderação não espera)`,
+        `**Pessoas por seleção:** \`${cfg.pickerMax}\` · **Proteger administradores:** ${yesNo(cfg.protectAdmins)}`,
+        `**Registro das ações:** ${logChannel}`,
+      ].join("\n")
+    )
+  );
+
+  const logSelect = new ChannelSelectMenuBuilder()
+    .setCustomId("chcfg_logchannel")
+    .setPlaceholder("Canal onde as ações do painel são registradas (opcional)")
+    .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+    .setMinValues(0)
+    .setMaxValues(1);
+  if (cfg.logChannelId && guild.channels.cache.has(cfg.logChannelId)) logSelect.setDefaultChannels(cfg.logChannelId);
+
+  const controls = new ContainerBuilder()
+    .addTextDisplayComponents(text("**Ajustes**"), text("-# Os botões ligam e desligam; \"Tempos e limites\" abre uma janela com os números."))
+    .addActionRowComponents(
+      row(
+        btn("chcfg_flag:autoPanel", `Painel automático: ${yesNo(cfg.autoPanel)}`, cfg.autoPanel ? ButtonStyle.Success : ButtonStyle.Secondary),
+        btn("chcfg_flag:clean", `Apagar painel ao esvaziar: ${yesNo(cfg.autoPanelClean)}`, cfg.autoPanelClean ? ButtonStyle.Success : ButtonStyle.Secondary)
+      )
+    )
+    .addActionRowComponents(
+      row(
+        btn("chcfg_flag:resetEmpty", `Restaurar call ao esvaziar: ${yesNo(cfg.resetOnEmpty)}`, cfg.resetOnEmpty ? ButtonStyle.Success : ButtonStyle.Secondary),
+        btn("chcfg_flag:protectAdmins", `Proteger administradores: ${yesNo(cfg.protectAdmins)}`, cfg.protectAdmins ? ButtonStyle.Success : ButtonStyle.Secondary)
+      )
+    )
+    .addActionRowComponents(row(btn("chcfg_edit:limits", "Tempos e limites", ButtonStyle.Primary)))
+    .addActionRowComponents(row(logSelect));
+  controls.addSeparatorComponents(new SeparatorBuilder());
+  controls.addActionRowComponents(
+    row(btn("chcfg_home", "Voltar"), btn("chcfg_reset_behavior", "Restaurar comportamento", ButtonStyle.Danger))
+  );
+
+  return [header, status, controls];
+}
+
+// Janela com os números do comportamento: tempo vazia, intervalo entre ações e pessoas por seleção
+function buildLimitsModal(cfg) {
+  return modal(
+    "chcfg_modal:limits",
+    "Tempos e limites",
+    textLabel({
+      id: "delay",
+      label: "Tempo vazia antes de apagar/restaurar",
+      description: "Segundos de 0 a 3600. 0 = na hora. Vazio = 0.",
+      max: 4,
+      value: String(cfg.emptyDelay),
+    }),
+    textLabel({
+      id: "cooldown",
+      label: "Intervalo entre ações do painel",
+      description: "Segundos de 0 a 300, por pessoa. 0 = sem intervalo. Vazio = 0.",
+      max: 3,
+      value: String(cfg.cooldown),
+    }),
+    textLabel({
+      id: "picker",
+      label: "Pessoas por seleção",
+      description: "De 1 a 25 (adicionar, remover, desconectar, mover, blacklist). Vazio = 5.",
+      max: 2,
+      value: String(cfg.pickerMax),
+    })
+  );
 }
 
 // ---------- Botões ----------
@@ -408,6 +497,8 @@ module.exports = {
   buildCallHubHome,
   buildCallHubAccess,
   buildCallHubLook,
+  buildCallHubBehavior,
+  buildLimitsModal,
   buildMainModal,
   buildSectionModal,
   buildCallHubButtons,

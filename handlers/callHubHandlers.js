@@ -23,11 +23,17 @@ const {
   unblockUser,
   setLocked,
   applyLock,
+  markTouched,
+  resetCall,
+  clearCallState,
 } = require("../utils/callHub");
+const { checkCooldown, logAction } = require("../utils/callHubAuto");
 const {
   buildCallHubHome,
   buildCallHubAccess,
   buildCallHubLook,
+  buildCallHubBehavior,
+  buildLimitsModal,
   buildMainModal,
   buildSectionModal,
   buildCallHubMessages,
@@ -73,6 +79,7 @@ const homePanel = async (guild) =>
 const accessPanel = async (guild) => buildCallHubAccess(guild, await getCallHubConfig(guild.id));
 const buttonsPanel = async (guild) => buildCallHubButtons(guild, await getCallHubConfig(guild.id));
 const messagesPanel = async (guild) => buildCallHubMessages(guild, await getCallHubConfig(guild.id));
+const behaviorPanel = async (guild) => buildCallHubBehavior(guild, await getCallHubConfig(guild.id));
 const lookPanel = async (guild) =>
   buildCallHubLook(guild, await getCallHubConfig(guild.id), await getPrefix(guild.id));
 
@@ -90,6 +97,14 @@ const TOGGLES = {
 const UI_TOGGLES = {
   legend: ["panelLegend", "legend"],
   dividers: ["panelDividers", "dividers"],
+};
+
+// Liga/desliga o comportamento automático (página "Comportamento"): argumento -> [campo no banco, campo da config]
+const FLAGS = {
+  autoPanel: ["autoPanel", "autoPanel"],
+  clean: ["autoPanelClean", "autoPanelClean"],
+  resetEmpty: ["resetOnEmpty", "resetOnEmpty"],
+  protectAdmins: ["protectAdmins", "protectAdmins"],
 };
 
 async function handleCallHubConfigButton(interaction) {
@@ -111,6 +126,26 @@ async function handleCallHubConfigButton(interaction) {
       return interaction.update({ components: await lookPanel(guild) });
     }
 
+    case "chcfg_flag": {
+      const flag = FLAGS[arg];
+      if (!flag) return;
+      await updateCallHubConfig(guild.id, { [flag[0]]: !cfg[flag[1]] });
+      return interaction.update({ components: await behaviorPanel(guild) });
+    }
+
+    case "chcfg_reset_behavior":
+      await resetCallHubConfig(guild.id, [
+        "autoPanel",
+        "autoPanelClean",
+        "resetOnEmpty",
+        "logChannelId",
+        "actionCooldown",
+        "emptyDelay",
+        "pickerMax",
+        "protectAdmins",
+      ]);
+      return interaction.update({ components: await behaviorPanel(guild) });
+
     case "chcfg_mode":
       await updateCallHubConfig(guild.id, { panelMode: cfg.mode === "select" ? null : "select" });
       return interaction.update({ components: await buttonsPanel(guild) });
@@ -129,6 +164,7 @@ async function handleCallHubConfigButton(interaction) {
     case "chcfg_page":
       if (arg === "messages") return interaction.update({ components: await messagesPanel(guild) });
       if (arg === "buttons") return interaction.update({ components: await buttonsPanel(guild) });
+      if (arg === "behavior") return interaction.update({ components: await behaviorPanel(guild) });
       return interaction.update({ components: arg === "access" ? await accessPanel(guild) : await lookPanel(guild) });
 
     case "chcfg_reset_msgs":
@@ -137,6 +173,7 @@ async function handleCallHubConfigButton(interaction) {
 
     case "chcfg_edit": {
       if (arg === "main") return interaction.showModal(buildMainModal(cfg));
+      if (arg === "limits") return interaction.showModal(buildLimitsModal(cfg));
       if (SECTIONS.some((s) => s.id === arg)) return interaction.showModal(buildSectionModal(arg, cfg));
       return;
     }
@@ -189,6 +226,12 @@ async function handleCallHubConfigSelect(interaction) {
   if (customId === "chcfg_ignored") {
     await updateCallHubConfig(guild.id, { ignoredChannels: values });
     return interaction.update({ components: await homePanel(guild) });
+  }
+
+  // Canal de registro das ações do painel: vazio = não registra
+  if (customId === "chcfg_logchannel") {
+    await updateCallHubConfig(guild.id, { logChannelId: values[0] ?? null });
+    return interaction.update({ components: await behaviorPanel(guild) });
   }
 
   // Listas de cargos (podem ficar vazias)
@@ -251,6 +294,22 @@ async function handleCallHubConfigModal(interaction) {
       patch[`texts.${key}`] = textPatch(key, read(key));
     }
     if (read("footer").toLowerCase() === "nenhum") patch["texts.footer"] = "nenhum";
+  } else if (kind === "limits") {
+    back = "behavior";
+    const num = (id, min, max, fallback) => {
+      const raw = read(id);
+      if (!raw) return fallback;
+      return /^\d+$/.test(raw) && Number(raw) >= min && Number(raw) <= max ? Number(raw) : null;
+    };
+    const delay = num("delay", 0, 3600, 0);
+    const cooldown = num("cooldown", 0, 300, 0);
+    const picker = num("picker", 1, 25, 5);
+    if (delay === null) return deny(interaction, "Tempo vazia inválido. Use um número de 0 a 3600 (segundos).");
+    if (cooldown === null) return deny(interaction, "Intervalo inválido. Use um número de 0 a 300 (segundos).");
+    if (picker === null) return deny(interaction, "Pessoas por seleção inválido. Use um número de 1 a 25.");
+    patch.emptyDelay = delay;
+    patch.actionCooldown = cooldown;
+    patch.pickerMax = picker;
   } else if (kind.startsWith("btn_")) {
     const key = kind.slice("btn_".length);
     if (!BUTTON_KEYS.includes(key)) return;
@@ -296,7 +355,9 @@ async function handleCallHubConfigModal(interaction) {
       ? await messagesPanel(guild)
       : back === "buttons"
         ? await buttonsPanel(guild)
-        : await lookPanel(guild);
+        : back === "behavior"
+          ? await behaviorPanel(guild)
+          : await lookPanel(guild);
   if (interaction.isFromMessage()) return interaction.update({ components });
   return interaction.reply({ components, flags: V2 | EPHEMERAL });
 }
@@ -348,7 +409,21 @@ async function requireCall(interaction, cfg, { update = false } = {}) {
   return { channel };
 }
 
-const PICKER_ACTIONS = { add: 5, remove: 5, kick: 5, move: 5, transfer: 1, blacklist: 5 }; // action -> máx. de pessoas
+const PICKER_ACTIONS = new Set(["add", "remove", "kick", "move", "transfer", "blacklist"]); // máx. de pessoas: Comportamento → Tempos e limites
+// Ações que mudam a call: ela passa a contar como "mexida pelo painel" (restaurada ao esvaziar, se ligado)
+const TOUCHING = new Set(["lock", "unlock", "limit", "add", "remove", "blacklist", "load"]);
+
+// Intervalo entre ações (configurável). Responde o aviso e retorna true se a pessoa ainda precisa esperar.
+async function waiting(interaction, cfg, { update = false } = {}) {
+  const left = checkCooldown(cfg, interaction.member);
+  if (!left) return false;
+  const content = say(cfg, "cooldown", { s: left });
+  if (update) await interaction.update({ components: buildNotice(content) });
+  else await reply(interaction, content);
+  return true;
+}
+
+const touch = (channel, key) => (TOUCHING.has(key) ? markTouched(channel) : null);
 
 const mentions = (ids) => ids.map((id) => `<@${id}>`).join(" ");
 
@@ -387,10 +462,13 @@ async function runPanelAction(interaction, rawAction, cfg) {
   if (action === "lockkeep") {
     const found = await requireCall(interaction, cfg, { update: true });
     if (!found) return;
+    if (await waiting(interaction, cfg, { update: true })) return;
     const keep = humansIn(found.channel)
       .map((m) => m.id)
       .filter((id) => id !== member.id);
     await applyLock(found.channel, member.id, keep);
+    await touch(found.channel, "lock");
+    logAction(guild, cfg, { actor: member, key: "lock", channel: found.channel, targets: keep });
     return interaction.update({
       components: buildNotice(keep.length ? say(cfg, "lockDone", { pessoas: mentions(keep) }) : say(cfg, "lockAlone")),
     });
@@ -421,7 +499,10 @@ async function runPanelAction(interaction, rawAction, cfg) {
     }
 
     case "unlock":
+      if (await waiting(interaction, cfg)) return;
       await setLocked(channel, false);
+      await touch(channel, "unlock");
+      logAction(guild, cfg, { actor: member, key: "unlock", channel });
       return reply(interaction, say(cfg, "unlockDone"));
 
     case "limit":
@@ -459,7 +540,7 @@ async function runPanelAction(interaction, rawAction, cfg) {
           hint: say(cfg, `${action}Hint`),
           placeholder: say(cfg, "pickPlaceholder"),
           min: 1,
-          max: PICKER_ACTIONS[action],
+          max: cfg.pickerMax,
         }),
         flags: V2 | EPHEMERAL,
       });
@@ -484,6 +565,7 @@ async function runPanelAction(interaction, rawAction, cfg) {
     }
 
     case "save": {
+      if (await waiting(interaction, cfg)) return;
       const allowed = allowedMemberIds(channel, member.id);
       await updateProfile(guild.id, member.id, {
         hasSaved: true,
@@ -491,6 +573,7 @@ async function runPanelAction(interaction, rawAction, cfg) {
         locked: isLocked(channel),
         allowed: allowed.slice(0, 25),
       });
+      logAction(guild, cfg, { actor: member, key: "save", channel });
       return reply(
         interaction,
         say(cfg, "saveDone", {
@@ -504,6 +587,7 @@ async function runPanelAction(interaction, rawAction, cfg) {
     case "load": {
       const profile = await getProfile(guild.id, member.id);
       if (!profile?.hasSaved) return reply(interaction, say(cfg, "loadNone"));
+      if (await waiting(interaction, cfg)) return;
 
       await interaction.deferReply({ flags: EPHEMERAL });
       const blocked = blockedMemberIds(channel);
@@ -516,6 +600,8 @@ async function runPanelAction(interaction, rawAction, cfg) {
         await setLocked(channel, false);
         for (const id of saved) await allowUser(channel, id).catch(() => {});
       }
+      await touch(channel, "load");
+      logAction(guild, cfg, { actor: member, key: "load", channel });
       return interaction.editReply({
         flags: V2,
         components: buildNotice(
@@ -525,6 +611,14 @@ async function runPanelAction(interaction, rawAction, cfg) {
           })
         ),
       });
+    }
+
+    case "reset": {
+      if (await waiting(interaction, cfg)) return;
+      const changed = await resetCall(channel);
+      await clearCallState(channel.id, ["touched"]);
+      if (changed) logAction(guild, cfg, { actor: member, key: "reset", channel });
+      return reply(interaction, say(cfg, changed ? "resetDone" : "resetNothing"));
     }
 
     default:
@@ -545,7 +639,7 @@ async function runPick(action, ids, { guild, channel, actor, cfg }) {
 
   const fetchMember = (id) => guild.members.cache.get(id) ?? guild.members.fetch(id).catch(() => null);
   // Administradores não podem ser desconectados nem bloqueados por quem não é administrador
-  const isProtected = (member) => !actorIsAdmin && member.permissions.has(PermissionFlagsBits.Administrator);
+  const isProtected = (member) => cfg.protectAdmins && !actorIsAdmin && member.permissions.has(PermissionFlagsBits.Administrator);
 
   switch (action) {
     case "lock": {
@@ -677,13 +771,15 @@ async function handleCallPanelSelect(interaction) {
 
   const { guild } = interaction;
   const [, action] = interaction.customId.split(":");
-  if (!PICKER_ACTIONS[action] && action !== "lock") return;
+  if (!PICKER_ACTIONS.has(action) && action !== "lock") return;
 
   const cfg = await getCallHubConfig(guild.id);
   const found = await requireCall(interaction, cfg, { update: true });
   if (!found) return;
+  if (await waiting(interaction, cfg, { update: true })) return;
 
   await interaction.deferUpdate();
+  let failed = false;
   const result = await runPick(action, interaction.values, {
     guild,
     channel: found.channel,
@@ -691,8 +787,13 @@ async function handleCallPanelSelect(interaction) {
     cfg,
   }).catch((err) => {
     console.error(`[CALLS] Erro na ação "${action}":`, err);
+    failed = true;
     return say(cfg, "errorGeneric");
   });
+  if (!failed) {
+    await touch(found.channel, action);
+    logAction(guild, cfg, { actor: interaction.member, key: action, channel: found.channel, targets: interaction.values });
+  }
 
   return interaction.editReply({ components: buildNotice(result || say(cfg, "nothingChanged")) });
 }
@@ -709,8 +810,12 @@ async function handleCallPanelModal(interaction) {
   const raw = interaction.fields.getTextInputValue("limit").trim();
   if (!/^\d{1,2}$/.test(raw)) return reply(interaction, say(cfg, "limitInvalid"));
 
+  if (await waiting(interaction, cfg)) return;
+
   const limit = Number(raw);
   await found.channel.setUserLimit(limit).catch(() => {});
+  await touch(found.channel, "limit");
+  logAction(guild, cfg, { actor: interaction.member, key: "limit", channel: found.channel });
   return reply(interaction, limit ? say(cfg, "limitSet", { n: limit }) : say(cfg, "limitRemoved"));
 }
 

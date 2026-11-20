@@ -212,6 +212,9 @@ async function sweepCalls(client) {
   if (docs.length) await CallRoom.deleteMany({ channelId: { $in: docs.map((d) => d.channelId) } }).catch(() => {});
 
   await loadOwners(client);
+
+  // Calls que esvaziaram com o bot desligado: apaga painel esquecido / restaura conforme a configuração do servidor
+  await require("./callHubAuto").sweepAutoPanels(client);
 }
 
 module.exports = {

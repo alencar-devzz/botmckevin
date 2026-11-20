@@ -27,6 +27,7 @@ const GROUPS = [
       { key: "errorGeneric", label: "Erro ao executar uma ação", vars: [], def: "Não consegui concluir. Confira se eu tenho as permissões Gerenciar Canais, Gerenciar Cargos e Mover Membros." },
       { key: "nothingChanged", label: "Nada foi alterado", vars: [], def: "Nada foi alterado." },
       { key: "cooldown", label: "Intervalo entre ações (espere)", vars: ["s"], def: "Calma, aguarde {s} segundo(s) para usar o painel de novo." },
+      { key: "logAction", label: "Registro: ação feita no painel", vars: ["usuario", "acao", "canal", "alvos"], def: "{usuario} usou **{acao}** em {canal}. Alvos: {alvos}" },
     ],
   },
   {
