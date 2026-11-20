@@ -15,7 +15,7 @@ const { buildSearchButton } = require("./mainMenu");
 const PAGE_SIZE = 4;
 
 const EMOJI = {
-  home: { name: "home", id: "1570991310612201482" },
+  home: { name: "home", id: "1573393029203624197" },
   prev: { name: "left2", id: "1573414733745365064" },
   next: { name: "right2", id: "1573414717114810448" },
   open: { name: "settings", id: "1570940544614539264" },

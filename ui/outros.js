@@ -14,7 +14,7 @@ const { buildSearchButton } = require("./mainMenu");
 // mas com grupo fixo "outros" e lista própria de sistemas.
 
 const EMOJI = {
-  home: { name: "home", id: "1570991310612201482" },
+  home: { name: "home", id: "1573393029203624197" },
   open: { name: "settings", id: "1570940544614539264" },
 };
 

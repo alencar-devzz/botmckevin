@@ -4,7 +4,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 // Linha fora do container: [Home] [Anterior] [Próximo], igual às categorias de Sistemas. Voltar/Avançar andam pelas telas já visitadas;
 // o Voltar da primeira tela leva para o painel "Outros" e o Home leva para o painel principal.
 const EMOJI = {
-  home: { name: "home", id: "1570991310612201482" },
+  home: { name: "home", id: "1573393029203624197" },
   prev: { name: "left2", id: "1573414733745365064" },
   next: { name: "right2", id: "1573414717114810448" },
 };
