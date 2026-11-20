@@ -5,8 +5,8 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 // o Voltar da primeira tela leva para o painel "Outros" e o Home leva para o painel principal.
 const EMOJI = {
   home: { name: "home", id: "1570991310612201482" },
-  prev: { name: "left2", id: "1572401579221590127" },
-  next: { name: "right2", id: "1572401550977007666" },
+  prev: { name: "left2", id: "1573391983425093823" },
+  next: { name: "right2", id: "1573391968963133610" },
 };
 const MAX_HISTORY = 40;
 const MAX_MESSAGES = 300;

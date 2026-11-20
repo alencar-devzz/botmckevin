@@ -25,8 +25,8 @@ const clip = (value, max) => String(value ?? "").slice(0, max);
 const unix = (ms = Date.now()) => Math.floor(ms / 1000);
 
 // Mesmos emojis dos botões de voltar e avançar do /menu
-const EMOJI_PREV = { name: "left2", id: "1572401579221590127" };
-const EMOJI_NEXT = { name: "right2", id: "1572401550977007666" };
+const EMOJI_PREV = { name: "left2", id: "1573391983425093823" };
+const EMOJI_NEXT = { name: "right2", id: "1573391968963133610" };
 
 function btn(id, label, style = ButtonStyle.Secondary, disabled = false) {
   return new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style).setDisabled(disabled);

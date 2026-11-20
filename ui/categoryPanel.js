@@ -16,8 +16,8 @@ const PAGE_SIZE = 4;
 
 const EMOJI = {
   home: { name: "home", id: "1570991310612201482" },
-  prev: { name: "left2", id: "1572401579221590127" },
-  next: { name: "right2", id: "1572401550977007666" },
+  prev: { name: "left2", id: "1573391983425093823" },
+  next: { name: "right2", id: "1573391968963133610" },
   open: { name: "settings", id: "1570940544614539264" },
 };
 
