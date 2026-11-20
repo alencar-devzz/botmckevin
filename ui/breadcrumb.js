@@ -273,7 +273,7 @@ function applyArrowRows(items) {
   if (!containers.length) return;
   let total = items.reduce((sum, item) => sum + countComponents(item), 0);
 
-  // 1) ligar/desligar do sistema no canto superior direito do título (se o título for texto solto)
+  // ligar/desligar do sistema no canto superior direito do título (se o título for texto solto)
   const head = containers[0];
   const first = head.components?.[0];
   if (first?.type === TYPE.TextDisplay && total + 2 <= MAX_COMPONENTS) {
@@ -287,23 +287,6 @@ function applyArrowRows(items) {
       };
       total += 2;
     }
-  }
-
-  // 2) o resto dos botões vira lista com seta (ou chave on/off) à direita
-  for (const container of containers) {
-    const next = [];
-    for (const child of container.components ?? []) {
-      if (isArrowRow(child)) {
-        const delta = 2 * child.components.length - 1; // linha (1 + n) vira n seções (3 cada)
-        if (total + delta <= MAX_COMPONENTS) {
-          total += delta;
-          next.push(...child.components.map(arrowSection));
-          continue;
-        }
-      }
-      next.push(child);
-    }
-    container.components = next;
   }
 }
 
