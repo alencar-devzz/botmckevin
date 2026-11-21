@@ -12,8 +12,8 @@ const panelSchema = new Schema(
     description: { type: String, default: "Clique no botão abaixo para verificar seu perfil." },
     buttonLabel: { type: String, default: "Verificar" },
     buttonEmoji: { type: String, default: null }, // emoji unicode ou <:nome:id>
-    successText: { type: String, default: "✅ Perfil verificado com sucesso!" },
-    failText: { type: String, default: "❌ Seu perfil não contém o padrão exigido." },
+    successText: { type: String, default: "Perfil verificado com sucesso!" },
+    failText: { type: String, default: "Seu perfil não contém o padrão exigido." },
 
     // Cargos concedidos / removidos ao verificar
     giveRoles: { type: [String], default: [] },

@@ -13,9 +13,31 @@ const EMOJI = {
   on: { name: "on3", id: "1573434230690545664" },
   off: { name: "off3", id: "1573434379181621489" },
 };
+const E = {
+  pencil: { name: "pencil", id: "1571748457423831191" },
+  pencil2: { name: "pencil2", id: "1571767357423095878" },
+  trash: { name: "trash", id: "1571750967094022154" },
+  send: { name: "send", id: "1571748543600005200" },
+  more: { name: "more", id: "1571750505426845810" },
+  lupa: { name: "lupa", id: "1569386560107970755" },
+  settings: { name: "settings", id: "1570940544614539264" },
+  check: { name: "check", id: "1571598243526348850" },
+  alert: { name: "alert", id: "1569387419634106448" },
+  note: { name: "note", id: "1569386865587392602" },
+  member: { name: "member", id: "1570579495746937002" },
+  clock: { name: "clock", id: "1570940810617298954" },
+  hashtag: { name: "hashtag", id: "1570940895115616276" },
+  interaction: { name: "interaction", id: "1571767077117624470" },
+  shield: { name: "Shield", id: "1572386860485976136" },
+  hammer: { name: "hammer", id: "1569386750701215905" },
+};
 const mk = (e) => `<:${e.name}:${e.id}>`;
+
+// Remove emojis unicode de textos salvos (o painel só usa emojis customizados do servidor)
+const UNICODE_EMOJI = /[\u2190-\u21ff\u2300-\u23ff\u2600-\u27bf\u2b00-\u2bff\u{1F000}-\u{1FAFF}\u200d\ufe0f]/gu;
+const stripEmoji = (v) => String(v ?? "").replace(UNICODE_EMOJI, "").replace(/[ \t]{2,}/g, " ").trim();
 const bool = (v) => (v ? "Sim" : "Não");
-const none = (v) => v || "—";
+const none = (v) => stripEmoji(v) || "—";
 const list = (arr) => arr.length ? arr.map((s) => `\`${s}\``).join(", ") : "—";
 const roles = (arr) => arr.length ? arr.map((id) => `<@&${id}>`).join(", ") : "—";
 
@@ -38,7 +60,7 @@ function buildBioPanelHome(panels, hasToken) {
       .setButtonAccessory(
         new ButtonBuilder()
           .setCustomId("bp_token_set")
-          .setEmoji(EMOJI.arrow)
+          .setEmoji(E.pencil2)
           .setStyle(ButtonStyle.Secondary)
       )
   );
@@ -48,7 +70,7 @@ function buildBioPanelHome(panels, hasToken) {
       new SectionBuilder()
         .addTextDisplayComponents(text("**Remover token**\n-# Apaga a token do banco de dados"))
         .setButtonAccessory(
-          new ButtonBuilder().setCustomId("bp_token_clear").setEmoji(EMOJI.arrow).setStyle(ButtonStyle.Danger)
+          new ButtonBuilder().setCustomId("bp_token_clear").setEmoji(E.trash).setStyle(ButtonStyle.Danger)
         )
     );
   }
@@ -69,7 +91,7 @@ function buildBioPanelHome(panels, hasToken) {
         .setButtonAccessory(
           new ButtonBuilder()
             .setCustomId(`bp_panel_edit:${p.panelId}`)
-            .setEmoji(EMOJI.arrow)
+            .setEmoji(E.settings)
             .setStyle(ButtonStyle.Secondary)
         )
     );
@@ -108,18 +130,18 @@ function buildBioPanelEdit(panel) {
   const page = editPages.get(panelId) || 1;
   const id = (action) => `bp_panel:${panelId}:${action}`;
   const clip = (v, n = 90) => {
-    const t = String(v ?? "").replace(/\s+/g, " ");
+    const t = stripEmoji(v).replace(/\s+/g, " ");
     return t.length > n ? t.slice(0, n - 1) + "…" : t;
   };
   const patterns = panel.patterns || [];
 
-  const arrowBtn = (action, style = ButtonStyle.Secondary, disabled = false) =>
-    new ButtonBuilder().setCustomId(id(action)).setEmoji(EMOJI.arrow).setStyle(style).setDisabled(disabled);
+  const iconBtn = (action, emoji, style = ButtonStyle.Secondary, disabled = false) =>
+    new ButtonBuilder().setCustomId(id(action)).setEmoji(emoji).setStyle(style).setDisabled(disabled);
   const toggleBtn = (action, on) =>
     new ButtonBuilder().setCustomId(id(action)).setEmoji(on ? EMOJI.on : EMOJI.off).setStyle(ButtonStyle.Secondary);
-  const item = (title, desc, button) =>
+  const item = (title, desc, button, icon) =>
     new SectionBuilder()
-      .addTextDisplayComponents(text(`**${title}**\n-# ${desc}`))
+      .addTextDisplayComponents(text(`${icon ? mk(icon) + " " : ""}**${title}**\n-# ${desc}`))
       .setButtonAccessory(button);
 
   const channel = panel.channelId ? `<#${panel.channelId}>` : "sem canal";
@@ -142,36 +164,36 @@ function buildBioPanelEdit(panel) {
 
   if (page === 1) {
     card
-      .addSectionComponents(item("Título", clip(none(panel.title)), arrowBtn("edit_title")))
-      .addSectionComponents(item("Descrição", clip(none(panel.description)), arrowBtn("edit_desc")))
-      .addSectionComponents(item("Botão de verificação", `${clip(none(panel.buttonLabel), 40)} · emoji ${none(panel.buttonEmoji)}`, arrowBtn("edit_btn")))
-      .addSectionComponents(item("Texto de sucesso", clip(none(panel.successText)), arrowBtn("edit_success")))
-      .addSectionComponents(item("Texto de falha", clip(none(panel.failText)), arrowBtn("edit_fail")));
+      .addSectionComponents(item("Título", clip(none(panel.title)), iconBtn("edit_title", E.pencil2), E.pencil))
+      .addSectionComponents(item("Descrição", clip(none(panel.description)), iconBtn("edit_desc", E.pencil2), E.note))
+      .addSectionComponents(item("Botão de verificação", `${clip(none(panel.buttonLabel), 40)} · emoji ${none(panel.buttonEmoji)}`, iconBtn("edit_btn", E.pencil2), E.interaction))
+      .addSectionComponents(item("Texto de sucesso", clip(none(panel.successText)), iconBtn("edit_success", E.pencil2), E.check))
+      .addSectionComponents(item("Texto de falha", clip(none(panel.failText)), iconBtn("edit_fail", E.pencil2), E.alert));
   } else if (page === 2) {
     card
-      .addSectionComponents(item("Bio (sobre mim)", bool(panel.checkBio), toggleBtn("toggle_bio", panel.checkBio)))
-      .addSectionComponents(item("Status personalizado", bool(panel.checkStatus), toggleBtn("toggle_status", panel.checkStatus)))
-      .addSectionComponents(item("Pronomes", bool(panel.checkPronouns), toggleBtn("toggle_pronouns", panel.checkPronouns)))
+      .addSectionComponents(item("Bio (sobre mim)", bool(panel.checkBio), toggleBtn("toggle_bio", panel.checkBio), E.member))
+      .addSectionComponents(item("Status personalizado", bool(panel.checkStatus), toggleBtn("toggle_status", panel.checkStatus), E.clock))
+      .addSectionComponents(item("Pronomes", bool(panel.checkPronouns), toggleBtn("toggle_pronouns", panel.checkPronouns), E.hashtag))
       .addTextDisplayComponents(
         text(
           `**Padrões exigidos** · ${patterns.length}/10\n-# O perfil deve conter TODOS os padrões nos campos ativados.\n` +
           (patterns.length ? clip(patterns.map((p, i) => `${i + 1}. \`${p}\``).join("\n"), 1200) : "-# Nenhum padrão definido.")
         )
       )
-      .addSectionComponents(item("Adicionar padrão", "Texto que o perfil precisa conter.", arrowBtn("add_pattern")))
-      .addSectionComponents(item("Remover padrão", "Escolha pelo número.", arrowBtn("remove_pattern", ButtonStyle.Secondary, !patterns.length)));
+      .addSectionComponents(item("Adicionar padrão", "Texto que o perfil precisa conter.", iconBtn("add_pattern", E.more), E.pencil))
+      .addSectionComponents(item("Remover padrão", "Escolha pelo número.", iconBtn("remove_pattern", E.trash, ButtonStyle.Secondary, !patterns.length), E.trash));
   } else if (page === 3) {
     card
-      .addSectionComponents(item("Dar cargos ao verificar", clip(roles(panel.giveRoles || []), 300), arrowBtn("edit_give_roles")))
-      .addSectionComponents(item("Remover cargos ao verificar", clip(roles(panel.removeRoles || []), 300), arrowBtn("edit_remove_roles")));
+      .addSectionComponents(item("Dar cargos ao verificar", clip(roles(panel.giveRoles || []), 300), iconBtn("edit_give_roles", E.pencil2), E.shield))
+      .addSectionComponents(item("Remover cargos ao verificar", clip(roles(panel.removeRoles || []), 300), iconBtn("edit_remove_roles", E.pencil2), E.hammer));
   } else {
     card
-      .addSectionComponents(item("Canal do painel", channel, arrowBtn("set_channel")))
-      .addSectionComponents(item(panel.messageId ? "Reenviar mensagem" : "Publicar mensagem", "O bot envia o painel no canal escolhido.", arrowBtn("publish", ButtonStyle.Success, !panel.channelId)))
-      .addSectionComponents(item("Excluir painel", "Apaga o painel e a mensagem publicada.", arrowBtn("delete_panel", ButtonStyle.Danger)));
+      .addSectionComponents(item("Canal do painel", channel, iconBtn("set_channel", E.settings), E.hashtag))
+      .addSectionComponents(item(panel.messageId ? "Reenviar mensagem" : "Publicar mensagem", "O bot envia o painel no canal escolhido.", iconBtn("publish", E.send, ButtonStyle.Success, !panel.channelId), E.send))
+      .addSectionComponents(item("Excluir painel", "Apaga o painel e a mensagem publicada.", iconBtn("delete_panel", E.trash, ButtonStyle.Danger), E.trash));
   }
 
-  // Navegação ← → e prévia, igual às telas de referência
+  // Navegação (setas) e prévia, igual às telas de referência
   card
     .addSeparatorComponents(sep())
     .addActionRowComponents(
@@ -181,7 +203,7 @@ function buildBioPanelEdit(panel) {
       )
     )
     .addSeparatorComponents(sep())
-    .addSectionComponents(item("Prévia completa", "Confira o painel antes de publicar.", arrowBtn("preview")));
+    .addSectionComponents(item("Prévia completa", "Confira o painel antes de publicar.", iconBtn("preview", E.lupa), E.lupa));
 
   // "Voltar" no mesmo formato dos demais painéis: o decorator do /menu tira ele do container
   // e coloca numa linha própria embaixo.
@@ -319,7 +341,7 @@ function buildButtonModal(panelId, panel) {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("emoji")
-          .setLabel("Emoji (opcional, ex.: ✅ ou <:nome:id>)")
+          .setLabel("Emoji (opcional, ex.: <:nome:id>)")
           .setStyle(TextInputStyle.Short)
           .setValue(panel.buttonEmoji ?? "")
           .setRequired(false)
@@ -356,6 +378,7 @@ function buildPublicPanel(panel) {
 }
 
 module.exports = {
+  stripEmoji,
   buildBioPanelHome,
   buildBioPanelEdit,
   setEditPage,

@@ -5,7 +5,7 @@ const {
 } = require("../utils/bioPanel/store");
 const { fetchProfile, checkProfile } = require("../utils/bioPanel/api");
 const {
-  buildBioPanelHome, buildBioPanelEdit, setEditPage,
+  buildBioPanelHome, buildBioPanelEdit, setEditPage, stripEmoji,
   buildTokenModal, buildTextModal, buildPatternModal, buildRemovePatternModal,
   buildRolesModal, buildChannelModal, buildButtonModal, buildPublicPanel,
 } = require("../ui/bioPanel/bioPanelConfig");
@@ -252,7 +252,7 @@ async function handleBioPanelVerify(interaction) {
 
   if (!token) {
     return interaction.editReply({
-      content: "⚠️ O administrador ainda não definiu a token de acesso. A verificação está indisponível.",
+      content: "<:alert:1569387419634106448> O administrador ainda não definiu a token de acesso. A verificação está indisponível.",
       flags: EPHEMERAL,
     });
   }
@@ -283,7 +283,7 @@ async function handleBioPanelVerify(interaction) {
     // Token inválida: apaga do banco
     await clearUserToken(interaction.user.id);
     return interaction.editReply({
-      content: "❌ Sua token é inválida ou expirou. Redefina-a e tente novamente.",
+      content: "<:alert:1569387419634106448> Sua token é inválida ou expirou. Redefina-a e tente novamente.",
       flags: EPHEMERAL,
     });
   }
@@ -300,11 +300,11 @@ async function handleBioPanelVerify(interaction) {
       try { await member.roles.remove(roleId); } catch { errors.push(`remover <@&${roleId}>`); }
     }
     const extra = errors.length ? `\n-# Erro nos cargos: ${errors.join(", ")}` : "";
-    return interaction.editReply({ content: panel.successText + extra, flags: EPHEMERAL });
+    return interaction.editReply({ content: stripEmoji(panel.successText) + extra, flags: EPHEMERAL });
   }
 
   return interaction.editReply({
-    content: `${panel.failText}\n-# ${details.join("\n-# ")}`,
+    content: `${stripEmoji(panel.failText)}\n-# ${details.join("\n-# ")}`,
     flags: EPHEMERAL,
   });
 }
@@ -344,7 +344,7 @@ async function handleBioPanelUserToken(interaction) {
 async function handleBioPanelUserTokenModal(interaction) {
   const token = interaction.fields.getTextInputValue("token").trim();
   await setUserToken(interaction.user.id, token);
-  return interaction.reply({ content: "✅ Sua token foi salva com criptografia. Agora clique em **Verificar**.", flags: EPHEMERAL });
+  return interaction.reply({ content: "<:check:1571598243526348850> Sua token foi salva com criptografia. Agora clique em **Verificar**.", flags: EPHEMERAL });
 }
 
 module.exports = {
