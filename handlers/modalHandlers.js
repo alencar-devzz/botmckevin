@@ -16,6 +16,7 @@ const { handleSearchModal } = require("./menuSearchHandlers");
 const { handleSorteioModal } = require("./sorteioHandlers");
 const { handleInvitesConfigModal } = require("./convitesConfigHandlers");
 const { handleUnbanallModal } = require("./unbanallHandlers");
+const { handleBioPanelModal } = require("./bioPanelHandlers");
 
 const { handleCallHubConfigModal, handleCallPanelModal } = require("./callHubHandlers");
 
@@ -45,6 +46,11 @@ async function handleModal(interaction) {
   // Painel do comando /duplicar-categoria (nome da cópia)
   if (customId.startsWith("dup:")) {
     return handleDupModal(interaction);
+  }
+
+  // Cargos por perfil (token, texto, mídia, botões, padrões e respostas)
+  if (customId.startsWith("bp_modal:")) {
+    return handleBioPanelModal(interaction);
   }
 
   // Criador de mensagens (comando mensagem)

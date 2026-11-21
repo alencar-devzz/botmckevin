@@ -5,13 +5,19 @@ const {
 } = require("../utils/bioPanel/store");
 const { fetchProfile, checkProfile } = require("../utils/bioPanel/api");
 const {
-  buildBioPanelHome, buildBioPanelEdit, setEditPage, stripEmoji,
-  buildTokenModal, buildTextModal, buildPatternModal, buildRemovePatternModal,
-  buildRolesModal, buildChannelModal, buildButtonModal, buildPublicPanel,
+  buildBioPanelHome, buildBioPanelEdit, setEditPage, stepEditPage, needsReport, stripEmoji,
+  buildTokenModal, buildTextModal, buildImageModal, buildHexModal, buildMainButtonModal,
+  buildExtraButtonModal, buildPatternModal, buildReplyModal, DEFAULT_MESSAGE,
 } = require("../ui/bioPanel/bioPanelConfig");
+const {
+  LIMITS, cleanText, normalizePanel, savePanelImage, dropPanelAssets, renderPanel, publishPanel, syncPublished,
+} = require("../utils/bioPanel/message");
+const { LAYOUTS, COLORS, BUTTON_STYLES, PLACES, parseHex, dropSources } = require("../utils/msgBuilder/store");
+const { textLength, parseEmoji } = require("../utils/msgBuilder/render");
 
 const V2 = MessageFlags.IsComponentsV2;
 const EPHEMERAL = MessageFlags.Ephemeral;
+const LINK = /^https?:\/\/\S+$/i;
 
 const deny = (i, msg) => {
   const p = { content: msg, flags: EPHEMERAL };
@@ -37,13 +43,37 @@ const safeUpdate = (interaction, payload) => {
   return interaction.update(payload).catch(() => interaction.editReply(payload));
 };
 
+// Aviso só para quem clicou
+const notice = (interaction, content) => deny(interaction, content);
+
+// Mostra a etapa aberta do editor (atualiza a mensagem do /menu)
+async function showEditor(interaction, panelId, note = null) {
+  const raw = await getPanel(interaction.guildId, panelId);
+  if (!raw) return deny(interaction, "Painel não encontrado.");
+  const report = needsReport(panelId) ? await renderPanel(raw) : null;
+  return safeUpdate(interaction, { components: buildBioPanelEdit(raw, { report, note }), flags: V2 });
+}
+
+// Salva e, se o painel já estiver publicado, atualiza a mensagem do canal na hora.
+// Devolve um aviso curto quando a mensagem publicada não pôde ser atualizada.
+async function commit(interaction, panelId, patch, { sync = true } = {}) {
+  await updatePanel(interaction.guildId, panelId, patch);
+  if (!sync) return null;
+  const updated = await getPanel(interaction.guildId, panelId);
+  const result = await syncPublished(interaction.guild, updated);
+  if (result === "invalid") return "-# A mensagem publicada não foi atualizada: o painel está incompleto. Veja o Resumo.";
+  if (result === "missing") return "-# A mensagem publicada sumiu do canal. Publique de novo na etapa Envio.";
+  if (result === "error") return "-# Não consegui atualizar a mensagem publicada. Confira as permissões do bot no canal.";
+  return null;
+}
+
 // ─── Botões de config ───────────────────────────────────────────────────────
 
 async function handleBioPanelButton(interaction) {
   if (!(await guard(interaction))) return;
   const { customId, guildId } = interaction;
 
-  // Voltar para home
+  // Voltar para a lista de painéis
   if (customId === "bp_home") {
     return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
   }
@@ -60,101 +90,161 @@ async function handleBioPanelButton(interaction) {
   // Criar painel
   if (customId === "bp_panel_create") {
     const panelId = await createPanel(guildId);
-    setEditPage(panelId, 1);
-    const panel = await getPanel(guildId, panelId);
-    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
+    setEditPage(panelId, "home");
+    return showEditor(interaction, panelId);
   }
 
-  // Editar painel existente (da home)
+  // Editar painel existente (da lista)
   if (customId.startsWith("bp_panel_edit:")) {
     const panelId = customId.split(":")[1];
     const panel = await getPanel(guildId, panelId);
     if (!panel) return deny(interaction, "Painel não encontrado.");
-    setEditPage(panelId, 1);
-    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
+    setEditPage(panelId, "home");
+    return showEditor(interaction, panelId);
   }
 
-  // Ações dentro de um painel — formato: bp_panel:<panelId>:<action>
+  // Ações dentro de um painel: bp_panel:<panelId>:<ação>[:<arg>]
   if (customId.startsWith("bp_panel:")) {
-    const parts = customId.split(":");
-    const panelId = parts[1];
-    const action = parts[2];
-    return handlePanelAction(interaction, guildId, panelId, action);
+    const [, panelId, action, arg] = customId.split(":");
+    return handlePanelAction(interaction, guildId, panelId, action, arg);
   }
 }
 
-async function handlePanelAction(interaction, guildId, panelId, action) {
-  const panel = await getPanel(guildId, panelId);
-  if (!panel) return deny(interaction, "Painel não encontrado.");
+async function handlePanelAction(interaction, guildId, panelId, action, arg) {
+  const raw = await getPanel(guildId, panelId);
+  if (!raw) return deny(interaction, "Painel não encontrado.");
+  const panel = normalizePanel(raw);
 
-  // Prévia do painel público (só para quem clicou)
+  // Prévia (só para quem clicou). O botão de verificar fica desativado.
   if (action === "preview") {
-    return interaction.reply({ components: buildPublicPanel(panel), flags: V2 | EPHEMERAL });
+    const report = await renderPanel(raw, { withData: true, preview: true });
+    if (!report.ready) return deny(interaction, `Ainda não dá para ver a prévia:\n${report.problems.map((p) => `-# ${p}`).join("\n")}`);
+    return interaction.reply({ components: report.components, files: report.files, flags: V2 | EPHEMERAL });
   }
 
-  // Toggles
+  // Navegação entre as etapas
+  if (action === "go") {
+    setEditPage(panelId, arg);
+    return showEditor(interaction, panelId);
+  }
+  if (action === "prev" || action === "next") {
+    stepEditPage(panelId, action === "next" ? 1 : -1);
+    return showEditor(interaction, panelId);
+  }
+
+  // ----- modais -----
+  if (action === "txt") return interaction.showModal(buildTextModal(panelId, raw));
+  if (action === "img_main") return interaction.showModal(buildImageModal(panelId, "main"));
+  if (action === "img_thumb") return interaction.showModal(buildImageModal(panelId, "thumb"));
+  if (action === "hex") return interaction.showModal(buildHexModal(panelId, panel.color));
+  if (action === "btn_main") return interaction.showModal(buildMainButtonModal(panelId, raw));
+  if (action === "add_pattern") return interaction.showModal(buildPatternModal(panelId));
+  if (action === "resp_ok") return interaction.showModal(buildReplyModal(panelId, "ok", panel.successText));
+  if (action === "resp_fail") return interaction.showModal(buildReplyModal(panelId, "fail", panel.failText));
+  if (action === "btn_add") {
+    if (panel.extraButtons.length >= LIMITS.extraButtons) return deny(interaction, `Máximo de ${LIMITS.extraButtons} links extras.`);
+    return interaction.showModal(buildExtraButtonModal(panelId, "new"));
+  }
+  if (action === "btn_edit") {
+    const target = panel.extraButtons[Number(arg)];
+    if (!target) return deny(interaction, "Esse link não existe mais.");
+    return interaction.showModal(buildExtraButtonModal(panelId, Number(arg), target));
+  }
+
+  // ----- texto -----
+  if (action === "txt_reset") {
+    const note = await commit(interaction, panelId, { message: DEFAULT_MESSAGE });
+    return showEditor(interaction, panelId, note);
+  }
+
+  // ----- mídia -----
+  if (action === "img_xmain" || action === "img_xthumb") {
+    const field = action === "img_xmain" ? "image" : "thumb";
+    const old = panel[field];
+    const note = await commit(interaction, panelId, { [field]: null });
+    await dropSources([old]);
+    return showEditor(interaction, panelId, note);
+  }
+
+  // ----- aparência -----
+  if (action === "look_wide") {
+    const note = await commit(interaction, panelId, { wide: !panel.wide });
+    return showEditor(interaction, panelId, note);
+  }
+
+  // ----- botões -----
+  if (action === "btn_del") {
+    const list = [...panel.extraButtons];
+    if (!list[Number(arg)]) return showEditor(interaction, panelId);
+    list.splice(Number(arg), 1);
+    const note = await commit(interaction, panelId, { extraButtons: list });
+    return showEditor(interaction, panelId, note);
+  }
+
+  // ----- verificação -----
   const toggles = { toggle_bio: "checkBio", toggle_status: "checkStatus", toggle_pronouns: "checkPronouns" };
   if (toggles[action]) {
     await updatePanel(guildId, panelId, { [toggles[action]]: !panel[toggles[action]] });
-    const updated = await getPanel(guildId, panelId);
-    return safeUpdate(interaction, { components: buildBioPanelEdit(updated), flags: V2 });
+    return showEditor(interaction, panelId);
   }
 
-  // Modais de texto simples
-  const textModals = {
-    edit_title: ["Título do painel", "Título", panel.title],
-    edit_desc: ["Descrição do painel", "Descrição", panel.description, true],
-    edit_success: ["Texto de sucesso", "Texto mostrado ao verificar com sucesso", panel.successText, true],
-    edit_fail: ["Texto de falha", "Texto mostrado ao falhar a verificação", panel.failText, true],
-  };
-  if (textModals[action]) {
-    const [title, label, cur, long] = textModals[action];
-    return interaction.showModal(buildTextModal(`bp_modal:${action}:${panelId}`, title, label, cur, long));
-  }
-
-  if (action === "edit_btn") return interaction.showModal(buildButtonModal(panelId, panel));
-  if (action === "add_pattern") return interaction.showModal(buildPatternModal(panelId));
-  if (action === "remove_pattern") return interaction.showModal(buildRemovePatternModal(panelId, panel.patterns));
-
-  // Publicar painel no canal
+  // ----- publicação -----
   if (action === "publish") {
-    if (!panel.channelId) return deny(interaction, "Defina o canal antes de publicar.");
-    const channel = interaction.guild.channels.cache.get(panel.channelId);
-    if (!channel) return deny(interaction, "Canal não encontrado. Verifique o ID.");
-    await interaction.deferUpdate();
-    // Apaga mensagem antiga se houver
-    if (panel.messageId) {
-      try { await channel.messages.delete(panel.messageId); } catch { /* já deletada */ }
+    if (!panel.channelId) return deny(interaction, "Escolha o canal antes de publicar.");
+    await interaction.deferUpdate().catch(() => {});
+    let result;
+    try {
+      result = await publishPanel(interaction.guild, raw);
+    } catch (err) {
+      console.error("[BIOPANEL] Falha ao publicar:", err?.message ?? err);
+      result = { error: "Não consegui enviar a mensagem. Confira se o bot pode ver e escrever no canal." };
     }
-    const msg = await channel.send({ components: buildPublicPanel(panel), flags: V2 });
-    await updatePanel(guildId, panelId, { messageId: msg.id, channelId: channel.id });
-    const updated = await getPanel(guildId, panelId);
-    return interaction.editReply({ components: buildBioPanelEdit(updated), flags: V2 });
+    return showEditor(interaction, panelId, result.error ? `-# ${result.error}` : null);
   }
 
-  // Excluir painel
-  if (action === "delete_panel") {
+  // ----- exclusão (com confirmação) -----
+  if (action === "del") {
+    setEditPage(panelId, "del");
+    return showEditor(interaction, panelId);
+  }
+  if (action === "del_no") {
+    setEditPage(panelId, "send");
+    return showEditor(interaction, panelId);
+  }
+  if (action === "del_ok") {
     if (panel.messageId && panel.channelId) {
       const ch = interaction.guild.channels.cache.get(panel.channelId);
-      if (ch) try { await ch.messages.delete(panel.messageId); } catch { /* ok */ }
+      if (ch) await ch.messages.delete(panel.messageId).catch(() => {});
     }
+    await dropPanelAssets(panel);
     await deletePanel(guildId, panelId);
     return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
   }
 }
 
-
-// ─── Selects do editor (navegação, cargos, canal) ───────────────────────────
+// ─── Selects do editor (navegação, formato, cor, cargos, canal) ─────────────
 
 async function handleBioPanelSelect(interaction) {
   if (!(await guard(interaction))) return;
   const { customId, guildId, values } = interaction;
   const [, panelId, action] = customId.split(":");
-  const panel = await getPanel(guildId, panelId);
-  if (!panel) return deny(interaction, "Painel não encontrado.");
+  const raw = await getPanel(guildId, panelId);
+  if (!raw) return deny(interaction, "Painel não encontrado.");
+  const panel = normalizePanel(raw);
+  let note = null;
 
   if (action === "nav") {
     setEditPage(panelId, values[0]);
+  } else if (action === "look_format") {
+    if (!(values[0] in LAYOUTS)) return;
+    note = await commit(interaction, panelId, { layout: values[0] });
+  } else if (action === "look_color") {
+    if (values[0] !== "none" && !(values[0] in COLORS)) return;
+    note = await commit(interaction, panelId, { color: values[0] === "none" ? null : values[0] });
+  } else if (action === "rm_pattern") {
+    const list = [...panel.patterns];
+    list.splice(Number(values[0]), 1);
+    await updatePanel(guildId, panelId, { patterns: list });
   } else if (action === "give_roles" || action === "remove_roles") {
     const me = interaction.guild.members.me;
     const top = me?.roles?.highest?.position ?? 0;
@@ -169,7 +259,7 @@ async function handleBioPanelSelect(interaction) {
       // mudou ou limpou o canal: apaga a mensagem publicada no canal antigo
       if (panel.messageId && panel.channelId) {
         const old = interaction.guild.channels.cache.get(panel.channelId);
-        if (old) try { await old.messages.delete(panel.messageId); } catch { /* já apagada */ }
+        if (old) await old.messages.delete(panel.messageId).catch(() => {});
       }
       await updatePanel(guildId, panelId, { channelId: newId, messageId: null });
     }
@@ -177,18 +267,34 @@ async function handleBioPanelSelect(interaction) {
     return;
   }
 
-  const updated = await getPanel(guildId, panelId);
-  return safeUpdate(interaction, { components: buildBioPanelEdit(updated), flags: V2 });
+  return showEditor(interaction, panelId, note);
 }
 
 // ─── Modais de config ────────────────────────────────────────────────────────
 
+function selectValue(interaction, id) {
+  try {
+    return interaction.fields.getStringSelectValues(id)?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Emoji de botão: só emoji do servidor (<:nome:id>). Devolve { value } ou { error }.
+function customEmoji(raw) {
+  const v = String(raw ?? "").trim();
+  if (!v) return { value: "" };
+  const parsed = parseEmoji(v);
+  if (parsed.error || typeof parsed.value === "string") {
+    return { error: "Emoji inválido. Use um emoji do servidor no formato <:nome:id>. Emoji unicode não é aceito." };
+  }
+  return { value: v };
+}
+
 async function handleBioPanelModal(interaction) {
   if (!(await guard(interaction))) return;
-  const { customId, guildId } = interaction;
-  const parts = customId.split(":");
-  // bp_modal:<type>[:<panelId>[:<field>]]
-  const type = parts[1];
+  const { customId, guildId, guild, user } = interaction;
+  const [, type, panelId, arg] = customId.split(":"); // bp_modal:<tipo>[:<painel>[:<arg>]]
 
   if (type === "set_token") {
     const token = interaction.fields.getTextInputValue("token").trim();
@@ -196,70 +302,112 @@ async function handleBioPanelModal(interaction) {
     return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
   }
 
-  const panelId = parts[2];
   if (!panelId) return;
+  const raw = await getPanel(guildId, panelId);
+  if (!raw) return deny(interaction, "Painel não encontrado.");
+  const panel = normalizePanel(raw);
+  const field = (id) => interaction.fields.getTextInputValue(id).trim();
 
-  const textFields = {
-    edit_title: ["title"],
-    edit_desc: ["description"],
-    edit_success: ["successText"],
-    edit_fail: ["failText"],
-  };
-  if (textFields[type]) {
-    const [field] = textFields[type];
-    const value = interaction.fields.getTextInputValue("value").trim();
-    await updatePanel(guildId, panelId, { [field]: value });
-    const panel = await getPanel(guildId, panelId);
-    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
+  await interaction.deferUpdate(); // baixar arquivo e atualizar a mensagem publicada pode demorar
+
+  // ----- texto -----
+  if (type === "txt") {
+    const value = cleanText(interaction.fields.getTextInputValue("text"));
+    if (!value) return notice(interaction, "Escreva algum texto.");
+    if (textLength(value) > LIMITS.text) return notice(interaction, `O texto passa do limite de ${LIMITS.text} caracteres.`);
+    const note = await commit(interaction, panelId, { message: value });
+    return showEditor(interaction, panelId, note);
   }
 
-  if (type === "button") {
-    const label = interaction.fields.getTextInputValue("label").trim();
-    const emoji = interaction.fields.getTextInputValue("emoji").trim() || null;
-    await updatePanel(guildId, panelId, { buttonLabel: label, buttonEmoji: emoji });
-    const panel = await getPanel(guildId, panelId);
-    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
+  // ----- imagem principal / miniatura -----
+  if (type === "img") {
+    const file = interaction.fields.getUploadedFiles("file", false)?.first();
+    const link = field("link");
+
+    let source;
+    if (file) {
+      const saved = await savePanelImage({ guildId: guild.id, userId: user.id, file });
+      if (saved.error) return notice(interaction, saved.error);
+      source = saved.source;
+    } else if (link) {
+      if (!LINK.test(link)) return notice(interaction, "Link inválido. Use um link que começa com http:// ou https://");
+      source = link;
+    } else {
+      return notice(interaction, "Envie uma imagem ou informe o link de uma imagem.");
+    }
+
+    const target = arg === "main" ? "image" : "thumb";
+    const old = panel[target];
+    const note = await commit(interaction, panelId, { [target]: source });
+    if (old && old !== source) await dropSources([old]);
+    return showEditor(interaction, panelId, note);
   }
 
+  // ----- cor -----
+  if (type === "hex") {
+    const hex = parseHex(field("hex"));
+    if (!hex) return notice(interaction, "Cor inválida. Use o formato #RRGGBB ou #RGB.");
+    const note = await commit(interaction, panelId, { color: hex });
+    return showEditor(interaction, panelId, note);
+  }
+
+  // ----- botão de verificação -----
+  if (type === "btn_main") {
+    const label = field("label");
+    const emoji = customEmoji(field("emoji"));
+    if (emoji.error) return notice(interaction, emoji.error);
+    if (!label && !emoji.value) return notice(interaction, "O botão precisa de um texto ou de um emoji.");
+    const style = selectValue(interaction, "style");
+    const place = selectValue(interaction, "place");
+    const note = await commit(interaction, panelId, {
+      buttonLabel: label,
+      buttonEmoji: emoji.value || null,
+      buttonStyle: style in BUTTON_STYLES ? style : panel.buttonStyle,
+      buttonPlace: place in PLACES ? place : panel.buttonPlace,
+    });
+    return showEditor(interaction, panelId, note);
+  }
+
+  // ----- link extra -----
+  if (type === "btn_x") {
+    const label = field("label");
+    const url = field("url");
+    const emoji = customEmoji(field("emoji"));
+    const place = selectValue(interaction, "place");
+    if (emoji.error) return notice(interaction, emoji.error);
+    if (!LINK.test(url)) return notice(interaction, "Link inválido. Use um link que começa com http:// ou https://");
+    if (!label && !emoji.value) return notice(interaction, "O botão precisa de um texto ou de um emoji.");
+
+    const list = [...panel.extraButtons];
+    const data = { label, url, emoji: emoji.value, place: place in PLACES ? place : "inside" };
+    if (arg === "new") {
+      if (list.length >= LIMITS.extraButtons) return notice(interaction, `Máximo de ${LIMITS.extraButtons} links extras.`);
+      list.push(data);
+    } else if (list[Number(arg)]) {
+      list[Number(arg)] = data;
+    } else {
+      return showEditor(interaction, panelId);
+    }
+    const note = await commit(interaction, panelId, { extraButtons: list });
+    return showEditor(interaction, panelId, note);
+  }
+
+  // ----- padrões -----
   if (type === "add_pattern") {
-    const pattern = interaction.fields.getTextInputValue("pattern").trim();
-    const panel = await getPanel(guildId, panelId);
-    if (panel.patterns.includes(pattern)) return deny(interaction, "Esse padrão já existe.");
-    if (panel.patterns.length >= 10) return deny(interaction, "Máximo de 10 padrões por painel.");
+    const pattern = field("pattern");
+    if (!pattern) return notice(interaction, "Escreva o padrão.");
+    if (panel.patterns.includes(pattern)) return notice(interaction, "Esse padrão já existe.");
+    if (panel.patterns.length >= LIMITS.patterns) return notice(interaction, `Máximo de ${LIMITS.patterns} padrões por painel.`);
     await updatePanel(guildId, panelId, { patterns: [...panel.patterns, pattern] });
-    const updated = await getPanel(guildId, panelId);
-    return safeUpdate(interaction, { components: buildBioPanelEdit(updated), flags: V2 });
+    return showEditor(interaction, panelId);
   }
 
-  if (type === "remove_pattern") {
-    const idx = parseInt(interaction.fields.getTextInputValue("index").trim(), 10) - 1;
-    const panel = await getPanel(guildId, panelId);
-    if (isNaN(idx) || idx < 0 || idx >= panel.patterns.length)
-      return deny(interaction, `Número inválido. Use de 1 a ${panel.patterns.length}.`);
-    const newPatterns = [...panel.patterns];
-    newPatterns.splice(idx, 1);
-    await updatePanel(guildId, panelId, { patterns: newPatterns });
-    const updated = await getPanel(guildId, panelId);
-    return safeUpdate(interaction, { components: buildBioPanelEdit(updated), flags: V2 });
-  }
-
-  if (type === "roles") {
-    const field = parts[3]; // give | remove
-    const raw = interaction.fields.getTextInputValue("roles");
-    const ids = raw.split(",").map((s) => s.trim()).filter((s) => /^\d{15,25}$/.test(s));
-    const key = field === "give" ? "giveRoles" : "removeRoles";
-    await updatePanel(guildId, panelId, { [key]: ids });
-    const panel = await getPanel(guildId, panelId);
-    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
-  }
-
-  if (type === "channel") {
-    const channelId = interaction.fields.getTextInputValue("channelId").trim();
-    const ch = interaction.guild.channels.cache.get(channelId);
-    if (!ch) return deny(interaction, "Canal não encontrado. Verifique o ID.");
-    await updatePanel(guildId, panelId, { channelId });
-    const panel = await getPanel(guildId, panelId);
-    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
+  // ----- respostas -----
+  if (type === "resp_ok" || type === "resp_fail") {
+    const value = cleanText(interaction.fields.getTextInputValue("text"));
+    if (!value) return notice(interaction, "Escreva algum texto.");
+    await updatePanel(guildId, panelId, { [type === "resp_ok" ? "successText" : "failText"]: value });
+    return showEditor(interaction, panelId);
   }
 }
 
@@ -317,6 +465,8 @@ async function handleBioPanelVerify(interaction) {
   }
 
   const { passed, details } = checkProfile(profile, panel);
+  // {usuario} vira a menção de quem clicou; emoji unicode não entra nas respostas
+  const fill = (t) => stripEmoji(t).replaceAll("{usuario}", `<@${interaction.user.id}>`);
 
   if (passed) {
     // Dar/remover cargos
@@ -328,11 +478,11 @@ async function handleBioPanelVerify(interaction) {
       try { await member.roles.remove(roleId); } catch { errors.push(`remover <@&${roleId}>`); }
     }
     const extra = errors.length ? `\n-# Erro nos cargos: ${errors.join(", ")}` : "";
-    return interaction.editReply({ content: stripEmoji(panel.successText) + extra, flags: EPHEMERAL });
+    return interaction.editReply({ content: fill(panel.successText) + extra, flags: EPHEMERAL });
   }
 
   return interaction.editReply({
-    content: `${stripEmoji(panel.failText)}\n-# ${details.join("\n-# ")}`,
+    content: `${fill(panel.failText)}\n-# ${details.join("\n-# ")}`,
     flags: EPHEMERAL,
   });
 }

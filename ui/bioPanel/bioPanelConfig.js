@@ -1,251 +1,444 @@
 const {
-  ContainerBuilder, TextDisplayBuilder, SectionBuilder, SeparatorBuilder,
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle,
-  StringSelectMenuBuilder, RoleSelectMenuBuilder, ChannelSelectMenuBuilder, ChannelType,
+  SectionBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder,
+  RoleSelectMenuBuilder,
+  ChannelSelectMenuBuilder,
+  ChannelType,
+  TextInputStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  ActionRowBuilder,
 } = require("discord.js");
+const { ui } = require("../antiraid");
+const { LAYOUTS, COLORS, BUTTON_STYLES, PLACES, colorLabel, parseHex, isStored } = require("../../utils/msgBuilder/store");
+const { textLength } = require("../../utils/msgBuilder/render");
+const { textLabel, selectLabel, uploadLabel, modal } = require("../modalHelpers");
+const { LIMITS, DEFAULT_MESSAGE, stripEmoji, normalizePanel, panelName } = require("../../utils/bioPanel/message");
 
-const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3500));
-const sep = () => new SeparatorBuilder();
+// Painéis de configuração de "Cargos por perfil" (Self). Tudo em Components V2.
+// Visual do Criador de mensagens (n!msg): um assunto por container, seletor para navegar entre as etapas
+// e botões com texto numa linha embaixo. Nada de emoji: nem os personalizados de seta, nem unicode.
+// IDs: "bp_panel:<painel>:<ação>[:<arg>]" (botões e selects) e "bp_modal:<tipo>:<painel>[:<arg>]" (modais).
 
-// Emojis customizados do bot (mesmos do breadcrumb/categoryPanel)
-const EMOJI = {
-  arrow: { name: "right2", id: "1573414717114810448" },
-  prev: { name: "left2", id: "1573414733745365064" },
-  on: { name: "on3", id: "1573434230690545664" },
-  off: { name: "off3", id: "1573434379181621489" },
-};
-// Remove emojis unicode de textos salvos (o painel só usa emojis customizados do servidor)
-const UNICODE_EMOJI = /[\u2190-\u21ff\u2300-\u23ff\u2600-\u27bf\u2b00-\u2bff\u{1F000}-\u{1FAFF}\u200d\ufe0f]/gu;
-const stripEmoji = (v) => String(v ?? "").replace(UNICODE_EMOJI, "").replace(/[ \t]{2,}/g, " ").trim();
-const bool = (v) => (v ? "Sim" : "Não");
-const none = (v) => stripEmoji(v) || "—";
-const list = (arr) => arr.length ? arr.map((s) => `\`${s}\``).join(", ") : "—";
-const roles = (arr) => arr.length ? arr.map((id) => `<@&${id}>`).join(", ") : "—";
+const { text, clip, divider, btn, row, tag, box } = ui;
 
-// ─── Tela inicial do sistema ────────────────────────────────────────────────
+const num = (n) => Number(n).toLocaleString("pt-BR");
+const yes = (v) => (v ? "sim" : "não");
+const list = (arr) => (arr.length ? arr.map((s) => `\`${s}\``).join(", ") : "`nenhum`");
+const roles = (arr) => (arr.length ? arr.map((id) => `<@&${id}>`).join(", ") : "`nenhum`");
+
+// ─── Tela inicial: token e lista de painéis ─────────────────────────────────
 
 function buildBioPanelHome(panels, hasToken) {
-  const container = new ContainerBuilder()
+  const container = box()
     .addTextDisplayComponents(
       text("### Cargos por perfil"),
-      text(`-# Painel › Funções › Self › **Cargos por perfil**`)
+      text("Painéis de verificação: o membro clica no botão e, se o perfil tiver o que você pediu, recebe os cargos.")
     )
-    .addSeparatorComponents(sep());
+    .addSeparatorComponents(divider());
 
-  // Token
   container.addSectionComponents(
     new SectionBuilder()
       .addTextDisplayComponents(
-        text(`**Token de acesso**\n-# ${hasToken ? "Token definida e criptografada" : "Nenhuma token definida — a verificação não funcionará"}`)
+        text(`**Token de acesso**  ${tag(hasToken)}\n-# ${hasToken ? "Definida e criptografada." : "Nenhuma token definida: a verificação não funciona."}`)
       )
-      .setButtonAccessory(
-        new ButtonBuilder()
-          .setCustomId("bp_token_set")
-          .setEmoji(EMOJI.arrow)
-          .setStyle(ButtonStyle.Secondary)
-      )
+      .setButtonAccessory(btn("bp_token_set", hasToken ? "Trocar" : "Definir"))
   );
 
   if (hasToken) {
     container.addSectionComponents(
       new SectionBuilder()
-        .addTextDisplayComponents(text("**Remover token**\n-# Apaga a token do banco de dados"))
-        .setButtonAccessory(
-          new ButtonBuilder().setCustomId("bp_token_clear").setEmoji(EMOJI.arrow).setStyle(ButtonStyle.Danger)
-        )
+        .addTextDisplayComponents(text("**Remover token**\n-# Apaga a token do banco de dados."))
+        .setButtonAccessory(btn("bp_token_clear", "Remover", ButtonStyle.Danger))
     );
   }
 
-  container.addSeparatorComponents(sep());
-
-  // Lista de painéis
-  container.addTextDisplayComponents(
-    text(`**Painéis configurados · ${panels.length}**\n-# Cada painel envia uma mensagem num canal com um botão de verificação.`)
-  );
+  container
+    .addSeparatorComponents(divider())
+    .addTextDisplayComponents(
+      text(`**Painéis**  \`${panels.length}\`\n-# Cada painel é uma mensagem com botão de verificação, enviada num canal.`)
+    );
 
   // limite de 40 componentes: cada painel listado custa 3
   for (const p of panels.slice(0, 7)) {
-    const channel = p.channelId ? `<#${p.channelId}>` : "sem canal";
+    const n = normalizePanel(p);
+    const channel = p.channelId ? `<#${p.channelId}>` : "`sem canal`";
     container.addSectionComponents(
       new SectionBuilder()
-        .addTextDisplayComponents(text(`**${p.title}** · ${channel}\n-# padrões: ${list(p.patterns)}`))
-        .setButtonAccessory(
-          new ButtonBuilder()
-            .setCustomId(`bp_panel_edit:${p.panelId}`)
-            .setEmoji(EMOJI.arrow)
-            .setStyle(ButtonStyle.Secondary)
+        .addTextDisplayComponents(
+          text(`**${clip(panelName(p), 60)}**  ${channel}\n-# ${p.messageId ? "Publicado" : "Não publicado"}  ·  padrões: ${n.patterns.length}`)
         )
+        .setButtonAccessory(btn(`bp_panel_edit:${p.panelId}`, "Editar", ButtonStyle.Primary))
     );
   }
+  if (!panels.length) container.addTextDisplayComponents(text("-# Nenhum painel criado ainda."));
 
-  if (!panels.length) {
-    container.addTextDisplayComponents(text("-# Nenhum painel criado ainda."));
-  }
-
-  container.addSeparatorComponents(sep()).addActionRowComponents(
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("bp_panel_create").setLabel("Criar painel").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("back_self").setLabel("Voltar").setStyle(ButtonStyle.Secondary)
-    )
+  container.addSeparatorComponents(divider()).addActionRowComponents(
+    row(btn("bp_panel_create", "Criar painel", ButtonStyle.Success), btn("back_self", "Voltar"))
   );
 
   return [container];
 }
 
-// ─── Tela de edição de um painel ────────────────────────────────────────────
+// ─── Editor de um painel ────────────────────────────────────────────────────
 
-// Página aberta de cada painel (só em memória; volta para a 1 ao reiniciar o bot)
-const editPages = new Map();
-const PAGES = [
-  { label: "Visão geral", desc: "Estado e atalhos" },
-  { label: "Aparência", desc: "Textos e botão" },
-  { label: "Verificação", desc: "Perfil e padrões" },
-  { label: "Cargos", desc: "Entrega e remoção" },
-  { label: "Publicação", desc: "Canal e mensagem" },
+const SECTIONS = [
+  { key: "home", label: "Resumo", desc: "Situação do painel" },
+  { key: "text", label: "Texto", desc: "Mensagem e markdown" },
+  { key: "media", label: "Mídia", desc: "Imagem e miniatura" },
+  { key: "look", label: "Aparência", desc: "Formato, cor e espaçamento" },
+  { key: "btns", label: "Botões", desc: "Botão de verificar e links extras" },
+  { key: "verify", label: "Verificação", desc: "O que o perfil precisa ter" },
+  { key: "roles", label: "Cargos", desc: "Entrega e remoção" },
+  { key: "send", label: "Envio", desc: "Canal e publicação" },
 ];
-const PAGE_HELP = [
-  "Resumo do painel e prévia.",
-  "Como o painel aparece para os membros.",
-  "O que o perfil precisa ter para liberar os cargos.",
-  "Cargos dados e removidos ao verificar.",
-  "Onde a mensagem do painel é enviada.",
-];
+const KEYS = SECTIONS.map((s) => s.key);
 
+// Etapa aberta de cada painel (só em memória; volta ao Resumo quando o bot reinicia)
+const views = new Map();
+
+// Aceita a chave da etapa, o número dela (1 a 8) ou "del" (confirmação de exclusão)
 function setEditPage(panelId, page) {
-  const n = Math.min(Math.max(parseInt(page, 10) || 1, 1), PAGES.length);
-  editPages.set(panelId, n);
-  return n;
+  const key = page === "del" ? "del" : KEYS.includes(page) ? page : KEYS[Math.min(Math.max(parseInt(page, 10) || 1, 1), KEYS.length) - 1];
+  views.set(panelId, key);
+  return key;
 }
 
-// Limite do Discord: 40 componentes por mensagem. Cada página usa no máximo ~30.
-function buildBioPanelEdit(panel) {
+const currentView = (panelId) => views.get(panelId) ?? "home";
+
+// Move uma etapa para frente (+1) ou para trás (-1)
+function stepEditPage(panelId, delta) {
+  const at = Math.max(KEYS.indexOf(currentView(panelId)), 0);
+  return setEditPage(panelId, KEYS[Math.min(Math.max(at + delta, 0), KEYS.length - 1)]);
+}
+
+// O Resumo e o Envio mostram a situação da mensagem (limites e problemas), então precisam do relatório
+const needsReport = (panelId) => ["home", "send"].includes(currentView(panelId));
+
+const quote = (value, max = 700) =>
+  (value.length > max ? `${value.slice(0, max)}...` : value)
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+
+const sourceTag = (source) => (!source ? "`vazia`" : isStored(source) ? "`arquivo enviado`" : "`link`");
+const emojiTag = (e) => (e ? `\`${clip(e, 40)}\`` : "`nenhum`");
+
+// Limite do Discord: 40 componentes por mensagem. Cada etapa usa no máximo ~28.
+function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
+  const panel = normalizePanel(rawPanel);
   const { panelId } = panel;
-  const page = editPages.get(panelId) || 1;
+  const view = currentView(panelId);
+  if (view === "del") return buildDeleteConfirm(panel);
+
   const id = (action) => `bp_panel:${panelId}:${action}`;
-  const clip = (v, n = 90) => {
-    const t = stripEmoji(v).replace(/\s+/g, " ");
-    return t.length > n ? t.slice(0, n - 1) + "…" : t;
-  };
-  const patterns = panel.patterns || [];
-  const give = panel.giveRoles || [];
-  const remove = panel.removeRoles || [];
+  const at = Math.max(KEYS.indexOf(view), 0);
+  const step = SECTIONS[at];
+  const published = Boolean(panel.messageId);
+  const channel = panel.channelId ? `<#${panel.channelId}>` : "`não escolhido`";
+  const layoutName = LAYOUTS[panel.layout]?.label ?? "Caixa";
 
-  const arrowBtn = (action, style = ButtonStyle.Secondary, disabled = false) =>
-    new ButtonBuilder().setCustomId(id(action)).setEmoji(EMOJI.arrow).setStyle(style).setDisabled(disabled);
-  const toggleBtn = (action, on) =>
-    new ButtonBuilder().setCustomId(id(action)).setEmoji(on ? EMOJI.on : EMOJI.off).setStyle(ButtonStyle.Secondary);
-  const item = (title, desc, button) =>
-    new SectionBuilder()
-      .addTextDisplayComponents(text(`**${title}**\n-# ${desc}`))
-      .setButtonAccessory(button);
-  const card = (title, sub) =>
-    new ContainerBuilder().addTextDisplayComponents(text(`### ${title}${sub ? `\n-# ${sub}` : ""}`)).addSeparatorComponents(sep());
-
-  const channel = panel.channelId ? `<#${panel.channelId}>` : "sem canal";
-  const status = panel.messageId ? "Publicado" : "Ainda não publicado";
-  const current = PAGES[page - 1];
-
-  // ── Topo: título, caminho e select de navegação
+  // ----- cabeçalho: nome, situação e seletor de etapas -----
   const nav = new StringSelectMenuBuilder()
     .setCustomId(id("nav"))
-    .setPlaceholder(current.label)
-    .addOptions(PAGES.map((p, i) => ({ label: p.label, description: p.desc, value: String(i + 1), default: false })));
+    .setPlaceholder("Escolha a etapa do editor")
+    .addOptions(SECTIONS.map((s) => ({ label: s.label, description: s.desc, value: s.key, default: s.key === view })));
 
-  const header = new ContainerBuilder()
-    .addTextDisplayComponents(text(`### ${current.label}\n-# Painel › Self › Cargos por perfil › **${current.label}**`))
-    .addSeparatorComponents(sep())
-    .addActionRowComponents(new ActionRowBuilder().addComponents(nav))
-    .addTextDisplayComponents(text(`-# **${clip(panel.title, 60)}** · ${PAGE_HELP[page - 1]}`));
-
-  const cards = [header];
-
-  if (page === 1) {
-    cards.push(
-      new ContainerBuilder().addTextDisplayComponents(
-        text(
-          `### Situação\n` +
-          `**Canal** · ${channel}\n` +
-          `**Publicação** · ${status}\n` +
-          `**Verifica** · Bio ${bool(panel.checkBio)} · Status ${bool(panel.checkStatus)} · Pronomes ${bool(panel.checkPronouns)}\n` +
-          `**Padrões** · ${patterns.length}\n` +
-          `**Dar cargos** · ${give.length} · **Remover cargos** · ${remove.length}`
-        )
-      ),
-      card("Prévia completa", "Confira o painel antes de publicar.").addSectionComponents(
-        item("Ver prévia", "Mostra a mensagem como os membros vão ver.", arrowBtn("preview"))
+  const head = box()
+    .addTextDisplayComponents(
+      text(
+        [
+          "## Editor do painel",
+          `**Painel**  ${clip(panelName(rawPanel), 60)}`,
+          `**Estado**  ${published ? "`Publicado`" : "`Não publicado`"}  ·  **Formato**  \`${layoutName}\`  ·  **Cor**  \`${colorLabel(panel.color)}\`  ·  **Imagem**  \`${yes(panel.image)}\``,
+        ].join("\n")
       )
-    );
-  } else if (page === 2) {
+    )
+    .addSeparatorComponents(divider())
+    .addActionRowComponents(row(nav));
+
+  // ----- linha de navegação embaixo -----
+  const footer = row(
+    btn(id("prev"), "Anterior").setDisabled(at === 0),
+    btn(id("next"), "Próxima").setDisabled(at === SECTIONS.length - 1),
+    btn(id("preview"), "Ver prévia"),
+    btn("bp_home", "Voltar")
+  );
+
+  const title = (extra = "") => `### ${step.label}\n-# Etapa ${at + 1} de ${SECTIONS.length}  ·  ${step.desc}${extra}`;
+  const cards = [head];
+  if (note) cards.push(box().addTextDisplayComponents(text(note)));
+
+  // ── Resumo ──
+  if (view === "home") {
+    const problems = report?.problems ?? [];
+    const warnings = report?.warnings ?? [];
+    const images = (panel.image ? 1 : 0) + (panel.thumb ? 1 : 0);
+    const links = panel.extraButtons.filter((b) => b.url).length;
     cards.push(
-      card("Aparência", "Textos e botão")
-        .addSectionComponents(item("Título", clip(none(panel.title)), arrowBtn("edit_title")))
-        .addSectionComponents(item("Descrição", clip(none(panel.description)), arrowBtn("edit_desc")))
-        .addSectionComponents(item("Botão de verificação", `${clip(none(panel.buttonLabel), 40)} · emoji ${none(panel.buttonEmoji)}`, arrowBtn("edit_btn")))
-        .addSectionComponents(item("Texto de sucesso", clip(none(panel.successText)), arrowBtn("edit_success")))
-        .addSectionComponents(item("Texto de falha", clip(none(panel.failText)), arrowBtn("edit_fail")))
-    );
-  } else if (page === 3) {
-    cards.push(
-      card("O que verificar", "Basta uma fonte conter os padrões.")
-        .addSectionComponents(item("Bio (sobre mim)", bool(panel.checkBio), toggleBtn("toggle_bio", panel.checkBio)))
-        .addSectionComponents(item("Status personalizado", bool(panel.checkStatus), toggleBtn("toggle_status", panel.checkStatus)))
-        .addSectionComponents(item("Pronomes", bool(panel.checkPronouns), toggleBtn("toggle_pronouns", panel.checkPronouns))),
-      new ContainerBuilder()
+      box()
         .addTextDisplayComponents(
           text(
-            `### Padrões exigidos · ${patterns.length}/10\n-# O perfil deve conter TODOS os padrões nos campos ativados.\n` +
-            (patterns.length ? clip(patterns.map((p, i) => `${i + 1}. \`${p}\``).join("\n"), 1200) : "-# Nenhum padrão definido.")
+            [
+              title(),
+              `**Texto**  \`${num(textLength(panel.message))} de ${num(LIMITS.text)}\` caracteres  ·  **Imagens**  \`${images}\`  ·  **Links extras**  \`${links}\``,
+              `**Verifica**  bio \`${yes(panel.checkBio)}\`  ·  status \`${yes(panel.checkStatus)}\`  ·  pronomes \`${yes(panel.checkPronouns)}\``,
+              `**Padrões**  \`${panel.patterns.length} de ${LIMITS.patterns}\`  ·  **Dar**  \`${panel.giveRoles.length}\`  ·  **Remover**  \`${panel.removeRoles.length}\``,
+              `**Canal**  ${channel}`,
+              `**Situação**  ${report ? (report.ready ? "`Pronto para publicar`" : "`Incompleto`") : "`Sem checagem`"}`,
+              ...problems.map((p) => `-# ${p}`),
+              ...warnings.map((w) => `-# ${w}`),
+            ].join("\n")
           )
         )
-        .addSectionComponents(item("Adicionar padrão", "Texto que o perfil precisa conter.", arrowBtn("add_pattern")))
-        .addSectionComponents(item("Remover padrão", "Escolha pelo número.", arrowBtn("remove_pattern", ButtonStyle.Secondary, !patterns.length)))
-    );
-  } else if (page === 4) {
-    const roleSelect = (action, ph, list) => {
-      const menu = new RoleSelectMenuBuilder().setCustomId(id(action)).setPlaceholder(ph).setMinValues(0).setMaxValues(10);
-      if (list.length) menu.setDefaultRoles(list.slice(0, 10));
-      return new ActionRowBuilder().addComponents(menu);
-    };
-    cards.push(
-      new ContainerBuilder()
-        .addTextDisplayComponents(text(`### Dar cargos\n-# Entregues quando o perfil for verificado. @everyone, integrações e cargos acima do bot são ignorados.\n${give.length ? roles(give) : "Nenhum cargo escolhido."}`))
-        .addActionRowComponents(roleSelect("give_roles", "Escolher cargos para dar...", give)),
-      new ContainerBuilder()
-        .addTextDisplayComponents(text(`### Remover cargos\n-# Retirados do membro ao verificar.\n${remove.length ? roles(remove) : "Nenhum cargo escolhido."}`))
-        .addActionRowComponents(roleSelect("remove_roles", "Escolher cargos para remover...", remove))
-    );
-  } else {
-    const chMenu = new ChannelSelectMenuBuilder()
-      .setCustomId(id("channel"))
-      .setPlaceholder("Canal do painel (limpe para despublicar)...")
-      .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-      .setMinValues(0)
-      .setMaxValues(1);
-    if (panel.channelId) chMenu.setDefaultChannels([panel.channelId]);
-    cards.push(
-      new ContainerBuilder()
-        .addTextDisplayComponents(text(`### Canal\n-# Escolha onde enviar. Selecionar outro canal move a publicação.\n**Canal atual** · ${channel}`))
-        .addActionRowComponents(new ActionRowBuilder().addComponents(chMenu)),
-      card("Mensagem", status)
-        .addSectionComponents(item(panel.messageId ? "Reenviar mensagem" : "Publicar mensagem", "O bot envia o painel no canal escolhido.", arrowBtn("publish", ButtonStyle.Success, !panel.channelId)))
-        .addSectionComponents(item("Excluir painel", "Apaga o painel e a mensagem publicada.", arrowBtn("delete_panel", ButtonStyle.Danger)))
+        .addActionRowComponents(
+          row(btn(id("go:text"), "Editar texto", ButtonStyle.Primary), btn(id("go:verify"), "Verificação"), btn(id("go:send"), "Publicar", ButtonStyle.Success))
+        )
     );
   }
 
-  // "Voltar" igual aos demais painéis: o decorator do /menu tira o botão do container e põe numa linha embaixo
-  cards[cards.length - 1]
-    .addSeparatorComponents(sep())
-    .addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("bp_home").setLabel("Voltar").setStyle(ButtonStyle.Secondary)
+  // ── Texto ──
+  else if (view === "text") {
+    cards.push(
+      box()
+        .addTextDisplayComponents(
+          text(
+            [
+              title(),
+              "**Mensagem do painel**",
+              quote(panel.message),
+              `-# ${num(textLength(panel.message))} de ${num(LIMITS.text)} caracteres.`,
+            ].join("\n")
+          )
+        )
+        .addActionRowComponents(row(btn(id("txt"), "Editar texto", ButtonStyle.Primary), btn(id("txt_reset"), "Restaurar padrão")))
+    );
+    cards.push(
+      box().addTextDisplayComponents(
+        text(
+          [
+            "### Marcadores",
+            "`[separador]`  linha fina entre trechos",
+            "`[separador_largo]`  espaço maior entre trechos",
+            "-# Markdown do Discord funciona normalmente. Emojis do servidor entram como `<:nome:id>`; emoji unicode é removido ao salvar.",
+          ].join("\n")
+        )
       )
     );
+  }
 
+  // ── Mídia ──
+  else if (view === "media") {
+    cards.push(
+      box()
+        .addTextDisplayComponents(text(`${title()}\n**Imagem principal**  ${sourceTag(panel.image)}\n-# Aparece abaixo do texto. Envie um arquivo ou use um link (png, jpg, gif ou webp).`))
+        .addActionRowComponents(
+          row(btn(id("img_main"), panel.image ? "Trocar imagem" : "Definir imagem", ButtonStyle.Primary), btn(id("img_xmain"), "Remover imagem", ButtonStyle.Danger).setDisabled(!panel.image))
+        ),
+      box()
+        .addTextDisplayComponents(
+          text(
+            `**Miniatura**  ${sourceTag(panel.thumb)}\n-# Fica ao lado do primeiro trecho de texto. ${
+              panel.layout === "image" ? "Não aparece no formato Só imagem." : "Sem texto no painel, ela não aparece."
+            }`
+          )
+        )
+        .addActionRowComponents(
+          row(btn(id("img_thumb"), panel.thumb ? "Trocar miniatura" : "Definir miniatura", ButtonStyle.Primary), btn(id("img_xthumb"), "Remover miniatura", ButtonStyle.Danger).setDisabled(!panel.thumb))
+        )
+    );
+  }
+
+  // ── Aparência ──
+  else if (view === "look") {
+    cards.push(
+      box()
+        .addTextDisplayComponents(text(`${title()}\n**Formato**  \`${layoutName}\`\n-# Como a mensagem aparece no canal.`))
+        .addActionRowComponents(
+          row(
+            new StringSelectMenuBuilder()
+              .setCustomId(id("look_format"))
+              .setPlaceholder("Formato da mensagem")
+              .addOptions(Object.entries(LAYOUTS).map(([value, i]) => ({ label: i.label, description: i.desc, value, default: panel.layout === value })))
+          )
+        ),
+      box()
+        .addTextDisplayComponents(
+          text(`### Cor da caixa  \`${colorLabel(panel.color)}\`\n-# ${panel.layout === "box" ? "Barra de cor na lateral da caixa." : "A cor só vale no formato Caixa."}`)
+        )
+        .addActionRowComponents(
+          row(
+            new StringSelectMenuBuilder()
+              .setCustomId(id("look_color"))
+              .setPlaceholder("Escolha uma cor pronta")
+              .addOptions([
+                { label: "Sem cor", value: "none", default: !panel.color },
+                ...Object.entries(COLORS).map(([value, c]) => ({ label: c.label, value, default: panel.color === value })),
+              ])
+          ),
+          row(btn(id("hex"), "Cor personalizada"))
+        ),
+      box()
+        .addTextDisplayComponents(text(`### Espaçamento amplo  ${tag(panel.wide)}\n-# Aumenta o espaço entre texto, imagem e botões.`))
+        .addActionRowComponents(row(panel.wide ? btn(id("look_wide"), "Desativar", ButtonStyle.Danger) : btn(id("look_wide"), "Ativar", ButtonStyle.Success)))
+    );
+  }
+
+  // ── Botões ──
+  else if (view === "btns") {
+    const extras = panel.extraButtons;
+    const lines = extras.length
+      ? extras.map((b, i) => `**${i + 1}**  ${b.label ? clip(b.label, 40) : "só emoji"}  \`link\`  \`${PLACES[b.place]}\``)
+      : ["-# Nenhum botão extra."];
+
+    cards.push(
+      box()
+        .addTextDisplayComponents(
+          text(
+            [
+              title(),
+              `**Botão de verificação**  \`${BUTTON_STYLES[panel.buttonStyle]}\``,
+              `**Texto**  ${panel.buttonLabel.trim() ? clip(panel.buttonLabel, 40) : "`vazio`"}  ·  **Emoji**  ${emojiTag(panel.buttonEmoji)}  ·  **Posição**  \`${PLACES[panel.buttonPlace]}\``,
+              "-# Quem clica passa pela verificação de perfil.",
+            ].join("\n")
+          )
+        )
+        .addActionRowComponents(row(btn(id("btn_main"), "Editar botão", ButtonStyle.Primary))),
+      box()
+        .addTextDisplayComponents(
+          text([`### Links extras  (${extras.length} de ${LIMITS.extraButtons})`, "-# Botões que abrem um endereço, como regras ou convite.", ...lines].join("\n"))
+        )
+        .addActionRowComponents(
+          ...extras.map((_, i) => row(btn(id(`btn_edit:${i}`), `Editar link ${i + 1}`), btn(id(`btn_del:${i}`), `Remover link ${i + 1}`, ButtonStyle.Danger))),
+          row(btn(id("btn_add"), "Adicionar link", ButtonStyle.Success).setDisabled(extras.length >= LIMITS.extraButtons))
+        )
+    );
+  }
+
+  // ── Verificação ──
+  else if (view === "verify") {
+    const flag = (action, label, on) => btn(id(action), `${label}: ${yes(on)}`, on ? ButtonStyle.Success : ButtonStyle.Secondary);
+    const patterns = panel.patterns;
+
+    const padroes = box()
+      .addTextDisplayComponents(
+        text(
+          [
+            `### Padrões exigidos  (${patterns.length} de ${LIMITS.patterns})`,
+            "-# O perfil precisa conter TODOS os padrões nos campos ligados acima.",
+            ...(patterns.length ? patterns.map((p, i) => `**${i + 1}**  \`${clip(p, 80)}\``) : ["-# Nenhum padrão definido."]),
+          ].join("\n")
+        )
+      )
+      .addActionRowComponents(row(btn(id("add_pattern"), "Adicionar padrão", ButtonStyle.Success).setDisabled(patterns.length >= LIMITS.patterns)));
+    if (patterns.length) {
+      padroes.addActionRowComponents(
+        row(
+          new StringSelectMenuBuilder()
+            .setCustomId(id("rm_pattern"))
+            .setPlaceholder("Escolha um padrão para remover")
+            .addOptions(patterns.map((p, i) => ({ label: clip(`${i + 1}. ${p}`, 100), value: String(i) })))
+        )
+      );
+    }
+
+    cards.push(
+      box()
+        .addTextDisplayComponents(text(`${title()}\n**O que verificar**\n-# Basta uma fonte conter os padrões.`))
+        .addActionRowComponents(
+          row(flag("toggle_bio", "Bio", panel.checkBio), flag("toggle_status", "Status", panel.checkStatus), flag("toggle_pronouns", "Pronomes", panel.checkPronouns))
+        ),
+      padroes,
+      box()
+        .addTextDisplayComponents(
+          text(
+            [
+              "### Respostas",
+              "-# Mensagens privadas mostradas a quem clica. Aceitam markdown e {usuario}.",
+              `**Sucesso**  ${panel.successText.trim() ? clip(stripEmoji(panel.successText).replace(/\s+/g, " "), 100) : "`vazio`"}`,
+              `**Falha**  ${panel.failText.trim() ? clip(stripEmoji(panel.failText).replace(/\s+/g, " "), 100) : "`vazio`"}`,
+            ].join("\n")
+          )
+        )
+        .addActionRowComponents(row(btn(id("resp_ok"), "Resposta de sucesso"), btn(id("resp_fail"), "Resposta de falha")))
+    );
+  }
+
+  // ── Cargos ──
+  else if (view === "roles") {
+    const roleSelect = (action, placeholder, current) => {
+      const menu = new RoleSelectMenuBuilder().setCustomId(id(action)).setPlaceholder(placeholder).setMinValues(0).setMaxValues(10);
+      if (current.length) menu.setDefaultRoles(current.slice(0, 10));
+      return row(menu);
+    };
+    cards.push(
+      box()
+        .addTextDisplayComponents(
+          text(`${title()}\n**Dar cargos**\n-# Entregues quando o perfil for verificado. @everyone, integrações e cargos acima do bot são ignorados.\n${roles(panel.giveRoles)}`)
+        )
+        .addActionRowComponents(roleSelect("give_roles", "Escolher cargos para dar...", panel.giveRoles)),
+      box()
+        .addTextDisplayComponents(text(`### Remover cargos\n-# Retirados do membro ao verificar.\n${roles(panel.removeRoles)}`))
+        .addActionRowComponents(roleSelect("remove_roles", "Escolher cargos para remover...", panel.removeRoles))
+    );
+  }
+
+  // ── Envio ──
+  else {
+    const picker = new ChannelSelectMenuBuilder()
+      .setCustomId(id("channel"))
+      .setPlaceholder("Canal do painel (limpe para despublicar)")
+      .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+      .setMinValues(0)
+      .setMaxValues(1);
+    if (panel.channelId) picker.setDefaultChannels([panel.channelId]);
+
+    const problems = report?.problems ?? [];
+    cards.push(
+      box()
+        .addTextDisplayComponents(text(`${title()}\n**Canal**  ${channel}\n-# Escolha onde enviar. Selecionar outro canal move a publicação.`))
+        .addActionRowComponents(row(picker)),
+      box()
+        .addTextDisplayComponents(
+          text(
+            [
+              "### Mensagem",
+              `**Estado**  ${published ? "`Publicado`" : "`Não publicado`"}`,
+              published ? "-# Edições de texto, mídia, aparência e botões atualizam a mensagem publicada na hora." : "-# O bot envia o painel no canal escolhido.",
+              ...(problems.length ? problems.map((p) => `-# ${p}`) : []),
+              ...(report?.warnings ?? []).map((w) => `-# ${w}`),
+            ].join("\n")
+          )
+        )
+        .addActionRowComponents(
+          row(
+            btn(id("publish"), published ? "Reenviar" : "Publicar", ButtonStyle.Success).setDisabled(!panel.channelId || Boolean(report && !report.ready)),
+            btn(id("del"), "Excluir painel", ButtonStyle.Danger)
+          )
+        )
+    );
+  }
+
+  cards.push(footer);
   return cards;
+}
+
+function buildDeleteConfirm(panel) {
+  const id = (action) => `bp_panel:${panel.panelId}:${action}`;
+  return [
+    box().addTextDisplayComponents(text("## Excluir painel")).addSeparatorComponents(divider()),
+    box()
+      .addTextDisplayComponents(
+        text(`### Tem certeza?\n-# O painel **${clip(panelName(panel), 60)}**, as imagens guardadas e a mensagem publicada serão apagados. Isso não pode ser desfeito.`)
+      )
+      .addActionRowComponents(row(btn(id("del_ok"), "Excluir de vez", ButtonStyle.Danger), btn(id("del_no"), "Cancelar"))),
+  ];
 }
 
 // ─── Modais ─────────────────────────────────────────────────────────────────
 
+// Token de acesso do servidor (modal antigo, sem mudanças)
 function buildTokenModal() {
   return new ModalBuilder()
     .setCustomId("bp_modal:set_token")
@@ -263,157 +456,129 @@ function buildTokenModal() {
     );
 }
 
-function buildTextModal(customId, title, label, currentValue, long = false) {
-  return new ModalBuilder()
-    .setCustomId(customId)
-    .setTitle(title)
-    .addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("value")
-          .setLabel(label)
-          .setStyle(long ? TextInputStyle.Paragraph : TextInputStyle.Short)
-          .setValue(currentValue ?? "")
-          .setRequired(true)
-          .setMaxLength(long ? 1800 : 200)
-      )
-    );
+function buildTextModal(panelId, panel) {
+  return modal(
+    `bp_modal:txt:${panelId}`,
+    "Texto do painel",
+    textLabel({
+      id: "text",
+      label: "Mensagem",
+      description: "Markdown aceito. Use [separador] ou [separador_largo] para dividir.",
+      style: TextInputStyle.Paragraph,
+      max: LIMITS.text,
+      required: true,
+      value: normalizePanel(panel).message,
+      placeholder: "Escreva a mensagem do painel",
+    })
+  );
+}
+
+const IMAGE_TITLES = { main: "Imagem do painel", thumb: "Miniatura do painel" };
+
+// kind: "main" (imagem principal) ou "thumb" (miniatura)
+function buildImageModal(panelId, kind) {
+  return modal(
+    `bp_modal:img:${panelId}:${kind}`,
+    IMAGE_TITLES[kind] ?? "Imagem",
+    uploadLabel({ id: "file", label: "Enviar imagem", description: "Escolha uma imagem (png, jpg, gif ou webp) de até 4 MB." }),
+    textLabel({
+      id: "link",
+      label: "Ou use o link de uma imagem",
+      description: "Só use se não enviou um arquivo acima.",
+      max: 500,
+      placeholder: "https://exemplo.com/imagem.png",
+    })
+  );
+}
+
+function buildHexModal(panelId, current) {
+  return modal(
+    `bp_modal:hex:${panelId}`,
+    "Cor personalizada",
+    textLabel({
+      id: "hex",
+      label: "Cor em HEX",
+      description: "Use #RRGGBB ou a forma curta #RGB.",
+      max: 7,
+      required: true,
+      value: parseHex(current) ?? "",
+      placeholder: "#5865F2",
+    })
+  );
+}
+
+// Botão de verificação: texto, emoji do servidor, cor e posição
+function buildMainButtonModal(panelId, panel) {
+  const p = normalizePanel(panel);
+  return modal(
+    `bp_modal:btn_main:${panelId}`,
+    "Botão de verificação",
+    textLabel({ id: "label", label: "Texto do botão", description: "Opcional quando houver emoji.", max: 80, value: p.buttonLabel, placeholder: "Ex.: Verificar" }),
+    textLabel({ id: "emoji", label: "Emoji do servidor (opcional)", description: "Formato <:nome:id>. Emoji unicode não é aceito.", max: 60, value: p.buttonEmoji }),
+    selectLabel({ id: "style", label: "Cor", options: Object.entries(BUTTON_STYLES).map(([value, label]) => ({ label, value, default: p.buttonStyle === value })) }),
+    selectLabel({ id: "place", label: "Posição", options: Object.entries(PLACES).map(([value, label]) => ({ label, value, default: p.buttonPlace === value })) })
+  );
+}
+
+// Link extra. index: número do link (0 ou 1) ou "new"
+function buildExtraButtonModal(panelId, index, data) {
+  return modal(
+    `bp_modal:btn_x:${panelId}:${index}`,
+    index === "new" ? "Novo link" : `Link ${Number(index) + 1}`,
+    textLabel({ id: "label", label: "Texto do botão", description: "Opcional quando houver emoji.", max: 80, value: data?.label, placeholder: "Ex.: Regras" }),
+    textLabel({ id: "url", label: "Link", description: "Obrigatório. Começa com https://", max: 500, required: true, value: data?.url, placeholder: "https://exemplo.com" }),
+    textLabel({ id: "emoji", label: "Emoji do servidor (opcional)", description: "Formato <:nome:id>. Emoji unicode não é aceito.", max: 60, value: data?.emoji }),
+    selectLabel({ id: "place", label: "Posição", options: Object.entries(PLACES).map(([value, label]) => ({ label, value, default: (data?.place ?? "inside") === value })) })
+  );
 }
 
 function buildPatternModal(panelId) {
-  return new ModalBuilder()
-    .setCustomId(`bp_modal:add_pattern:${panelId}`)
-    .setTitle("Adicionar padrão")
-    .addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("pattern")
-          .setLabel("Padrão exigido (texto simples, sem regex)")
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder("Ex.: /verificado | exemplo.gg")
-          .setRequired(true)
-          .setMaxLength(100)
-      )
-    );
+  return modal(
+    `bp_modal:add_pattern:${panelId}`,
+    "Adicionar padrão",
+    textLabel({
+      id: "pattern",
+      label: "Padrão exigido",
+      description: "Texto simples, sem regex.",
+      max: 100,
+      required: true,
+      placeholder: "Ex.: /verificado | exemplo.gg",
+    })
+  );
 }
 
-function buildRemovePatternModal(panelId, patterns) {
-  return new ModalBuilder()
-    .setCustomId(`bp_modal:remove_pattern:${panelId}`)
-    .setTitle("Remover padrão")
-    .addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("index")
-          .setLabel(`Número do padrão (1 a ${patterns.length})`)
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder(patterns.map((p, i) => `${i + 1}. ${p}`).join(" | ").slice(0, 100))
-          .setRequired(true)
-          .setMaxLength(3)
-      )
-    );
-}
-
-function buildRolesModal(panelId, field, currentRoles) {
-  return new ModalBuilder()
-    .setCustomId(`bp_modal:roles:${panelId}:${field}`)
-    .setTitle(field === "give" ? "Dar cargos ao verificar" : "Remover cargos ao verificar")
-    .addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("roles")
-          .setLabel("IDs dos cargos separados por vírgula")
-          .setStyle(TextInputStyle.Short)
-          .setValue(currentRoles.join(", "))
-          .setRequired(false)
-          .setPlaceholder("123456789, 987654321 (vazio = nenhum)")
-          .setMaxLength(500)
-      )
-    );
-}
-
-function buildChannelModal(panelId, current) {
-  return new ModalBuilder()
-    .setCustomId(`bp_modal:channel:${panelId}`)
-    .setTitle("Canal do painel")
-    .addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("channelId")
-          .setLabel("ID do canal")
-          .setStyle(TextInputStyle.Short)
-          .setValue(current ?? "")
-          .setRequired(true)
-          .setPlaceholder("ID numérico do canal de texto")
-          .setMaxLength(25)
-      )
-    );
-}
-
-function buildButtonModal(panelId, panel) {
-  return new ModalBuilder()
-    .setCustomId(`bp_modal:button:${panelId}`)
-    .setTitle("Botão de verificação")
-    .addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("label")
-          .setLabel("Texto do botão")
-          .setStyle(TextInputStyle.Short)
-          .setValue(panel.buttonLabel ?? "Verificar")
-          .setRequired(true)
-          .setMaxLength(80)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("emoji")
-          .setLabel("Emoji (opcional, ex.: <:nome:id>)")
-          .setStyle(TextInputStyle.Short)
-          .setValue(panel.buttonEmoji ?? "")
-          .setRequired(false)
-          .setMaxLength(100)
-      )
-    );
-}
-
-// ─── Painel enviado no canal (mensagem pública) ──────────────────────────────
-
-function buildPublicPanel(panel) {
-  const btn = new ButtonBuilder()
-    .setCustomId(`bp_verify:${panel.panelId}`)
-    .setLabel(panel.buttonLabel ?? "Verificar")
-    .setStyle(ButtonStyle.Success);
-
-  if (panel.buttonEmoji) {
-    // emoji unicode ou customizado
-    const custom = panel.buttonEmoji.match(/^<a?:(\w+):(\d+)>$/);
-    if (custom) {
-      btn.setEmoji({ name: custom[1], id: custom[2] });
-    } else {
-      btn.setEmoji(panel.buttonEmoji);
-    }
-  }
-
-  const container = new ContainerBuilder()
-    .addTextDisplayComponents(text(`## ${panel.title}`))
-    .addSeparatorComponents(sep())
-    .addTextDisplayComponents(text(panel.description))
-    .addActionRowComponents(new ActionRowBuilder().addComponents(btn));
-
-  return [container];
+// kind: "ok" (sucesso) ou "fail" (falha)
+function buildReplyModal(panelId, kind, current) {
+  const ok = kind === "ok";
+  return modal(
+    `bp_modal:resp_${kind}:${panelId}`,
+    ok ? "Resposta de sucesso" : "Resposta de falha",
+    textLabel({
+      id: "text",
+      label: ok ? "Texto ao verificar com sucesso" : "Texto ao falhar a verificação",
+      description: "Markdown aceito. Use {usuario} para mencionar quem clicou.",
+      style: TextInputStyle.Paragraph,
+      max: LIMITS.reply,
+      required: true,
+      value: current,
+    })
+  );
 }
 
 module.exports = {
   stripEmoji,
+  DEFAULT_MESSAGE,
   buildBioPanelHome,
   buildBioPanelEdit,
   setEditPage,
+  stepEditPage,
+  needsReport,
   buildTokenModal,
   buildTextModal,
+  buildImageModal,
+  buildHexModal,
+  buildMainButtonModal,
+  buildExtraButtonModal,
   buildPatternModal,
-  buildRemovePatternModal,
-  buildRolesModal,
-  buildChannelModal,
-  buildButtonModal,
-  buildPublicPanel,
+  buildReplyModal,
 };
