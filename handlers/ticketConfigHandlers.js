@@ -354,7 +354,7 @@ async function handleTicketConfigButton(interaction) {
       if (!option) {
         return interaction.reply({ content: "Essa opção não existe mais.", flags: EPHEMERAL });
       }
-      return interaction.showModal(buildOptionEmojiModal(panel, option));
+      return interaction.showModal(buildOptionEmojiModal(panel, option, interaction.guild));
     }
 
     case "tcfg_o_rmopen": {
@@ -939,7 +939,13 @@ async function handleTicketConfigModal(interaction) {
       const current = panel.options.find((o) => o.key === extra);
       if (!current) return interaction.reply({ content: "Essa opção não existe mais.", flags: EPHEMERAL });
 
-      const parsed = parseOptionEmoji(field("emoji"));
+      // Texto digitado ou emoji escolhido na lista do servidor. O campo já abre com o emoji atual:
+      // se foi mudado, vale o que foi digitado; senão vale o escolhido na lista (se houver); vazio = sem emoji.
+      const typed = field("emoji").trim();
+      const picked = [1, 2, 3, 4].map((n) => selectValues(interaction, `emoji_s${n}`)[0]).find(Boolean);
+      const raw = typed && typed !== (current.emoji ?? "") ? typed : picked || typed;
+
+      const parsed = parseOptionEmoji(raw);
       if (parsed.error) {
         return interaction.reply({
           content: "Emoji inválido. Use um emoji direto (como 🎫) ou o formato `<:nome:id>` de um emoji do servidor.",

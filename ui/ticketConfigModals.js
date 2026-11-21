@@ -599,19 +599,59 @@ function buildOptionModal({ customId, title, option = {}, options = [], position
 
 // ---------- emoji da opção do select ----------
 
-function buildOptionEmojiModal(panel, option) {
-  return modal(
-    `tcfg_modal_o_emoji:${panel.id}:${option.key}`,
-    "Emoji da opção",
+const EMOJI_SELECTS = 4; // o modal aceita 5 campos: o texto + até 4 selects de 25 emojis
+const EMOJI_PER_SELECT = 25;
+
+// Emojis do servidor que o bot pode usar, em ordem alfabética
+function guildEmojis(guild) {
+  return [...(guild?.emojis?.cache?.values() ?? [])]
+    .filter((e) => e.available !== false)
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
+}
+
+// Select(s) com os emojis do servidor + campo de texto (unicode ou <:nome:id>).
+// Os selects têm o id "emoji_s1", "emoji_s2"... e o valor de cada opção já é o <:nome:id>.
+function buildOptionEmojiModal(panel, option, guild) {
+  const all = guildEmojis(guild);
+  const shown = all.slice(0, EMOJI_SELECTS * EMOJI_PER_SELECT);
+
+  const labels = [];
+  for (let i = 0; i * EMOJI_PER_SELECT < shown.length; i += 1) {
+    const chunk = shown.slice(i * EMOJI_PER_SELECT, (i + 1) * EMOJI_PER_SELECT);
+    const from = i * EMOJI_PER_SELECT + 1;
+    labels.push(
+      selectLabel({
+        id: `emoji_s${i + 1}`,
+        label: shown.length > EMOJI_PER_SELECT ? `Emojis do servidor (${from}-${from + chunk.length - 1})` : "Emojis do servidor",
+        description: "Opcional. Escolha um emoji da lista.",
+        min: 0,
+        max: 1,
+        required: false,
+        placeholder: "Escolha um emoji",
+        options: chunk.map((e) => ({
+          label: e.name.slice(0, 100),
+          value: `<${e.animated ? "a" : ""}:${e.name}:${e.id}>`,
+          emoji: { id: e.id, name: e.name, animated: Boolean(e.animated) },
+        })),
+      })
+    );
+  }
+
+  let help = "Unicode (😀) ou <:nome:id>. Vazio = sem emoji.";
+  if (!all.length) help = "Unicode (😀) ou <:nome:id> de um emoji do servidor. Vazio = sem emoji.";
+  if (all.length > shown.length) help = `Lista mostra ${shown.length} de ${all.length}. Os outros: <:nome:id>. Vazio = sem emoji.`;
+  labels.push(
     textLabel({
       id: "emoji",
       label: `Emoji (${option.label})`.slice(0, 45),
-      description: "Unicode (😀) ou do servidor <:nome:id>. Vazio = sem emoji.",
+      description: help,
       max: 60,
       value: option.emoji,
       placeholder: "Ex: 🎫 ou <:ticket:123456789012345678>",
     })
   );
+
+  return modal(`tcfg_modal_o_emoji:${panel.id}:${option.key}`, "Emoji da opção", ...labels);
 }
 
 // ---------- remover várias opções ----------
