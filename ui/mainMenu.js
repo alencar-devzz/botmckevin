@@ -37,7 +37,7 @@ const SISTEMAS = [
   },
   {
     label: "Self",
-    description: "Configurações do Self.",
+    description: "Verificação de bio, status e pronomes com cargos automáticos.",
     value: "self",
   },
 ];
