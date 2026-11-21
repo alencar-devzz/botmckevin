@@ -2,6 +2,7 @@ const { SISTEMAS } = require("../ui/mainMenu");
 const { COMUNIDADE_OPCOES } = require("../ui/comunidade");
 const { MODERACAO_OPCOES } = require("../ui/moderacao");
 const { OUTROS_OPCOES } = require("../ui/outros");
+const { SELF_OPCOES } = require("../ui/self");
 
 // ---------------------------------------------------------------------------
 // BUSCA DE SISTEMAS DO /menu
@@ -14,6 +15,7 @@ const { OUTROS_OPCOES } = require("../ui/outros");
 const KEYWORDS = {
   "main:aparencia": ["avatar", "foto", "banner", "capa", "prefixo", "nome", "status", "atividade", "visual", "identidade", "bot"],
   "main:comunidade": ["interacao", "membros", "servidor", "engajamento"],
+  "main:self": ["self", "pessoal", "conta"],
   "main:moderacao": ["moderar", "staff", "equipe", "seguranca", "atendimento"],
   "comunidade:portaria": ["boas vindas", "bem vindo", "bem vindos", "welcome", "entrada", "saida", "dm", "filtro", "conta", "idade", "recepcao", "join"],
   "comunidade:autoroles": ["autorole", "auto role", "cargo automatico", "cargos automaticos", "cargo ao entrar"],
@@ -42,6 +44,9 @@ function buildRegistry() {
   }
   for (const o of MODERACAO_OPCOES) {
     registry.push({ group: "moderacao", value: o.value, label: o.label, description: o.description, parent: "Moderação" });
+  }
+  for (const o of SELF_OPCOES) {
+    registry.push({ group: "self", value: o.value, label: o.label, description: o.description, parent: "Self" });
   }
   for (const o of OUTROS_OPCOES) {
     registry.push({ group: "outros", value: o.value, label: o.label, description: o.description, parent: "Outros" });

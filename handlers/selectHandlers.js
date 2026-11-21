@@ -20,6 +20,7 @@ const {
 } = require("./convitesConfigHandlers");
 const { handleTicketConfigSelect, openTicketHome } = require("./ticketConfigHandlers");
 const { buildModeracaoPanel } = require("../ui/moderacao");
+const { buildSelfPanel } = require("../ui/self");
 const { openLogsPanel, handleLogsSelect } = require("./logsHandlers");
 const { openPostsPanel, handlePostsConfigSelect, handlePostSelect } = require("./postsHandlers");
 const { openClPanel, handleClConfigSelect } = require("./clHandlers");
@@ -57,6 +58,9 @@ async function openMainOption(interaction, value) {
   if (value === "moderacao") {
     return respond(buildModeracaoPanel());
   }
+  if (value === "self") {
+    return respond(buildSelfPanel());
+  }
 }
 
 // Opções da categoria Moderação (busca e cat:moderacao:open:*)
@@ -76,6 +80,11 @@ async function openModeracaoOption(interaction, value) {
   if (value === "bump") {
     return openBumpPanel(interaction);
   }
+}
+
+// Opções da categoria Self (busca e cat:self:open:*). Ainda sem sistemas.
+async function openSelfOption(interaction, value) {
+  return;
 }
 
 // Opções da categoria Comunidade e interação (busca e cat:comunidade:open:*)
@@ -122,6 +131,7 @@ async function openSystem(interaction, key) {
   if (group === "sistemas") return openMainOption(interaction, value);
   if (group === "moderacao") return openModeracaoOption(interaction, value);
   if (group === "comunidade") return openComunidadeOption(interaction, value);
+  if (group === "self") return openSelfOption(interaction, value);
   if (group === "outros") return openOutrosOption(interaction, value);
 }
 
@@ -265,4 +275,4 @@ async function handleSelect(interaction) {
   }
 }
 
-module.exports = { handleSelect, openSystem, openMainOption, openModeracaoOption, openComunidadeOption, openOutrosOption };
+module.exports = { handleSelect, openSystem, openMainOption, openModeracaoOption, openSelfOption, openComunidadeOption, openOutrosOption };

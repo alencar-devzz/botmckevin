@@ -24,7 +24,7 @@ function buildSistemasPanel() {
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
       text("## Sistemas"),
-      text("-# Configurações gerais do bot: aparência, comunidade e moderação.")
+      text("-# Configurações gerais do bot: aparência, comunidade, moderação e self.")
     )
     .addSeparatorComponents(new SeparatorBuilder());
 

@@ -36,6 +36,10 @@ function buildCategoryPanel({ group, title, description, options, page = 0 }) {
     .addTextDisplayComponents(text(title), text(`-# ${description}`))
     .addSeparatorComponents(new SeparatorBuilder());
 
+  if (!slice.length) {
+    container.addTextDisplayComponents(text("-# Nenhum sistema nesta categoria ainda."));
+  }
+
   for (const option of slice) {
     container.addSectionComponents(
       new SectionBuilder()

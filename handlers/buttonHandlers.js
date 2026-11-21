@@ -5,6 +5,7 @@ const { openSearchModal } = require("./menuSearchHandlers");
 const { rememberCategoryPage, recallCategoryPage } = require("../utils/menuSession");
 const { buildComunidadePanel } = require("../ui/comunidade");
 const { buildModeracaoPanel } = require("../ui/moderacao");
+const { buildSelfPanel, SELF_OPCOES } = require("../ui/self");
 const { buildOutrosPanel } = require("../ui/outros");
 const { buildSistemasPanel } = require("../ui/sistemas");
 const { buildMessageHome } = require("../ui/mensagemPanels");
@@ -219,14 +220,20 @@ async function handleButton(interaction) {
     if (action === "prev" || action === "next") {
       const page = Math.max(0, Number(arg) || 0);
       rememberCategoryPage(messageId, group, page);
-      const build = group === "moderacao" ? buildModeracaoPanel : buildComunidadePanel;
+      const build = group === "moderacao" ? buildModeracaoPanel : group === "self" ? buildSelfPanel : buildComunidadePanel;
       return interaction.update({ components: build(page) });
     }
 
     if (action === "open") {
-      const options = group === "moderacao" ? require("../ui/moderacao").MODERACAO_OPCOES : require("../ui/comunidade").COMUNIDADE_OPCOES;
+      const options =
+        group === "moderacao"
+          ? require("../ui/moderacao").MODERACAO_OPCOES
+          : group === "self"
+            ? SELF_OPCOES
+            : require("../ui/comunidade").COMUNIDADE_OPCOES;
       const { PAGE_SIZE } = require("../ui/categoryPanel");
       rememberCategoryPage(messageId, group, Math.floor(Math.max(0, options.findIndex((o) => o.value === arg)) / PAGE_SIZE));
+      if (group === "self") return selects.openSelfOption(interaction, arg);
       return group === "moderacao"
         ? selects.openModeracaoOption(interaction, arg)
         : selects.openComunidadeOption(interaction, arg);
@@ -249,6 +256,10 @@ async function handleButton(interaction) {
 
     case "back_moderacao": {
       return interaction.update({ components: buildModeracaoPanel(recallCategoryPage(interaction.message?.id, "moderacao")) });
+    }
+
+    case "back_self": {
+      return interaction.update({ components: buildSelfPanel(recallCategoryPage(interaction.message?.id, "self")) });
     }
 
     case "back_comunidade": {

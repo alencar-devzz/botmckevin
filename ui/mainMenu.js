@@ -35,6 +35,11 @@ const SISTEMAS = [
     description: "Sistema de tickets e outras ferramentas de moderação.",
     value: "moderacao",
   },
+  {
+    label: "Self",
+    description: "Configurações do Self.",
+    value: "self",
+  },
 ];
 
 // Lista de sistemas da categoria "Outros"

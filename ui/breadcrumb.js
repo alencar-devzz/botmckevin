@@ -16,6 +16,7 @@ const TYPE = { ActionRow: 1, Button: 2, Section: 9, TextDisplay: 10, Separator: 
 
 const COMUNIDADE = "Comunidade";
 const MODERACAO = "Moderação";
+const SELF = "Self";
 
 // prefix/exact = id dos componentes da tela · trail = caminho depois de "Painel" (nomes curtos, só o essencial)
 // home = nomes completos que o título da tela inicial do sistema pode ter (para não repetir no caminho)
@@ -38,6 +39,7 @@ const ROOTS = [
   { prefix: "msg:hist:", trail: ["Outros", "Criador de mensagens"], home: ["Criador de mensagens"], noArrows: true },
   { prefix: "cat:comunidade:", trail: [COMUNIDADE], home: ["Comunidade e interação"], noArrows: true },
   { prefix: "cat:moderacao:", trail: [MODERACAO], noArrows: true },
+  { prefix: "cat:self:", trail: [SELF], noArrows: true },
 ];
 
 const MAX_CRUMB = 45;
