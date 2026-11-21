@@ -258,6 +258,11 @@ async function handleButton(interaction) {
       });
     }
 
+    case "back_sistemas": {
+      // Dentro de uma categoria (Comunidade, Moderação, Self): volta para a página Sistemas
+      return interaction.update({ components: buildSistemasPanel() });
+    }
+
     case "back_moderacao": {
       return interaction.update({ components: buildModeracaoPanel(recallCategoryPage(interaction.message?.id, "moderacao")) });
     }

@@ -11,7 +11,7 @@ const { buildSearchButton } = require("./mainMenu");
 
 // Telas das categorias do /menu (Comunidade, Moderação): lista paginada de sistemas.
 // Cada sistema tem um botão de engrenagem que abre a configuração dele.
-// Embaixo do container: início, anterior, página, próxima e Buscar.
+// Embaixo do container: voltar para Sistemas (botão com emoji), anterior, página, próxima e Buscar.
 const PAGE_SIZE = 4;
 
 const EMOJI = {
@@ -54,7 +54,7 @@ function buildCategoryPanel({ group, title, description, options, page = 0 }) {
   }
 
   const nav = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("back_main").setEmoji(EMOJI.home).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("back_sistemas").setEmoji(EMOJI.home).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`cat:${group}:prev:${current - 1}`)
       .setEmoji(EMOJI.prev)
