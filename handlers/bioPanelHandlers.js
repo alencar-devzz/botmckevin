@@ -5,7 +5,7 @@ const {
 } = require("../utils/bioPanel/store");
 const { fetchProfile, checkProfile } = require("../utils/bioPanel/api");
 const {
-  buildBioPanelHome, buildBioPanelEdit,
+  buildBioPanelHome, buildBioPanelEdit, setEditPage,
   buildTokenModal, buildTextModal, buildPatternModal, buildRemovePatternModal,
   buildRolesModal, buildChannelModal, buildButtonModal, buildPublicPanel,
 } = require("../ui/bioPanel/bioPanelConfig");
@@ -60,6 +60,7 @@ async function handleBioPanelButton(interaction) {
   // Criar painel
   if (customId === "bp_panel_create") {
     const panelId = await createPanel(guildId);
+    setEditPage(panelId, 1);
     const panel = await getPanel(guildId, panelId);
     return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
   }
@@ -69,6 +70,7 @@ async function handleBioPanelButton(interaction) {
     const panelId = customId.split(":")[1];
     const panel = await getPanel(guildId, panelId);
     if (!panel) return deny(interaction, "Painel não encontrado.");
+    setEditPage(panelId, 1);
     return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
   }
 
@@ -84,6 +86,18 @@ async function handleBioPanelButton(interaction) {
 async function handlePanelAction(interaction, guildId, panelId, action) {
   const panel = await getPanel(guildId, panelId);
   if (!panel) return deny(interaction, "Painel não encontrado.");
+
+  // Navegação entre páginas do editor
+  if (action.startsWith("page")) {
+    // customId: bp_panel:<id>:page:<n>  -> action vem como "page"; o número fica no 4º trecho
+    setEditPage(panelId, interaction.customId.split(":")[3]);
+    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
+  }
+
+  // Prévia do painel público (só para quem clicou)
+  if (action === "preview") {
+    return interaction.reply({ components: buildPublicPanel(panel), flags: V2 | EPHEMERAL });
+  }
 
   // Toggles
   const toggles = { toggle_bio: "checkBio", toggle_status: "checkStatus", toggle_pronouns: "checkPronouns" };

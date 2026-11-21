@@ -32,6 +32,10 @@ const ROOTS = [
   { prefix: "tcfg_", trail: [MODERACAO, "Tickets"], home: ["Sistema de tickets"] },
   { prefix: "logs_", trail: [MODERACAO, "Logs"], home: ["Logs e registros"] },
   { prefix: "rmcfg_", trail: [MODERACAO, "Cargos"], home: ["Gerenciamento de cargos"] },
+  // só as telas de configuração (a mensagem pública usa bp_verify e não pode receber caminho)
+  { prefix: "bp_panel", trail: [SELF, "Cargos por perfil"], home: ["Cargos por perfil"], noArrows: true },
+  { prefix: "bp_token", trail: [SELF, "Cargos por perfil"], home: ["Cargos por perfil"], noArrows: true },
+  { prefix: "bp_home", trail: [SELF, "Cargos por perfil"], home: ["Cargos por perfil"], noArrows: true },
   { prefix: "nukecfg_", trail: [MODERACAO, "nnuke"], home: ["Comando nnuke"] },
   { prefix: "bumpcfg_", trail: [MODERACAO, "Bump"], home: ["Bump reminder"] },
   // Criador de mensagens aberto pelo /menu (só ele tem a linha de navegação msg:hist:*)
