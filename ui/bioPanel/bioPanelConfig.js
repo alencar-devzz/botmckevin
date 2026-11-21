@@ -83,11 +83,8 @@ function buildBioPanelHome(panels, hasToken) {
   }
   if (!panels.length) container.addTextDisplayComponents(text("-# Nenhum painel criado ainda."));
 
-  container.addSeparatorComponents(divider()).addActionRowComponents(
-    row(btn("bp_panel_create", "Criar painel", ButtonStyle.Success), btn("back_self", "Voltar"))
-  );
-
-  return [container];
+  // Criar painel e Voltar ficam juntos, numa linha fora da caixa
+  return [container, row(btn("bp_panel_create", "Criar painel", ButtonStyle.Success), btn("back_self", "Voltar"))];
 }
 
 // ─── Editor de um painel ────────────────────────────────────────────────────
