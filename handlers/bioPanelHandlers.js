@@ -545,11 +545,26 @@ async function handleBioPanelVerify(interaction) {
   // Sem cargo definido no painel: avisa em vez de verificar
   if (!giveRoles.length) return reply("norole");
 
-  // Quem já se verificou neste painel não verifica de novo,
-  // mas se perdeu o cargo por qualquer motivo, o bot devolve.
+  // Lê o perfil de quem clicou e confere os padrões do painel.
+  // Devolve { kind } com a resposta de erro, ou { passed, details }.
+  const checkMember = async () => {
+    if (!token) return { kind: "notoken" };
+    // A bio e os pronomes são lidos com a token da staff. O status vem da presença do membro (intent GuildPresences).
+    const statusText = member.presence?.activities?.find((a) => a.type === 4)?.state ?? "";
+    const profile = await fetchProfile(guildId, token, interaction.user.id, statusText);
+    if (!profile) return { kind: "noprofile" };
+    return checkProfile(profile, panel);
+  };
+
+  // Quem já se verificou neste painel não ganha tudo de novo, mas se perdeu o cargo por qualquer motivo
+  // o bot devolve. Só devolve se o perfil AINDA tiver o padrão: sem ele, o cargo não volta.
   if ((panel.verifiedUsers ?? []).includes(interaction.user.id)) {
     const missing = giveRoles.filter((rid) => !member.roles.cache.has(rid));
     if (!missing.length) return reply("already", { cargos: responses.mentions(giveRoles) });
+
+    const result = await checkMember();
+    if (result.kind) return reply(result.kind);
+    if (!result.passed) return reply("fail", { detalhes: result.details.map((d) => `-# ${d}`).join("\n") });
 
     const restored = [];
     const failed = [];
@@ -568,14 +583,9 @@ async function handleBioPanelVerify(interaction) {
     return reply("restored", { cargos: responses.mentions(restored), erros });
   }
 
-  if (!token) return reply("notoken");
-
-  // A bio e os pronomes são lidos com a token da staff. O status vem da presença do membro (intent GuildPresences).
-  const statusText = member.presence?.activities?.find((a) => a.type === 4)?.state ?? "";
-  const profile = await fetchProfile(guildId, token, interaction.user.id, statusText);
-  if (!profile) return reply("noprofile");
-
-  const { passed, details } = checkProfile(profile, panel);
+  const check = await checkMember();
+  if (check.kind) return reply(check.kind);
+  const { passed, details } = check;
 
   if (passed) {
     await markVerified(guildId, panelId, interaction.user.id);
