@@ -16,7 +16,7 @@ function buildSelfPanel(page = 0) {
   return buildCategoryPanel({
     group: "self",
     title: "### Self",
-    description: "Configurações do Self.",
+    description: "Verificação de bio, status e pronomes com cargos automáticos.",
     options: OPCOES,
     page,
   });
