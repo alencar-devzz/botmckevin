@@ -157,6 +157,11 @@ async function handlePanelAction(interaction, guildId, panelId, action, arg) {
     return showEditor(interaction, panelId, note);
   }
 
+  if (action === "txt_clear") {
+    const note = await commit(interaction, panelId, { message: "" });
+    return showEditor(interaction, panelId, note);
+  }
+
   // ----- mídia -----
   if (action === "img_xmain" || action === "img_xthumb") {
     const field = action === "img_xmain" ? "image" : "thumb";

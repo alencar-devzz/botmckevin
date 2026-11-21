@@ -1,5 +1,6 @@
 const {
   SectionBuilder,
+  ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
   RoleSelectMenuBuilder,
@@ -22,6 +23,12 @@ const { LIMITS, DEFAULT_MESSAGE, stripEmoji, normalizePanel, panelName } = requi
 // IDs: "bp_panel:<painel>:<ação>[:<arg>]" (botões e selects) e "bp_modal:<tipo>:<painel>[:<arg>]" (modais).
 
 const { text, clip, divider, btn, row, tag, box } = ui;
+
+// Únicos emojis do editor: setas de Anterior e Próxima
+const ARROW = {
+  prev: { name: "left2", id: "1573414733745365064" },
+  next: { name: "right2", id: "1573414717114810448" },
+};
 
 const num = (n) => Number(n).toLocaleString("pt-BR");
 const yes = (v) => (v ? "sim" : "não");
@@ -160,8 +167,8 @@ function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
 
   // ----- linha de navegação embaixo -----
   const footer = row(
-    btn(id("prev"), "Anterior").setDisabled(at === 0),
-    btn(id("next"), "Próxima").setDisabled(at === SECTIONS.length - 1),
+    new ButtonBuilder().setCustomId(id("prev")).setEmoji(ARROW.prev).setStyle(ButtonStyle.Secondary).setDisabled(at === 0),
+    new ButtonBuilder().setCustomId(id("next")).setEmoji(ARROW.next).setStyle(ButtonStyle.Secondary).setDisabled(at === SECTIONS.length - 1),
     btn(id("preview"), "Ver prévia"),
     btn("bp_home", "Voltar")
   );
@@ -207,12 +214,16 @@ function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
             [
               title(),
               "**Mensagem do painel**",
-              quote(panel.message),
+              panel.message.trim() ? quote(panel.message) : "-# Nenhum texto neste painel.",
               `-# ${num(textLength(panel.message))} de ${num(LIMITS.text)} caracteres.`,
             ].join("\n")
           )
         )
-        .addActionRowComponents(row(btn(id("txt"), "Editar texto", ButtonStyle.Primary), btn(id("txt_reset"), "Restaurar padrão")))
+        .addActionRowComponents(row(
+            btn(id("txt"), panel.message.trim() ? "Editar texto" : "Definir texto", ButtonStyle.Primary),
+            btn(id("txt_reset"), "Restaurar padrão"),
+            btn(id("txt_clear"), "Remover texto", ButtonStyle.Danger).setDisabled(!panel.message.trim())
+          ))
     );
     cards.push(
       box().addTextDisplayComponents(

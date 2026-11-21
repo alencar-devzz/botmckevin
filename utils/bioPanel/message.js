@@ -59,7 +59,8 @@ function normalizePanel(p = {}) {
   const extra = (Array.isArray(p.extraButtons) ? p.extraButtons : []).slice(0, LIMITS.extraButtons);
   return {
     ...p,
-    message: typeof p.message === "string" && p.message.trim() ? p.message : legacyText(p),
+    // null = painel antigo (usa título + descrição); "" = texto removido de propósito
+    message: typeof p.message === "string" ? p.message : legacyText(p),
     image: p.image || null,
     thumb: p.thumb || null,
     layout: LAYOUTS[p.layout] ? p.layout : "box",
