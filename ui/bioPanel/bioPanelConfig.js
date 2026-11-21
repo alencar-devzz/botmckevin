@@ -1,6 +1,7 @@
 const {
   ContainerBuilder, TextDisplayBuilder, SectionBuilder, SeparatorBuilder,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle,
+  StringSelectMenuBuilder, RoleSelectMenuBuilder, ChannelSelectMenuBuilder, ChannelType,
 } = require("discord.js");
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3500));
@@ -13,26 +14,6 @@ const EMOJI = {
   on: { name: "on3", id: "1573434230690545664" },
   off: { name: "off3", id: "1573434379181621489" },
 };
-const E = {
-  pencil: { name: "pencil", id: "1571748457423831191" },
-  pencil2: { name: "pencil2", id: "1571767357423095878" },
-  trash: { name: "trash", id: "1571750967094022154" },
-  send: { name: "send", id: "1571748543600005200" },
-  more: { name: "more", id: "1571750505426845810" },
-  lupa: { name: "lupa", id: "1569386560107970755" },
-  settings: { name: "settings", id: "1570940544614539264" },
-  check: { name: "check", id: "1571598243526348850" },
-  alert: { name: "alert", id: "1569387419634106448" },
-  note: { name: "note", id: "1569386865587392602" },
-  member: { name: "member", id: "1570579495746937002" },
-  clock: { name: "clock", id: "1570940810617298954" },
-  hashtag: { name: "hashtag", id: "1570940895115616276" },
-  interaction: { name: "interaction", id: "1571767077117624470" },
-  shield: { name: "Shield", id: "1572386860485976136" },
-  hammer: { name: "hammer", id: "1569386750701215905" },
-};
-const mk = (e) => `<:${e.name}:${e.id}>`;
-
 // Remove emojis unicode de textos salvos (o painel só usa emojis customizados do servidor)
 const UNICODE_EMOJI = /[\u2190-\u21ff\u2300-\u23ff\u2600-\u27bf\u2b00-\u2bff\u{1F000}-\u{1FAFF}\u200d\ufe0f]/gu;
 const stripEmoji = (v) => String(v ?? "").replace(UNICODE_EMOJI, "").replace(/[ \t]{2,}/g, " ").trim();
@@ -60,7 +41,7 @@ function buildBioPanelHome(panels, hasToken) {
       .setButtonAccessory(
         new ButtonBuilder()
           .setCustomId("bp_token_set")
-          .setEmoji(E.pencil2)
+          .setEmoji(EMOJI.arrow)
           .setStyle(ButtonStyle.Secondary)
       )
   );
@@ -70,7 +51,7 @@ function buildBioPanelHome(panels, hasToken) {
       new SectionBuilder()
         .addTextDisplayComponents(text("**Remover token**\n-# Apaga a token do banco de dados"))
         .setButtonAccessory(
-          new ButtonBuilder().setCustomId("bp_token_clear").setEmoji(E.trash).setStyle(ButtonStyle.Danger)
+          new ButtonBuilder().setCustomId("bp_token_clear").setEmoji(EMOJI.arrow).setStyle(ButtonStyle.Danger)
         )
     );
   }
@@ -91,7 +72,7 @@ function buildBioPanelHome(panels, hasToken) {
         .setButtonAccessory(
           new ButtonBuilder()
             .setCustomId(`bp_panel_edit:${p.panelId}`)
-            .setEmoji(E.settings)
+            .setEmoji(EMOJI.arrow)
             .setStyle(ButtonStyle.Secondary)
         )
     );
@@ -115,8 +96,20 @@ function buildBioPanelHome(panels, hasToken) {
 
 // Página aberta de cada painel (só em memória; volta para a 1 ao reiniciar o bot)
 const editPages = new Map();
-const PAGES = ["Aparência", "Verificação", "Cargos", "Publicação"];
-const PAGE_SUB = ["Textos e botão", "Perfil e padrões", "Dar e remover", "Canal e mensagem"];
+const PAGES = [
+  { label: "Visão geral", desc: "Estado e atalhos" },
+  { label: "Aparência", desc: "Textos e botão" },
+  { label: "Verificação", desc: "Perfil e padrões" },
+  { label: "Cargos", desc: "Entrega e remoção" },
+  { label: "Publicação", desc: "Canal e mensagem" },
+];
+const PAGE_HELP = [
+  "Resumo do painel e prévia.",
+  "Como o painel aparece para os membros.",
+  "O que o perfil precisa ter para liberar os cargos.",
+  "Cargos dados e removidos ao verificar.",
+  "Onde a mensagem do painel é enviada.",
+];
 
 function setEditPage(panelId, page) {
   const n = Math.min(Math.max(parseInt(page, 10) || 1, 1), PAGES.length);
@@ -124,7 +117,7 @@ function setEditPage(panelId, page) {
   return n;
 }
 
-// Limite do Discord: 40 componentes por mensagem. Cada página usa no máximo ~33.
+// Limite do Discord: 40 componentes por mensagem. Cada página usa no máximo ~30.
 function buildBioPanelEdit(panel) {
   const { panelId } = panel;
   const page = editPages.get(panelId) || 1;
@@ -134,80 +127,113 @@ function buildBioPanelEdit(panel) {
     return t.length > n ? t.slice(0, n - 1) + "…" : t;
   };
   const patterns = panel.patterns || [];
+  const give = panel.giveRoles || [];
+  const remove = panel.removeRoles || [];
 
-  const iconBtn = (action, emoji, style = ButtonStyle.Secondary, disabled = false) =>
-    new ButtonBuilder().setCustomId(id(action)).setEmoji(emoji).setStyle(style).setDisabled(disabled);
+  const arrowBtn = (action, style = ButtonStyle.Secondary, disabled = false) =>
+    new ButtonBuilder().setCustomId(id(action)).setEmoji(EMOJI.arrow).setStyle(style).setDisabled(disabled);
   const toggleBtn = (action, on) =>
     new ButtonBuilder().setCustomId(id(action)).setEmoji(on ? EMOJI.on : EMOJI.off).setStyle(ButtonStyle.Secondary);
-  const item = (title, desc, button, icon) =>
+  const item = (title, desc, button) =>
     new SectionBuilder()
-      .addTextDisplayComponents(text(`${icon ? mk(icon) + " " : ""}**${title}**\n-# ${desc}`))
+      .addTextDisplayComponents(text(`**${title}**\n-# ${desc}`))
       .setButtonAccessory(button);
+  const card = (title, sub) =>
+    new ContainerBuilder().addTextDisplayComponents(text(`### ${title}${sub ? `\n-# ${sub}` : ""}`)).addSeparatorComponents(sep());
 
   const channel = panel.channelId ? `<#${panel.channelId}>` : "sem canal";
   const status = panel.messageId ? "Publicado" : "Ainda não publicado";
+  const current = PAGES[page - 1];
 
-  // Container do topo (título, caminho e resumo)
+  // ── Topo: título, caminho e select de navegação
+  const nav = new StringSelectMenuBuilder()
+    .setCustomId(id("nav"))
+    .setPlaceholder(current.label)
+    .addOptions(PAGES.map((p, i) => ({ label: p.label, description: p.desc, value: String(i + 1), default: false })));
+
   const header = new ContainerBuilder()
-    .addTextDisplayComponents(
-      text(`### ${clip(panel.title, 100)}\n-# Painel › Self › Cargos por perfil › **${clip(panel.title, 60)}**`)
-    )
+    .addTextDisplayComponents(text(`### ${current.label}\n-# Painel › Self › Cargos por perfil › **${current.label}**`))
     .addSeparatorComponents(sep())
-    .addTextDisplayComponents(
-      text(`-# Canal · **${channel}** · Status · **${status}** · Padrões · **${patterns.length}**`)
-    );
+    .addActionRowComponents(new ActionRowBuilder().addComponents(nav))
+    .addTextDisplayComponents(text(`-# **${clip(panel.title, 60)}** · ${PAGE_HELP[page - 1]}`));
 
-  // Card da página atual
-  const card = new ContainerBuilder().addTextDisplayComponents(
-    text(`### ${PAGES[page - 1]} · ${page}/${PAGES.length}\n-# ${PAGE_SUB[page - 1]}`)
-  ).addSeparatorComponents(sep());
+  const cards = [header];
 
   if (page === 1) {
-    card
-      .addSectionComponents(item("Título", clip(none(panel.title)), iconBtn("edit_title", E.pencil2), E.pencil))
-      .addSectionComponents(item("Descrição", clip(none(panel.description)), iconBtn("edit_desc", E.pencil2), E.note))
-      .addSectionComponents(item("Botão de verificação", `${clip(none(panel.buttonLabel), 40)} · emoji ${none(panel.buttonEmoji)}`, iconBtn("edit_btn", E.pencil2), E.interaction))
-      .addSectionComponents(item("Texto de sucesso", clip(none(panel.successText)), iconBtn("edit_success", E.pencil2), E.check))
-      .addSectionComponents(item("Texto de falha", clip(none(panel.failText)), iconBtn("edit_fail", E.pencil2), E.alert));
-  } else if (page === 2) {
-    card
-      .addSectionComponents(item("Bio (sobre mim)", bool(panel.checkBio), toggleBtn("toggle_bio", panel.checkBio), E.member))
-      .addSectionComponents(item("Status personalizado", bool(panel.checkStatus), toggleBtn("toggle_status", panel.checkStatus), E.clock))
-      .addSectionComponents(item("Pronomes", bool(panel.checkPronouns), toggleBtn("toggle_pronouns", panel.checkPronouns), E.hashtag))
-      .addTextDisplayComponents(
+    cards.push(
+      new ContainerBuilder().addTextDisplayComponents(
         text(
-          `**Padrões exigidos** · ${patterns.length}/10\n-# O perfil deve conter TODOS os padrões nos campos ativados.\n` +
-          (patterns.length ? clip(patterns.map((p, i) => `${i + 1}. \`${p}\``).join("\n"), 1200) : "-# Nenhum padrão definido.")
+          `### Situação\n` +
+          `**Canal** · ${channel}\n` +
+          `**Publicação** · ${status}\n` +
+          `**Verifica** · Bio ${bool(panel.checkBio)} · Status ${bool(panel.checkStatus)} · Pronomes ${bool(panel.checkPronouns)}\n` +
+          `**Padrões** · ${patterns.length}\n` +
+          `**Dar cargos** · ${give.length} · **Remover cargos** · ${remove.length}`
         )
+      ),
+      card("Prévia completa", "Confira o painel antes de publicar.").addSectionComponents(
+        item("Ver prévia", "Mostra a mensagem como os membros vão ver.", arrowBtn("preview"))
       )
-      .addSectionComponents(item("Adicionar padrão", "Texto que o perfil precisa conter.", iconBtn("add_pattern", E.more), E.pencil))
-      .addSectionComponents(item("Remover padrão", "Escolha pelo número.", iconBtn("remove_pattern", E.trash, ButtonStyle.Secondary, !patterns.length), E.trash));
+    );
+  } else if (page === 2) {
+    cards.push(
+      card("Aparência", "Textos e botão")
+        .addSectionComponents(item("Título", clip(none(panel.title)), arrowBtn("edit_title")))
+        .addSectionComponents(item("Descrição", clip(none(panel.description)), arrowBtn("edit_desc")))
+        .addSectionComponents(item("Botão de verificação", `${clip(none(panel.buttonLabel), 40)} · emoji ${none(panel.buttonEmoji)}`, arrowBtn("edit_btn")))
+        .addSectionComponents(item("Texto de sucesso", clip(none(panel.successText)), arrowBtn("edit_success")))
+        .addSectionComponents(item("Texto de falha", clip(none(panel.failText)), arrowBtn("edit_fail")))
+    );
   } else if (page === 3) {
-    card
-      .addSectionComponents(item("Dar cargos ao verificar", clip(roles(panel.giveRoles || []), 300), iconBtn("edit_give_roles", E.pencil2), E.shield))
-      .addSectionComponents(item("Remover cargos ao verificar", clip(roles(panel.removeRoles || []), 300), iconBtn("edit_remove_roles", E.pencil2), E.hammer));
+    cards.push(
+      card("O que verificar", "Basta uma fonte conter os padrões.")
+        .addSectionComponents(item("Bio (sobre mim)", bool(panel.checkBio), toggleBtn("toggle_bio", panel.checkBio)))
+        .addSectionComponents(item("Status personalizado", bool(panel.checkStatus), toggleBtn("toggle_status", panel.checkStatus)))
+        .addSectionComponents(item("Pronomes", bool(panel.checkPronouns), toggleBtn("toggle_pronouns", panel.checkPronouns))),
+      new ContainerBuilder()
+        .addTextDisplayComponents(
+          text(
+            `### Padrões exigidos · ${patterns.length}/10\n-# O perfil deve conter TODOS os padrões nos campos ativados.\n` +
+            (patterns.length ? clip(patterns.map((p, i) => `${i + 1}. \`${p}\``).join("\n"), 1200) : "-# Nenhum padrão definido.")
+          )
+        )
+        .addSectionComponents(item("Adicionar padrão", "Texto que o perfil precisa conter.", arrowBtn("add_pattern")))
+        .addSectionComponents(item("Remover padrão", "Escolha pelo número.", arrowBtn("remove_pattern", ButtonStyle.Secondary, !patterns.length)))
+    );
+  } else if (page === 4) {
+    const roleSelect = (action, ph, list) => {
+      const menu = new RoleSelectMenuBuilder().setCustomId(id(action)).setPlaceholder(ph).setMinValues(0).setMaxValues(10);
+      if (list.length) menu.setDefaultRoles(list.slice(0, 10));
+      return new ActionRowBuilder().addComponents(menu);
+    };
+    cards.push(
+      new ContainerBuilder()
+        .addTextDisplayComponents(text(`### Dar cargos\n-# Entregues quando o perfil for verificado. @everyone, integrações e cargos acima do bot são ignorados.\n${give.length ? roles(give) : "Nenhum cargo escolhido."}`))
+        .addActionRowComponents(roleSelect("give_roles", "Escolher cargos para dar...", give)),
+      new ContainerBuilder()
+        .addTextDisplayComponents(text(`### Remover cargos\n-# Retirados do membro ao verificar.\n${remove.length ? roles(remove) : "Nenhum cargo escolhido."}`))
+        .addActionRowComponents(roleSelect("remove_roles", "Escolher cargos para remover...", remove))
+    );
   } else {
-    card
-      .addSectionComponents(item("Canal do painel", channel, iconBtn("set_channel", E.settings), E.hashtag))
-      .addSectionComponents(item(panel.messageId ? "Reenviar mensagem" : "Publicar mensagem", "O bot envia o painel no canal escolhido.", iconBtn("publish", E.send, ButtonStyle.Success, !panel.channelId), E.send))
-      .addSectionComponents(item("Excluir painel", "Apaga o painel e a mensagem publicada.", iconBtn("delete_panel", E.trash, ButtonStyle.Danger), E.trash));
+    const chMenu = new ChannelSelectMenuBuilder()
+      .setCustomId(id("channel"))
+      .setPlaceholder("Canal do painel (limpe para despublicar)...")
+      .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+      .setMinValues(0)
+      .setMaxValues(1);
+    if (panel.channelId) chMenu.setDefaultChannels([panel.channelId]);
+    cards.push(
+      new ContainerBuilder()
+        .addTextDisplayComponents(text(`### Canal\n-# Escolha onde enviar. Selecionar outro canal move a publicação.\n**Canal atual** · ${channel}`))
+        .addActionRowComponents(new ActionRowBuilder().addComponents(chMenu)),
+      card("Mensagem", status)
+        .addSectionComponents(item(panel.messageId ? "Reenviar mensagem" : "Publicar mensagem", "O bot envia o painel no canal escolhido.", arrowBtn("publish", ButtonStyle.Success, !panel.channelId)))
+        .addSectionComponents(item("Excluir painel", "Apaga o painel e a mensagem publicada.", arrowBtn("delete_panel", ButtonStyle.Danger)))
+    );
   }
 
-  // Navegação (setas) e prévia, igual às telas de referência
-  card
-    .addSeparatorComponents(sep())
-    .addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(id(`page:${page - 1}`)).setEmoji(EMOJI.prev).setStyle(ButtonStyle.Secondary).setDisabled(page <= 1),
-        new ButtonBuilder().setCustomId(id(`page:${page + 1}`)).setEmoji(EMOJI.arrow).setStyle(ButtonStyle.Secondary).setDisabled(page >= PAGES.length)
-      )
-    )
-    .addSeparatorComponents(sep())
-    .addSectionComponents(item("Prévia completa", "Confira o painel antes de publicar.", iconBtn("preview", E.lupa), E.lupa));
-
-  // "Voltar" no mesmo formato dos demais painéis: o decorator do /menu tira ele do container
-  // e coloca numa linha própria embaixo.
-  card
+  // "Voltar" igual aos demais painéis: o decorator do /menu tira o botão do container e põe numa linha embaixo
+  cards[cards.length - 1]
     .addSeparatorComponents(sep())
     .addActionRowComponents(
       new ActionRowBuilder().addComponents(
@@ -215,7 +241,7 @@ function buildBioPanelEdit(panel) {
       )
     );
 
-  return [header, card];
+  return cards;
 }
 
 // ─── Modais ─────────────────────────────────────────────────────────────────

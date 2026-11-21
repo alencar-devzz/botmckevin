@@ -87,13 +87,6 @@ async function handlePanelAction(interaction, guildId, panelId, action) {
   const panel = await getPanel(guildId, panelId);
   if (!panel) return deny(interaction, "Painel não encontrado.");
 
-  // Navegação entre páginas do editor
-  if (action.startsWith("page")) {
-    // customId: bp_panel:<id>:page:<n>  -> action vem como "page"; o número fica no 4º trecho
-    setEditPage(panelId, interaction.customId.split(":")[3]);
-    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
-  }
-
   // Prévia do painel público (só para quem clicou)
   if (action === "preview") {
     return interaction.reply({ components: buildPublicPanel(panel), flags: V2 | EPHEMERAL });
@@ -122,9 +115,6 @@ async function handlePanelAction(interaction, guildId, panelId, action) {
   if (action === "edit_btn") return interaction.showModal(buildButtonModal(panelId, panel));
   if (action === "add_pattern") return interaction.showModal(buildPatternModal(panelId));
   if (action === "remove_pattern") return interaction.showModal(buildRemovePatternModal(panelId, panel.patterns));
-  if (action === "edit_give_roles") return interaction.showModal(buildRolesModal(panelId, "give", panel.giveRoles));
-  if (action === "edit_remove_roles") return interaction.showModal(buildRolesModal(panelId, "remove", panel.removeRoles));
-  if (action === "set_channel") return interaction.showModal(buildChannelModal(panelId, panel.channelId));
 
   // Publicar painel no canal
   if (action === "publish") {
@@ -151,6 +141,44 @@ async function handlePanelAction(interaction, guildId, panelId, action) {
     await deletePanel(guildId, panelId);
     return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
   }
+}
+
+
+// ─── Selects do editor (navegação, cargos, canal) ───────────────────────────
+
+async function handleBioPanelSelect(interaction) {
+  if (!(await guard(interaction))) return;
+  const { customId, guildId, values } = interaction;
+  const [, panelId, action] = customId.split(":");
+  const panel = await getPanel(guildId, panelId);
+  if (!panel) return deny(interaction, "Painel não encontrado.");
+
+  if (action === "nav") {
+    setEditPage(panelId, values[0]);
+  } else if (action === "give_roles" || action === "remove_roles") {
+    const me = interaction.guild.members.me;
+    const top = me?.roles?.highest?.position ?? 0;
+    const ids = values.filter((rid) => {
+      const r = interaction.guild.roles.cache.get(rid);
+      return r && r.id !== interaction.guild.id && !r.managed && r.position < top;
+    });
+    await updatePanel(guildId, panelId, { [action === "give_roles" ? "giveRoles" : "removeRoles"]: ids });
+  } else if (action === "channel") {
+    const newId = values[0] ?? null;
+    if (newId !== panel.channelId) {
+      // mudou ou limpou o canal: apaga a mensagem publicada no canal antigo
+      if (panel.messageId && panel.channelId) {
+        const old = interaction.guild.channels.cache.get(panel.channelId);
+        if (old) try { await old.messages.delete(panel.messageId); } catch { /* já apagada */ }
+      }
+      await updatePanel(guildId, panelId, { channelId: newId, messageId: null });
+    }
+  } else {
+    return;
+  }
+
+  const updated = await getPanel(guildId, panelId);
+  return safeUpdate(interaction, { components: buildBioPanelEdit(updated), flags: V2 });
 }
 
 // ─── Modais de config ────────────────────────────────────────────────────────
@@ -349,6 +377,7 @@ async function handleBioPanelUserTokenModal(interaction) {
 
 module.exports = {
   handleBioPanelButton,
+  handleBioPanelSelect,
   handleBioPanelModal,
   handleBioPanelVerify,
   handleBioPanelUserToken,

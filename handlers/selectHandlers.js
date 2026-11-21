@@ -85,6 +85,7 @@ async function openModeracaoOption(interaction, value) {
 // Opções da categoria Self (busca e cat:self:open:*). Ainda sem sistemas.
 const {
   handleBioPanelButton: _bpBtn,
+  handleBioPanelSelect: _bpSel,
   handleBioPanelModal: _bpMdl,
 } = require("./bioPanelHandlers");
 const { getPanels, getToken } = require("../utils/bioPanel/store");
@@ -157,6 +158,11 @@ async function openSystem(interaction, key) {
 
 async function handleSelect(interaction) {
   const { customId, values } = interaction;
+
+  // Cargos por perfil (navegação, cargos e canal)
+  if (customId.startsWith("bp_panel:")) {
+    return _bpSel(interaction);
+  }
 
   // Central de ajuda (comando /help)
   if (customId.startsWith("help:")) {
