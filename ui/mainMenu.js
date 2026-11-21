@@ -14,7 +14,7 @@ const MENU_EMOJI = "<:menu:1572384509259685899>";
 const SEARCH_EMOJI = { name: "search", id: "1569386560107970755" };
 
 const text = (content) => new TextDisplayBuilder().setContent(String(content).slice(0, 3500));
-const code = (value) => `\`${String(value ?? "—").replaceAll("`", "'")}\``;
+const code = (value) => "`" + String(value ?? "—").replaceAll("`", "'") + "`";
 const unix = (ms) => Math.floor(ms / 1000);
 
 // Lista única de sistemas: alimenta a busca do menu.
