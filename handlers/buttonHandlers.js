@@ -6,6 +6,11 @@ const { rememberCategoryPage, recallCategoryPage } = require("../utils/menuSessi
 const { buildComunidadePanel } = require("../ui/comunidade");
 const { buildModeracaoPanel } = require("../ui/moderacao");
 const { buildSelfPanel, SELF_OPCOES } = require("../ui/self");
+const {
+  handleBioPanelButton,
+  handleBioPanelVerify,
+  handleBioPanelUserToken,
+} = require("./bioPanelHandlers");
 const { buildOutrosPanel } = require("../ui/outros");
 const { buildSistemasPanel } = require("../ui/sistemas");
 const { buildMessageHome } = require("../ui/mensagemPanels");
@@ -258,6 +263,14 @@ async function handleButton(interaction) {
       return interaction.update({ components: buildModeracaoPanel(recallCategoryPage(interaction.message?.id, "moderacao")) });
     }
 
+    // ── Bio Panel (configuração e verificação pública) ───────────────────────
+    case "bp_home":
+    case "bp_token_set":
+    case "bp_token_clear":
+    case "bp_panel_create": {
+      return handleBioPanelButton(interaction);
+    }
+
     case "back_self": {
       return interaction.update({ components: buildSelfPanel(recallCategoryPage(interaction.message?.id, "self")) });
     }
@@ -271,6 +284,15 @@ async function handleButton(interaction) {
     }
 
     default:
+      if (customId.startsWith("bp_panel:") || customId.startsWith("bp_panel_edit:")) {
+        return handleBioPanelButton(interaction);
+      }
+      if (customId.startsWith("bp_verify:")) {
+        return handleBioPanelVerify(interaction);
+      }
+      if (customId === "bp_user_token_set") {
+        return handleBioPanelUserToken(interaction);
+      }
       return;
   }
 }

@@ -83,8 +83,25 @@ async function openModeracaoOption(interaction, value) {
 }
 
 // Opções da categoria Self (busca e cat:self:open:*). Ainda sem sistemas.
+const {
+  handleBioPanelButton: _bpBtn,
+  handleBioPanelModal: _bpMdl,
+} = require("./bioPanelHandlers");
+const { getPanels, getToken } = require("../utils/bioPanel/store");
+const { buildBioPanelHome } = require("../ui/bioPanel/bioPanelConfig");
+
 async function openSelfOption(interaction, value) {
-  return;
+  if (value === "bio_panel") {
+    const { guildId } = interaction;
+    const [panels, hasToken] = await Promise.all([
+      getPanels(guildId),
+      getToken(guildId).then((t) => t !== null),
+    ]);
+    return interaction.update({
+      components: buildBioPanelHome(panels, hasToken),
+      flags: require("discord.js").MessageFlags.IsComponentsV2,
+    });
+  }
 }
 
 // Opções da categoria Comunidade e interação (busca e cat:comunidade:open:*)
