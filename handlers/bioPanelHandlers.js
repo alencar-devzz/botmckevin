@@ -32,6 +32,11 @@ async function homePanel(guildId) {
   return buildBioPanelHome(panels, hasToken);
 }
 
+const safeUpdate = (interaction, payload) => {
+  if (interaction.deferred) return interaction.editReply(payload);
+  return interaction.update(payload).catch(() => interaction.editReply(payload));
+};
+
 // ─── Botões de config ───────────────────────────────────────────────────────
 
 async function handleBioPanelButton(interaction) {
@@ -40,7 +45,7 @@ async function handleBioPanelButton(interaction) {
 
   // Voltar para home
   if (customId === "bp_home") {
-    return interaction.update({ components: await homePanel(guildId), flags: V2 });
+    return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
   }
 
   // Token
@@ -49,14 +54,14 @@ async function handleBioPanelButton(interaction) {
   }
   if (customId === "bp_token_clear") {
     await clearToken(guildId);
-    return interaction.update({ components: await homePanel(guildId), flags: V2 });
+    return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
   }
 
   // Criar painel
   if (customId === "bp_panel_create") {
     const panelId = await createPanel(guildId);
     const panel = await getPanel(guildId, panelId);
-    return interaction.update({ components: buildBioPanelEdit(panel), flags: V2 });
+    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
   }
 
   // Editar painel existente (da home)
@@ -64,7 +69,7 @@ async function handleBioPanelButton(interaction) {
     const panelId = customId.split(":")[1];
     const panel = await getPanel(guildId, panelId);
     if (!panel) return deny(interaction, "Painel não encontrado.");
-    return interaction.update({ components: buildBioPanelEdit(panel), flags: V2 });
+    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
   }
 
   // Ações dentro de um painel — formato: bp_panel:<panelId>:<action>
@@ -85,7 +90,7 @@ async function handlePanelAction(interaction, guildId, panelId, action) {
   if (toggles[action]) {
     await updatePanel(guildId, panelId, { [toggles[action]]: !panel[toggles[action]] });
     const updated = await getPanel(guildId, panelId);
-    return interaction.update({ components: buildBioPanelEdit(updated), flags: V2 });
+    return safeUpdate(interaction, { components: buildBioPanelEdit(updated), flags: V2 });
   }
 
   // Modais de texto simples
@@ -130,7 +135,7 @@ async function handlePanelAction(interaction, guildId, panelId, action) {
       if (ch) try { await ch.messages.delete(panel.messageId); } catch { /* ok */ }
     }
     await deletePanel(guildId, panelId);
-    return interaction.update({ components: await homePanel(guildId), flags: V2 });
+    return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
   }
 }
 
@@ -146,7 +151,7 @@ async function handleBioPanelModal(interaction) {
   if (type === "set_token") {
     const token = interaction.fields.getTextInputValue("token").trim();
     await setToken(guildId, token);
-    return interaction.update({ components: await homePanel(guildId), flags: V2 });
+    return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
   }
 
   const panelId = parts[2];
@@ -163,7 +168,7 @@ async function handleBioPanelModal(interaction) {
     const value = interaction.fields.getTextInputValue("value").trim();
     await updatePanel(guildId, panelId, { [field]: value });
     const panel = await getPanel(guildId, panelId);
-    return interaction.update({ components: buildBioPanelEdit(panel), flags: V2 });
+    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
   }
 
   if (type === "button") {
@@ -171,7 +176,7 @@ async function handleBioPanelModal(interaction) {
     const emoji = interaction.fields.getTextInputValue("emoji").trim() || null;
     await updatePanel(guildId, panelId, { buttonLabel: label, buttonEmoji: emoji });
     const panel = await getPanel(guildId, panelId);
-    return interaction.update({ components: buildBioPanelEdit(panel), flags: V2 });
+    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
   }
 
   if (type === "add_pattern") {
@@ -181,7 +186,7 @@ async function handleBioPanelModal(interaction) {
     if (panel.patterns.length >= 10) return deny(interaction, "Máximo de 10 padrões por painel.");
     await updatePanel(guildId, panelId, { patterns: [...panel.patterns, pattern] });
     const updated = await getPanel(guildId, panelId);
-    return interaction.update({ components: buildBioPanelEdit(updated), flags: V2 });
+    return safeUpdate(interaction, { components: buildBioPanelEdit(updated), flags: V2 });
   }
 
   if (type === "remove_pattern") {
@@ -193,7 +198,7 @@ async function handleBioPanelModal(interaction) {
     newPatterns.splice(idx, 1);
     await updatePanel(guildId, panelId, { patterns: newPatterns });
     const updated = await getPanel(guildId, panelId);
-    return interaction.update({ components: buildBioPanelEdit(updated), flags: V2 });
+    return safeUpdate(interaction, { components: buildBioPanelEdit(updated), flags: V2 });
   }
 
   if (type === "roles") {
@@ -203,7 +208,7 @@ async function handleBioPanelModal(interaction) {
     const key = field === "give" ? "giveRoles" : "removeRoles";
     await updatePanel(guildId, panelId, { [key]: ids });
     const panel = await getPanel(guildId, panelId);
-    return interaction.update({ components: buildBioPanelEdit(panel), flags: V2 });
+    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
   }
 
   if (type === "channel") {
@@ -212,7 +217,7 @@ async function handleBioPanelModal(interaction) {
     if (!ch) return deny(interaction, "Canal não encontrado. Verifique o ID.");
     await updatePanel(guildId, panelId, { channelId });
     const panel = await getPanel(guildId, panelId);
-    return interaction.update({ components: buildBioPanelEdit(panel), flags: V2 });
+    return safeUpdate(interaction, { components: buildBioPanelEdit(panel), flags: V2 });
   }
 }
 

@@ -97,10 +97,13 @@ async function openSelfOption(interaction, value) {
       getPanels(guildId),
       getToken(guildId).then((t) => t !== null),
     ]);
-    return interaction.update({
+    const payload = {
       components: buildBioPanelHome(panels, hasToken),
       flags: require("discord.js").MessageFlags.IsComponentsV2,
-    });
+    };
+    // editReply suporta tanto update() direto quanto deferUpdate() automático do safeInteraction
+    if (interaction.deferred) return interaction.editReply(payload);
+    return interaction.update(payload).catch(() => interaction.editReply(payload));
   }
 }
 
