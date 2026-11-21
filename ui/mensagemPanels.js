@@ -243,6 +243,8 @@ function buildTextPanel({ draft }) {
         "### Marcadores",
         "`[separador]`  linha fina entre trechos",
         "`[separador_largo]`  espaço maior entre trechos",
+        "`[imagem]`  posição da imagem principal (sem ele, ela vem depois do texto)",
+        "-# Nenhum separador é colocado sozinho: ele só existe onde você escrever. Vale no começo, no meio e no fim do texto (no fim, ele separa da imagem ou dos botões).",
         "-# Markdown do Discord funciona normalmente. Emojis do servidor entram como `<:nome:id>`.",
       ].join("\n")
     )
@@ -313,7 +315,7 @@ function buildLookPanel({ draft }) {
     );
 
   const espaco = box()
-    .addTextDisplayComponents(text(`### Espaçamento amplo  ${tag(b.wide)}\n-# Aumenta o espaço entre texto, imagem e botões do bloco.`))
+    .addTextDisplayComponents(text(`### Espaçamento amplo  ${tag(b.wide)}\n-# Todos os separadores do bloco ficam com espaçamento amplo.`))
     .addActionRowComponents(row(b.wide ? btn("msg:look:wide", "Desativar", ButtonStyle.Danger) : btn("msg:look:wide", "Ativar", ButtonStyle.Success)));
 
   return [partTitle(draft, "Aparência"), formato, cor, espaco, partNav(draft, "look")];
@@ -417,7 +419,7 @@ function buildResponsePanel({ draft }) {
   if (mode === "embed") lines.push(`**Título**  ${r.title.trim() ? clip(r.title, 80) : "`vazio`"}`);
   lines.push(r.text.trim() ? quote(r.text, 400) : "-# Nenhum texto.");
   if (mode === "embed") lines.push(`**Rodapé**  ${r.footer.trim() ? clip(r.footer, 80) : "`vazio`"}`);
-  lines.push(`-# ${num(r.text.length)} de ${num(maxRespText(mode))} caracteres.${mode === "v2" ? " [separador] e [separador_largo] funcionam aqui." : ""}`);
+  lines.push(`-# ${num(r.text.length)} de ${num(maxRespText(mode))} caracteres.${mode === "v2" ? " [separador], [separador_largo] e [imagem] funcionam aqui." : ""}`);
 
   const anyText = Boolean(r.text.trim() || r.title.trim() || r.footer.trim());
   const conteudo = box()

@@ -16,13 +16,18 @@ const MessageAsset = require("../../database/models/MessageAsset");
 const { LIMITS, LAYOUTS, colorValue, isStored, storedId, hasResponse, responseHasContent, responseSources } = require("./store");
 
 // Monta a mensagem final (Components V2) a partir do rascunho.
-// Marcadores no texto: [separador] = linha fina · [separador_largo] = espaço grande.
+// Marcadores no texto: [separador] = linha fina · [separador_largo] = espaço grande · [imagem] = onde a imagem aparece.
+// Nenhum separador é colocado automaticamente: quem monta a mensagem decide onde cada um fica.
 
 // ---------- texto ----------
 
-// Quebra o texto nos marcadores. Devolve itens { type: "text", value } e { type: "sep", large }.
-function chunkText(raw) {
-  const parts = String(raw ?? "").split(/\[(separador_largo|separador)\]/i);
+// Quebra o texto nos marcadores. Devolve itens { type: "text", value }, { type: "sep", large } e,
+// com image: true, { type: "image" } (posição da imagem, marcador [imagem]).
+// edges: true mantém separadores no começo e no fim do texto (quem monta a mensagem decide onde eles ficam).
+// Sem as opções, o comportamento é o antigo (usado por outros sistemas, como o sorteio).
+function chunkText(raw, { edges = false, image = false } = {}) {
+  const tokens = image ? "separador_largo|separador|imagem" : "separador_largo|separador";
+  const parts = String(raw ?? "").split(new RegExp(`\\[(${tokens})\\]`, "i"));
   const items = [];
   parts.forEach((part, i) => {
     if (i % 2 === 0) {
@@ -30,20 +35,25 @@ function chunkText(raw) {
       if (value) items.push({ type: "text", value });
       return;
     }
-    const large = part.toLowerCase() === "separador_largo";
+    const name = part.toLowerCase();
+    if (name === "imagem") {
+      items.push({ type: "image" });
+      return;
+    }
+    const large = name === "separador_largo";
     const last = items[items.length - 1];
-    if (!last) return; // sem separador no começo
-    if (last.type === "sep") {
+    if (!last && !edges) return; // sem separador no começo
+    if (last && last.type === "sep") {
       last.large = last.large || large;
       return;
     }
     items.push({ type: "sep", large });
   });
-  while (items.length && items[items.length - 1].type === "sep") items.pop();
+  if (!edges) while (items.length && items[items.length - 1].type === "sep") items.pop();
   return items;
 }
 
-const textLength = (raw) => chunkText(raw).reduce((n, item) => n + (item.type === "text" ? item.value.length : 0), 0);
+const textLength = (raw) => chunkText(raw, { image: true }).reduce((n, item) => n + (item.type === "text" ? item.value.length : 0), 0);
 const totalTextLength = (blocks) => blocks.reduce((n, b) => n + textLength(b.text), 0);
 
 const blockHasContent = (b) => Boolean(textLength(b.text) || b.image || b.buttons?.length);
@@ -94,12 +104,23 @@ function buildBlock(block, bi, media, ctx) {
 
   const content = [];
 
-  // texto (a miniatura vai ao lado do primeiro trecho de texto)
+  // texto (a miniatura vai ao lado do primeiro trecho de texto).
+  // Não há separador automático: só aparecem os que foram escritos no texto.
+  const gallery = () => {
+    ctx.count += 2; // galeria + item
+    return new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(image));
+  };
+  let imagePlaced = false;
   if (layout !== "image") {
     let sectionUsed = false;
-    for (const item of chunkText(block.text)) {
+    for (const item of chunkText(block.text, { edges: true, image: true })) {
       if (item.type === "sep") {
-        content.push(sep(item.large));
+        content.push(sep(item.large || large));
+      } else if (item.type === "image") {
+        if (image && !imagePlaced) {
+          imagePlaced = true;
+          content.push(gallery());
+        }
       } else if (thumb && !sectionUsed) {
         sectionUsed = true;
         ctx.count += 3; // seção + texto + miniatura
@@ -116,12 +137,8 @@ function buildBlock(block, bi, media, ctx) {
     if (thumb && !sectionUsed) ctx.warnings.push(`Bloco ${bi + 1}: a miniatura só aparece quando há texto.`);
   }
 
-  // imagem principal
-  if (image) {
-    if (content.length) content.push(sep(large));
-    ctx.count += 2; // galeria + item
-    content.push(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(image)));
-  }
+  // imagem principal: sem [imagem] no texto, vai depois do texto
+  if (image && !imagePlaced) content.push(gallery());
 
   // botões
   const makeRow = (list) => {
@@ -168,10 +185,7 @@ function buildBlock(block, bi, media, ctx) {
     };
 
     content.forEach(add);
-    if (inside.length) {
-      if (content.length) add(sep(large));
-      add(makeRow(inside));
-    }
+    if (inside.length) add(makeRow(inside));
     const out = [container];
     if (below.length) out.push(makeRow(below));
     return out;

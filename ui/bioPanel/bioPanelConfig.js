@@ -240,6 +240,8 @@ function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
             "### Marcadores",
             "`[separador]`  linha fina entre trechos",
             "`[separador_largo]`  espaço maior entre trechos",
+            "`[imagem]`  posição da imagem principal (sem ele, ela vem depois do texto)",
+            "-# Nenhum separador é colocado sozinho: ele só existe onde você escrever. Vale no começo, no meio e no fim do texto (no fim, ele separa da imagem ou dos botões).",
             "-# Markdown do Discord funciona normalmente. Emojis do servidor entram como `<:nome:id>`; emoji unicode é removido ao salvar.",
           ].join("\n")
         )
@@ -299,7 +301,7 @@ function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
           row(btn(id("hex"), "Cor personalizada"))
         ),
       box()
-        .addTextDisplayComponents(text(`### Espaçamento amplo  ${tag(panel.wide)}\n-# Aumenta o espaço entre texto, imagem e botões.`))
+        .addTextDisplayComponents(text(`### Espaçamento amplo  ${tag(panel.wide)}\n-# Todos os separadores ficam com espaçamento amplo.`))
         .addActionRowComponents(row(panel.wide ? btn(id("look_wide"), "Desativar", ButtonStyle.Danger) : btn(id("look_wide"), "Ativar", ButtonStyle.Success)))
     );
   }
@@ -473,7 +475,7 @@ function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
               `**Resposta**  \`${info.label}\`  ·  ${custom ? "`personalizada`" : "`padrão`"}`,
               `-# ${info.desc}.`,
               `-# Variáveis: ${info.vars.map((v) => `\`{${v}}\` ${VAR_HELP[v]}`).join("  ·  ")}`,
-              "-# Use [separador] e [separador_largo] para dividir o texto. Valem no Container e no Embed (o texto puro mostra só o texto).",
+              "-# Use [separador], [separador_largo] e [imagem] onde quiser. Valem no Container e no Embed (o texto puro mostra só o texto). Nenhum separador é colocado sozinho.",
             ].join("\n")
           )
         )
@@ -561,7 +563,7 @@ function buildTextModal(panelId, panel) {
     textLabel({
       id: "text",
       label: "Mensagem",
-      description: "Markdown aceito. Use [separador] ou [separador_largo] para dividir.",
+      description: "Markdown aceito. [separador], [separador_largo] e [imagem] onde quiser.",
       style: TextInputStyle.Paragraph,
       max: LIMITS.text,
       required: true,
@@ -663,7 +665,7 @@ function buildRespTextModal(panelId, kind, resp) {
     textLabel({
       id: "text",
       label: "Texto da resposta",
-      description: "Markdown, variáveis, [separador] e [separador_largo].",
+      description: "Markdown, variáveis, [separador], [separador_largo] e [imagem].",
       style: TextInputStyle.Paragraph,
       max: MSG_LIMITS.respText.v2,
       required: true,

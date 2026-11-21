@@ -149,11 +149,24 @@ async function renderPanel(raw, { withData = false, preview = false } = {}) {
 
   const content = [];
 
+  // Não há separador automático: só aparecem os escritos no texto ([separador], [separador_largo]).
+  // [imagem] marca onde a imagem fica; sem ele, a imagem vem depois do texto.
+  const gallery = () => {
+    ctx.count += 2; // galeria + item
+    return new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(image));
+  };
+  let imagePlaced = false;
+
   if (layout !== "image") {
     let sectionUsed = false;
-    for (const item of chunkText(panel.message)) {
+    for (const item of chunkText(panel.message, { edges: true, image: true })) {
       if (item.type === "sep") {
-        content.push(sep(item.large));
+        content.push(sep(item.large || large));
+      } else if (item.type === "image") {
+        if (image && !imagePlaced) {
+          imagePlaced = true;
+          content.push(gallery());
+        }
       } else if (thumb && !sectionUsed) {
         sectionUsed = true;
         ctx.count += 3; // seção + texto + miniatura
@@ -170,11 +183,7 @@ async function renderPanel(raw, { withData = false, preview = false } = {}) {
     if (thumb && !sectionUsed) warnings.push("A miniatura só aparece quando há texto.");
   }
 
-  if (image) {
-    if (content.length) content.push(sep(large));
-    ctx.count += 2; // galeria + item
-    content.push(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(image)));
-  }
+  if (image && !imagePlaced) content.push(gallery());
 
   // ----- botões: verificar + links extras -----
   const verifyButton = () => {
@@ -222,10 +231,7 @@ async function renderPanel(raw, { withData = false, preview = false } = {}) {
       else if (c instanceof SectionBuilder) container.addSectionComponents(c);
       else if (c instanceof MediaGalleryBuilder) container.addMediaGalleryComponents(c);
     }
-    if (inside.length) {
-      if (content.length) container.addSeparatorComponents(sep(large));
-      container.addActionRowComponents(makeRow(inside));
-    }
+    if (inside.length) container.addActionRowComponents(makeRow(inside));
     components = [container];
     if (below.length) components.push(makeRow(below));
   } else {
@@ -234,7 +240,7 @@ async function renderPanel(raw, { withData = false, preview = false } = {}) {
   }
 
   if (layout === "image" && !image) problems.push("O formato Só imagem precisa de uma imagem.");
-  else if (!content.length) problems.push("Falta conteúdo: escreva um texto ou envie uma imagem.");
+  else if (!content.some((c) => !(c instanceof SeparatorBuilder))) problems.push("Falta conteúdo: escreva um texto ou envie uma imagem.");
   if (textLength(panel.message) > 4000) problems.push("O texto passa de 4000 caracteres.");
   if (ctx.count > 40) problems.push(`A mensagem passa de 40 componentes (tem ${ctx.count}). Tire separadores ou botões.`);
 

@@ -134,11 +134,21 @@ async function buildResponse(raw, { withData = true, assets: preloaded = null } 
   const container = new ContainerBuilder();
   if (color !== null) container.setAccentColor(color);
 
-  let children = 0;
+  // Sem separador automático: só aparecem os escritos no texto ([separador], [separador_largo]).
+  // [imagem] marca onde a imagem fica; sem ele, a imagem vem depois do texto.
+  let children = 0; // conta só o que é visível (separador sozinho não é conteúdo)
   let sectionUsed = false;
-  for (const item of chunkText(text.slice(0, LIMITS.respText.v2)).slice(0, MAX_V2_ITEMS)) {
+  let imagePlaced = false;
+  const placeImage = () => {
+    imagePlaced = true;
+    container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(image)));
+    children += 1;
+  };
+  for (const item of chunkText(text.slice(0, LIMITS.respText.v2), { edges: true, image: true }).slice(0, MAX_V2_ITEMS)) {
     if (item.type === "sep") {
       container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(item.large ? SeparatorSpacingSize.Large : SeparatorSpacingSize.Small));
+    } else if (item.type === "image") {
+      if (image && !imagePlaced) placeImage();
     } else if (thumb && !sectionUsed) {
       sectionUsed = true;
       container.addSectionComponents(
@@ -146,20 +156,15 @@ async function buildResponse(raw, { withData = true, assets: preloaded = null } 
           .addTextDisplayComponents(new TextDisplayBuilder().setContent(item.value))
           .setThumbnailAccessory(new ThumbnailBuilder().setURL(thumb))
       );
+      children += 1;
     } else {
       container.addTextDisplayComponents(new TextDisplayBuilder().setContent(item.value));
+      children += 1;
     }
-    children += 1;
   }
 
-  const gap = () => container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
-  if (image) {
-    if (children) gap();
-    container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(image)));
-    children += 1;
-  }
+  if (image && !imagePlaced) placeImage();
   if (row) {
-    if (children) gap();
     container.addActionRowComponents(row);
     children += 1;
   }
