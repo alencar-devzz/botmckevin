@@ -597,6 +597,23 @@ function buildOptionModal({ customId, title, option = {}, options = [], position
   return modal(customId, title, ...labels);
 }
 
+// ---------- emoji da opção do select ----------
+
+function buildOptionEmojiModal(panel, option) {
+  return modal(
+    `tcfg_modal_o_emoji:${panel.id}:${option.key}`,
+    "Emoji da opção",
+    textLabel({
+      id: "emoji",
+      label: `Emoji (${option.label})`.slice(0, 45),
+      description: "Unicode (😀) ou do servidor <:nome:id>. Vazio = sem emoji.",
+      max: 60,
+      value: option.emoji,
+      placeholder: "Ex: 🎫 ou <:ticket:123456789012345678>",
+    })
+  );
+}
+
 // ---------- remover várias opções ----------
 
 function buildRemoveOptionsModal(panel) {
@@ -657,6 +674,7 @@ module.exports = {
   buildOptionTitleModal,
   buildLimitModal,
   buildOptionModal,
+  buildOptionEmojiModal,
   buildRemoveOptionsModal,
   buildReasonModal,
 };

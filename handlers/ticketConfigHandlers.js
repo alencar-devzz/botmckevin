@@ -15,6 +15,7 @@ const {
   parseHexColor,
   parseImageUrls,
   makeOptionKey,
+  parseOptionEmoji,
   DEFAULTS,
 } = require("../utils/ticketSettings");
 const {
@@ -61,6 +62,7 @@ const {
   buildOptionTitleModal,
   buildLimitModal,
   buildOptionModal,
+  buildOptionEmojiModal,
   buildRemoveOptionsModal,
 } = require("../ui/ticketConfigModals");
 
@@ -131,6 +133,7 @@ const serializeOptions = (options) =>
       title: o.title,
       message: o.message ?? null,
     };
+    if (o.emoji) doc.emoji = o.emoji;
     if (o.staffRoles?.length) doc.staffRoles = o.staffRoles;
     return doc;
   });
@@ -344,6 +347,14 @@ async function handleTicketConfigButton(interaction) {
           simple: panel.mode === "button",
         })
       );
+    }
+
+    case "tcfg_o_emoji": {
+      const option = panel.options.find((o) => o.key === extra);
+      if (!option) {
+        return interaction.reply({ content: "Essa opção não existe mais.", flags: EPHEMERAL });
+      }
+      return interaction.showModal(buildOptionEmojiModal(panel, option));
     }
 
     case "tcfg_o_rmopen": {
@@ -922,6 +933,24 @@ async function handleTicketConfigModal(interaction) {
           ? buildSection("opcoes", updated, guild)
           : buildOptionDetail(updated, updated.options.find((o) => o.key === extra)),
       });
+    }
+
+    case "tcfg_modal_o_emoji": {
+      const current = panel.options.find((o) => o.key === extra);
+      if (!current) return interaction.reply({ content: "Essa opção não existe mais.", flags: EPHEMERAL });
+
+      const parsed = parseOptionEmoji(field("emoji"));
+      if (parsed.error) {
+        return interaction.reply({
+          content: "Emoji inválido. Use um emoji direto (como 🎫) ou o formato `<:nome:id>` de um emoji do servidor.",
+          flags: EPHEMERAL,
+        });
+      }
+
+      const options = panel.options.map((o) => (o.key === extra ? { ...o, emoji: parsed.value } : o));
+      const updated = await updatePanel(id, { options: serializeOptions(options) });
+      refreshInBackground(interaction, updated);
+      return interaction.update({ components: buildOptionDetail(updated, updated.options.find((o) => o.key === extra)) });
     }
 
     case "tcfg_modal_o_rm": {

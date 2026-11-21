@@ -21,6 +21,7 @@ const {
   ARCHIVE_OPTIONS,
   DEFAULTS,
   colorName,
+  optionEmoji,
 } = require("../utils/ticketSettings");
 
 
@@ -356,7 +357,7 @@ function buildSecOpcoes(panel) {
     text(`**Opções do menu** (${panel.options.length}/${MAX_OPTIONS})`),
     text(
       panel.options
-        .map((o, i) => `${i + 1}. **${short(o.label, 30)}**${o.description ? ` · ${short(o.description, 40)}` : ""}`)
+        .map((o, i) => `${i + 1}. ${optionEmoji(o) ? `${o.emoji.trim()} ` : ""}**${short(o.label, 30)}**${o.description ? ` · ${short(o.description, 40)}` : ""}`)
         .join("\n")
     )
   );
@@ -368,6 +369,8 @@ function buildSecOpcoes(panel) {
       panel.options.slice(0, 25).map((o) => {
         const entry = { label: o.label.slice(0, 100), value: o.key };
         if (o.description) entry.description = o.description.slice(0, 100);
+        const emoji = optionEmoji(o);
+        if (emoji) entry.emoji = emoji;
         return entry;
       })
     );
@@ -410,6 +413,7 @@ function buildOptionDetail(panel, opt) {
       text(`### ${short(opt.label, 60)}`),
       text(
         [
+          `-# Emoji: ${optionEmoji(opt) ? `${opt.emoji.trim()}  (\`${short(opt.emoji, 40)}\`)` : "`Nenhum`"}`,
           `-# Descrição: \`${short(opt.description)}\``,
           `-# Título no ticket: \`${short(opt.title)}\``,
           `-# Mensagem: \`${short(opt.message ?? "Usa a mensagem padrão", 70)}\``,
@@ -420,6 +424,7 @@ function buildOptionDetail(panel, opt) {
     .addActionRowComponents(
       new ActionRowBuilder().addComponents(
         button(`tcfg_o_edit:${panel.id}:${opt.key}`, "Editar"),
+        button(`tcfg_o_emoji:${panel.id}:${opt.key}`, "Emoji"),
         button(`tcfg_o_del:${panel.id}:${opt.key}`, "Remover", {
           style: ButtonStyle.Danger,
           disabled: panel.options.length <= 1,

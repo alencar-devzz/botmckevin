@@ -64,6 +64,24 @@ function defaultOptions() {
   }));
 }
 
+// Emoji de uma opção do select: unicode (😀) ou personalizado do servidor (<:nome:id> / <a:nome:id>).
+// Devolve { value: texto para guardar (ou null se vazio), emoji: o que o Discord aceita no select (ou null) }
+// ou { error: true } quando não é um emoji.
+const CUSTOM_EMOJI = /^<(a?):([A-Za-z0-9_]{2,32}):(\d{17,20})>$/;
+const UNICODE_EMOJI = /^(?:\p{Extended_Pictographic}(?:\uFE0F|[\u{1F3FB}-\u{1F3FF}])*(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|[\u{1F3FB}-\u{1F3FF}])*)*|\p{Regional_Indicator}{2}|[0-9#*]\uFE0F?\u20E3)$/u;
+
+function parseOptionEmoji(raw) {
+  const v = String(raw ?? "").trim();
+  if (!v) return { value: null, emoji: null };
+  const custom = v.match(CUSTOM_EMOJI);
+  if (custom) return { value: v, emoji: { animated: Boolean(custom[1]), name: custom[2], id: custom[3] } };
+  if (UNICODE_EMOJI.test(v)) return { value: v, emoji: v };
+  return { error: true };
+}
+
+// Emoji pronto para o select (ou null). Emoji salvo que ficou inválido é ignorado.
+const optionEmoji = (opt) => parseOptionEmoji(opt?.emoji).emoji ?? null;
+
 // "#ff00aa" ou "ff00aa" -> número. Inválido -> null
 function parseHexColor(text) {
   const match = String(text ?? "").trim().match(/^#?([0-9a-f]{6})$/i);
@@ -89,6 +107,7 @@ function resolvePanel(doc) {
         key: o.key,
         label: o.label,
         description: o.description || null,
+        emoji: o.emoji || null,
         title: o.title,
         message: o.message ?? null, // "" = sem texto (de propósito), null = usa a mensagem do painel
         staffRoles: o.staffRoles ? [...o.staffRoles] : null,
@@ -248,4 +267,6 @@ module.exports = {
   parseImageUrls,
   getOption,
   makeOptionKey,
+  parseOptionEmoji,
+  optionEmoji,
 };

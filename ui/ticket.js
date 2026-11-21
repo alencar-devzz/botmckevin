@@ -9,7 +9,7 @@ const {
   ButtonStyle,
   ActionRowBuilder,
 } = require("discord.js");
-const { applyVars, getOption, DEFAULTS } = require("../utils/ticketSettings");
+const { applyVars, getOption, optionEmoji, DEFAULTS } = require("../utils/ticketSettings");
 const {
   addTemplate,
   buildGallery,
@@ -38,7 +38,7 @@ function infoText(panel) {
   if (panel.mode === "select" && panel.options.length > 1) {
     lines.push("", "**Categorias de atendimento**");
     for (const opt of panel.options.slice(0, 8)) {
-      lines.push(`• **${opt.label}**${opt.description ? ` · ${opt.description}` : ""}`);
+      lines.push(`• ${optionEmoji(opt) ? `${opt.emoji.trim()} ` : ""}**${opt.label}**${opt.description ? ` · ${opt.description}` : ""}`);
     }
     if (panel.options.length > 8) lines.push(`-# E mais ${panel.options.length - 8} opção(ões) no menu.`);
   }
@@ -91,6 +91,8 @@ function buildTicketPanel(panel, media = null, { preview = false } = {}) {
         panel.options.slice(0, 25).map((opt) => {
           const item = { label: opt.label.slice(0, 100), value: opt.key };
           if (opt.description) item.description = opt.description.slice(0, 100);
+          const emoji = optionEmoji(opt);
+          if (emoji) item.emoji = emoji;
           return item;
         })
       );
