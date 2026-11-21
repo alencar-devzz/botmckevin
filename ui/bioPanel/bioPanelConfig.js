@@ -34,14 +34,14 @@ function buildBioPanelHome(panels, hasToken) {
   const container = box()
     .addTextDisplayComponents(
       text("### Cargos por perfil"),
-      text("Painéis de verificação: o membro clica no botão e, se o perfil tiver o que você pediu, recebe os cargos.")
+      text("Painéis de verificação: o membro só clica no botão. O bot lê o perfil dele com a token da staff e, se tiver o padrão, entrega os cargos.")
     )
     .addSeparatorComponents(divider());
 
   container.addSectionComponents(
     new SectionBuilder()
       .addTextDisplayComponents(
-        text(`**Token de acesso**  ${tag(hasToken)}\n-# ${hasToken ? "Definida e criptografada." : "Nenhuma token definida: a verificação não funciona."}`)
+        text(`**Token de acesso**  ${tag(hasToken)}\n-# ${hasToken ? "Definida e criptografada. O bot lê o perfil de quem clica com ela." : "Nenhuma token definida: a verificação não funciona."}`)
       )
       .setButtonAccessory(btn("bp_token_set", hasToken ? "Trocar" : "Definir"))
   );
@@ -447,7 +447,7 @@ function buildTokenModal() {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("token")
-          .setLabel("Token de usuário do Discord")
+          .setLabel("Token da conta da staff")
           .setStyle(TextInputStyle.Short)
           .setPlaceholder("Sua token aqui (fica criptografada no banco)")
           .setRequired(true)

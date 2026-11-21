@@ -428,38 +428,17 @@ async function handleBioPanelVerify(interaction) {
 
   if (!token) {
     return interaction.editReply({
-      content: "<:alert:1569387419634106448> O administrador ainda não definiu a token de acesso. A verificação está indisponível.",
+      content: "O administrador ainda não definiu a token de acesso. A verificação está indisponível.",
       flags: EPHEMERAL,
     });
   }
 
-  // Busca o perfil do usuário com a token DELE armazenada
-  // Neste fluxo o usuário é quem clica: a token no banco é a do usuário.
-  // Se o servidor usa uma token própria (do admin ou de um bot auxiliar),
-  // a chamada é /users/<userId> — mas a API do Discord v10 não expõe bio
-  // de outros usuários sem o próprio token. Por isso o campo armazenado
-  // é a token do USUÁRIO que quer se verificar.
-  // Para isso, antes de verificar ele precisa ter definido a própria token.
-  // A token guardada no banco é POR USUÁRIO: o guildId aqui serve só para
-  // validar que o painel pertence ao servidor.
-
-  // Fluxo: cada usuário define sua própria token (via botão no painel público).
-  // A token fica em BioPanelUserToken (modelo separado, por userId).
-
-  const userToken = await getUserToken(interaction.user.id);
-  if (!userToken) {
-    return interaction.editReply({
-      content: `Você ainda não definiu sua token pessoal.\nUse o botão **Definir minha token** no painel para configurar antes de verificar.`,
-      flags: EPHEMERAL,
-    });
-  }
-
-  const profile = await fetchProfile(null, userToken);
+  // A bio e os pronomes são lidos com a token da staff. O status vem da presença do membro (intent GuildPresences).
+  const statusText = member.presence?.activities?.find((a) => a.type === 4)?.state ?? "";
+  const profile = await fetchProfile(guildId, token, interaction.user.id, statusText);
   if (!profile) {
-    // Token inválida: apaga do banco
-    await clearUserToken(interaction.user.id);
     return interaction.editReply({
-      content: "<:alert:1569387419634106448> Sua token é inválida ou expirou. Redefina-a e tente novamente.",
+      content: "Não consegui ler seu perfil agora. Tente de novo em instantes; se continuar, avise a staff.",
       flags: EPHEMERAL,
     });
   }
@@ -487,49 +466,9 @@ async function handleBioPanelVerify(interaction) {
   });
 }
 
-// ─── Token por usuário (modelo separado) ─────────────────────────────────────
-
-const BioPanelUserToken = require("../database/models/BioPanelUserToken");
-const { encrypt: enc, decrypt: dec } = require("../utils/bioPanel/crypto");
-
-async function getUserToken(userId) {
-  const doc = await BioPanelUserToken.findOne({ userId }).lean();
-  if (!doc?.tokenEnc) return null;
-  return dec(doc.tokenEnc);
-}
-async function setUserToken(userId, plain) {
-  await BioPanelUserToken.findOneAndUpdate(
-    { userId },
-    { $set: { tokenEnc: enc(plain.trim()) } },
-    { upsert: true }
-  );
-}
-async function clearUserToken(userId) {
-  await BioPanelUserToken.findOneAndUpdate({ userId }, { $set: { tokenEnc: null } }, { upsert: true });
-}
-
-// Botão "Definir minha token" no painel público
-async function handleBioPanelUserToken(interaction) {
-  const { customId } = interaction;
-  if (customId === "bp_user_token_set") {
-    return interaction.showModal(
-      buildTokenModal() // reutiliza o mesmo modal visual
-    );
-  }
-}
-
-// Modal da token do usuário (vindo do painel público)
-async function handleBioPanelUserTokenModal(interaction) {
-  const token = interaction.fields.getTextInputValue("token").trim();
-  await setUserToken(interaction.user.id, token);
-  return interaction.reply({ content: "<:check:1571598243526348850> Sua token foi salva com criptografia. Agora clique em **Verificar**.", flags: EPHEMERAL });
-}
-
 module.exports = {
   handleBioPanelButton,
   handleBioPanelSelect,
   handleBioPanelModal,
   handleBioPanelVerify,
-  handleBioPanelUserToken,
-  handleBioPanelUserTokenModal,
 };

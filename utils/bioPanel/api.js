@@ -1,7 +1,5 @@
-// Leitura do perfil do Discord via token de usuário.
-// Endpoints usados:
-//   GET /users/@me          -> bio (bio), custom_status (status_text), pronouns
-// Nenhum dado é guardado além do que o painel pede na hora.
+// Leitura do perfil do Discord com a token definida pela staff.
+// Nenhum dado do membro é guardado além do que o painel pede na hora.
 
 const { invalidateToken } = require("./store");
 
@@ -15,22 +13,24 @@ async function discordGet(path, token) {
   return { ok: res.ok, status: res.status, data: res.ok ? await res.json() : null };
 }
 
-// Busca bio, status e pronomes de um usuário usando a token DELE.
-// Retorna null se a token for inválida (401) e apaga do banco.
-async function fetchProfile(guildId, token) {
-  const { ok, status, data } = await discordGet("/users/@me", token);
+// Lê bio e pronomes do membro que clicou, usando a token que a staff definiu (nunca a do membro).
+// GET /users/<id>/profile. Retorna null se a token da staff for inválida (401: ela é apagada) ou a leitura falhar.
+// O status personalizado não vem desse endpoint: quem chama passa o texto lido da presença do membro.
+async function fetchProfile(guildId, token, targetUserId, statusText = "") {
+  const { ok, status, data } = await discordGet(
+    `/users/${targetUserId}/profile?with_mutual_guilds=false&with_mutual_friends_count=false&guild_id=${guildId}`,
+    token
+  );
 
   if (status === 401) {
-    if (guildId) await invalidateToken(guildId);
+    await invalidateToken(guildId);
     return null;
   }
   if (!ok || !data) return null;
 
   return {
-    bio: data.bio ?? "",
-    // O status customizado fica em connected_accounts mas o /users/@me
-    // com token de usuário retorna user_profile.custom_status
-    status: data.user_profile?.custom_status?.text ?? "",
+    bio: data.user_profile?.bio ?? data.user?.bio ?? "",
+    status: statusText ?? "",
     pronouns: data.user_profile?.pronouns ?? "",
   };
 }

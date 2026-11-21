@@ -9,7 +9,6 @@ const { buildSelfPanel, SELF_OPCOES } = require("../ui/self");
 const {
   handleBioPanelButton,
   handleBioPanelVerify,
-  handleBioPanelUserToken,
 } = require("./bioPanelHandlers");
 const { buildOutrosPanel } = require("../ui/outros");
 const { buildSistemasPanel } = require("../ui/sistemas");
@@ -289,9 +288,6 @@ async function handleButton(interaction) {
       }
       if (customId.startsWith("bp_verify:")) {
         return handleBioPanelVerify(interaction);
-      }
-      if (customId === "bp_user_token_set") {
-        return handleBioPanelUserToken(interaction);
       }
       return;
   }
