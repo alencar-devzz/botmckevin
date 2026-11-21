@@ -113,9 +113,19 @@ function buildPortariaPanel(guild, config) {
   const leaveReady = Boolean(config.leaveChannel);
   const where = (id) => (id ? `<#${id}>` : "`Não definido`");
 
+  const enabled = config.portariaEnabled !== false;
+
   const header = new ContainerBuilder().addTextDisplayComponents(
     text("## Portaria"),
-    text("-# Defina o que acontece quando alguém entra ou sai do servidor.")
+    text("-# Defina o que acontece quando alguém entra ou sai do servidor."),
+    text(`-# Sistema: **${enabled ? "ativado" : "desativado"}**${enabled ? "" : " · nada disso está acontecendo agora"}`)
+  );
+
+  // O botão "Ativar"/"Desativar" vira o toggle do canto do título (ícones on3/off3) pelo ui/breadcrumb.js
+  const toggleRow = new ActionRowBuilder().addComponents(
+    button("port_toggle:all", enabled ? "Desativar" : "Ativar", {
+      style: enabled ? ButtonStyle.Danger : ButtonStyle.Success,
+    })
   );
 
   const summary = new ContainerBuilder().addTextDisplayComponents(
@@ -132,6 +142,7 @@ function buildPortariaPanel(guild, config) {
       ].join("\n")
     )
   );
+  summary.addActionRowComponents(toggleRow);
 
   const select = new StringSelectMenuBuilder()
     .setCustomId("port_menu")

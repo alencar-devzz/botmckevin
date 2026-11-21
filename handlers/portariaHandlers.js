@@ -87,7 +87,8 @@ async function handlePortariaButton(interaction) {
 
     case "port_toggle": {
       const config = await getGuildConfig(guild.id);
-      if (key === "filter") config.accountFilterEnabled = !config.accountFilterEnabled;
+      if (key === "all") config.portariaEnabled = config.portariaEnabled === false;
+      else if (key === "filter") config.accountFilterEnabled = !config.accountFilterEnabled;
       else if (ALL_KINDS.includes(key)) {
         const f = FIELDS[key].enabled;
         config[f] = !config[f];

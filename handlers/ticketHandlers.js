@@ -70,6 +70,12 @@ async function panelForOpen(interaction) {
   });
 }
 
+// Liga/desliga geral do sistema de tickets pelo /menu (campo ticketsEnabled do GuildConfig; padrão: ligado)
+async function ticketsEnabled(guildId) {
+  const cfg = await GuildConfig.findOne({ guildId }).select("ticketsEnabled").lean();
+  return cfg?.ticketsEnabled !== false;
+}
+
 // Abre o ticket (select menu ou botão do painel)
 async function handleTicketOpen(interaction) {
   const { guild, user } = interaction;
@@ -95,7 +101,7 @@ async function handleTicketOpen(interaction) {
       .catch(() => {});
   }
 
-  if (!panel.enabled) {
+  if (!panel.enabled || !(await ticketsEnabled(guild.id))) {
     return interaction.reply({
       content: "O atendimento deste painel está temporariamente indisponível.",
       flags: EPHEMERAL,
@@ -134,7 +140,7 @@ async function handleTicketModal(interaction) {
   if (!panel) {
     return interaction.reply({ content: "Esse painel não existe mais.", flags: EPHEMERAL });
   }
-  if (!panel.enabled) {
+  if (!panel.enabled || !(await ticketsEnabled(interaction.guildId))) {
     return interaction.reply({
       content: "O atendimento deste painel está temporariamente indisponível.",
       flags: EPHEMERAL,

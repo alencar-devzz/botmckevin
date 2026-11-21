@@ -32,6 +32,12 @@ const ARROW = {
   next: { name: "right2", id: "1573414717114810448" },
 };
 
+// Ícones do toggle geral (mesmos on3/off3 dos outros sistemas do /menu)
+const TOGGLE_EMOJI = {
+  on: { name: "on3", id: "1573434230690545664" },
+  off: { name: "off3", id: "1573434379181621489" },
+};
+
 const num = (n) => Number(n).toLocaleString("pt-BR");
 const yes = (v) => (v ? "sim" : "não");
 const list = (arr) => (arr.length ? arr.map((s) => `\`${s}\``).join(", ") : "`nenhum`");
@@ -39,11 +45,23 @@ const roles = (arr) => (arr.length ? arr.map((id) => `<@&${id}>`).join(", ") : "
 
 // ─── Tela inicial: token e lista de painéis ─────────────────────────────────
 
-function buildBioPanelHome(panels, hasToken) {
+function buildBioPanelHome(panels, hasToken, enabled = true) {
+  // Toggle geral no canto do título (esta tela não passa pela conversão automática do breadcrumb)
   const container = box()
-    .addTextDisplayComponents(
-      text("### Cargos por perfil"),
-      text("Painéis de verificação: o membro só clica no botão. O bot lê o perfil dele com a token da staff e, se tiver o padrão, entrega os cargos.")
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          text("### Cargos por perfil"),
+          text(
+            `Painéis de verificação: o membro só clica no botão. O bot lê o perfil dele com a token da staff e, se tiver o padrão, entrega os cargos.\n-# Sistema: **${enabled ? "ativado" : "desativado"}**${enabled ? "" : " · o botão Verificar está indisponível"}`
+          )
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId("bp_toggle")
+            .setEmoji(enabled ? TOGGLE_EMOJI.on : TOGGLE_EMOJI.off)
+            .setStyle(ButtonStyle.Secondary)
+        )
     )
     .addSeparatorComponents(divider());
 

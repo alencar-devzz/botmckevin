@@ -1,6 +1,6 @@
 const { MessageFlags, PermissionFlagsBits } = require("discord.js");
 const {
-  getToken, setToken, clearToken, getPanels, getPanel,
+  getToken, setToken, clearToken, getPanels, getPanel, isEnabled, setEnabled,
   createPanel, updatePanel, deletePanel, markVerified,
 } = require("../utils/bioPanel/store");
 const { fetchProfile, checkProfile } = require("../utils/bioPanel/api");
@@ -33,11 +33,12 @@ async function guard(interaction) {
 }
 
 async function homePanel(guildId) {
-  const [panels, hasToken] = await Promise.all([
+  const [panels, hasToken, enabled] = await Promise.all([
     getPanels(guildId),
     getToken(guildId).then((t) => t !== null),
+    isEnabled(guildId),
   ]);
-  return buildBioPanelHome(panels, hasToken);
+  return buildBioPanelHome(panels, hasToken, enabled);
 }
 
 const safeUpdate = (interaction, payload) => {
@@ -85,6 +86,12 @@ async function handleBioPanelButton(interaction) {
 
   // Voltar para a lista de painéis
   if (customId === "bp_home") {
+    return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
+  }
+
+  // Liga/desliga geral do sistema
+  if (customId === "bp_toggle") {
+    await setEnabled(guildId, !(await isEnabled(guildId)));
     return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
   }
 
@@ -531,12 +538,16 @@ async function handleBioPanelVerify(interaction) {
 
   await interaction.deferReply({ flags: EPHEMERAL });
 
-  const [panel, token] = await Promise.all([
+  const [panel, token, enabled] = await Promise.all([
     getPanel(guildId, panelId),
     getToken(guildId),
+    isEnabled(guildId),
   ]);
 
   if (!panel) return interaction.editReply({ content: "Este painel não existe mais.", flags: EPHEMERAL });
+
+  // Sistema desativado no /menu: ninguém consegue verificar
+  if (!enabled) return interaction.editReply({ content: "A verificação de perfil está desativada no momento.", flags: EPHEMERAL });
 
   // Cargos de entrega configurados (ignora os que foram apagados do servidor)
   const giveRoles = (panel.giveRoles ?? []).filter((rid) => interaction.guild.roles.cache.has(rid));

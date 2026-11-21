@@ -5,14 +5,28 @@ const DEFAULT = { enabled: true, channelId: null, ignoreBots: true };
 const TTL = 60_000;
 const cache = new Map(); // guildId -> { data, at }
 
-async function loadSettings(guildId) {
+async function loadDoc(guildId) {
   const hit = cache.get(guildId);
-  if (hit && Date.now() - hit.at < TTL) return hit.data;
+  if (hit && Date.now() - hit.at < TTL) return hit;
 
   const doc = await LogConfig.findOne({ guildId }).lean();
-  const data = doc?.categories ?? {};
-  cache.set(guildId, { data, at: Date.now() });
-  return data;
+  const entry = { data: doc?.categories ?? {}, enabled: doc?.enabled !== false, at: Date.now() };
+  cache.set(guildId, entry);
+  return entry;
+}
+
+async function loadSettings(guildId) {
+  return (await loadDoc(guildId)).data;
+}
+
+// Liga/desliga geral dos logs (botão Ativar/Desativar do painel Logs e registros)
+async function isLogsEnabled(guildId) {
+  return (await loadDoc(guildId)).enabled;
+}
+
+async function setLogsEnabled(guildId, enabled) {
+  await LogConfig.findOneAndUpdate({ guildId }, { $set: { enabled: Boolean(enabled) } }, { upsert: true });
+  cache.delete(guildId);
 }
 
 async function getCategory(guildId, key) {
@@ -42,4 +56,4 @@ async function setAllChannels(guildId, channelId) {
   cache.delete(guildId);
 }
 
-module.exports = { getCategory, getAllCategories, updateCategory, setAllChannels };
+module.exports = { getCategory, getAllCategories, updateCategory, setAllChannels, isLogsEnabled, setLogsEnabled };

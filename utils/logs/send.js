@@ -1,10 +1,11 @@
 const { MessageFlags } = require("discord.js");
-const { getCategory } = require("./store");
+const { getCategory, isLogsEnabled } = require("./store");
 const { buildLogComponents } = require("./render");
 
 // Retorna a configuração da categoria se ela puder enviar logs agora; senão null
 async function activeCategory(guild, key, isBot = false) {
   if (!guild) return null;
+  if (!(await isLogsEnabled(guild.id))) return null; // logs desativados no /menu
   const cfg = await getCategory(guild.id, key);
   if (!cfg.enabled || !cfg.channelId) return null;
   if (isBot && cfg.ignoreBots) return null;

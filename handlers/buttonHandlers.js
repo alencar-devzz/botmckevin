@@ -25,6 +25,7 @@ const { handleBotcallButton } = require("./botcallHandlers");
 const { handleHelpButton } = require("./helpHandlers");
 const { handleTicketConfigButton } = require("./ticketConfigHandlers");
 const { handleClConfigButton } = require("./clHandlers");
+const { handleAutoRolesButton } = require("./autorolesHandlers");
 const { handleSpotifyConfigButton } = require("./spotifyConfigHandlers");
 const { handleNukeConfigButton } = require("./nukeHandlers");
 const { handleRoleManageButton, handleRoleManageConfigButton } = require("./roleManageHandlers");
@@ -119,6 +120,11 @@ async function handleButton(interaction) {
   // Bump reminder (/menu > Moderação)
   if (customId.startsWith("bumpcfg_")) {
     return handleBumpButton(interaction);
+  }
+
+  // Auto-roles (ativar/desativar) no /menu
+  if (customId === "autoroles_toggle") {
+    return handleAutoRolesButton(interaction);
   }
 
   // Configuração do comando cl no /menu
@@ -269,6 +275,7 @@ async function handleButton(interaction) {
 
     // ── Bio Panel (configuração e verificação pública) ───────────────────────
     case "bp_home":
+    case "bp_toggle":
     case "bp_token_set":
     case "bp_token_clear":
     case "bp_panel_create": {

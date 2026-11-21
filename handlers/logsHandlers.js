@@ -10,6 +10,8 @@ const {
   getAllCategories,
   updateCategory,
   setAllChannels,
+  isLogsEnabled,
+  setLogsEnabled,
 } = require("../utils/logs/store");
 const { deliver } = require("../utils/logs/send");
 const { COLORS } = require("../utils/logs/format");
@@ -35,7 +37,7 @@ const warn = (interaction, content) =>
   interaction.followUp({ content, flags: EPHEMERAL }).catch(() => {});
 
 async function mainPanel(guild) {
-  return buildLogsPanel(guild, await getAllCategories(guild.id));
+  return buildLogsPanel(guild, await getAllCategories(guild.id), await isLogsEnabled(guild.id));
 }
 
 async function categoryPanel(guild, key) {
@@ -102,6 +104,11 @@ async function handleLogsButton(interaction) {
 
     case "logs_all":
       return interaction.update({ components: buildLogsAllPanel(guild) });
+
+    case "logs_master": {
+      await setLogsEnabled(guild.id, !(await isLogsEnabled(guild.id)));
+      return interaction.update({ components: await mainPanel(guild) });
+    }
 
     case "logs_toggle": {
       const cfg = await getCategory(guild.id, key);

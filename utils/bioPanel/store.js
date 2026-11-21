@@ -31,6 +31,17 @@ async function invalidateToken(guildId) {
   await clearToken(guildId);
 }
 
+// ---------- liga/desliga geral ----------
+
+async function isEnabled(guildId) {
+  const doc = await BioPanelConfig.findOne({ guildId }).select("enabled").lean();
+  return doc?.enabled !== false;
+}
+
+async function setEnabled(guildId, enabled) {
+  await BioPanelConfig.findOneAndUpdate({ guildId }, { $set: { enabled: Boolean(enabled) } }, { upsert: true });
+}
+
 // ---------- painéis ----------
 
 async function getDoc(guildId) {
@@ -88,5 +99,6 @@ async function markVerified(guildId, panelId, userId) {
 module.exports = {
   markVerified,
   getToken, setToken, clearToken, invalidateToken,
+  isEnabled, setEnabled,
   getPanels, getPanel, createPanel, updatePanel, deletePanel, getDoc,
 };

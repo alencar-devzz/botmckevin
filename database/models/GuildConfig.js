@@ -52,6 +52,11 @@ const guildConfigSchema = new Schema({
 
   // Logs do servidor
   logsChannel: { type: String, default: null },
+
+  // Liga/desliga geral dos sistemas do /menu (padrão: ligado)
+  autoRolesEnabled: { type: Boolean, default: true },
+  portariaEnabled: { type: Boolean, default: true },
+  ticketsEnabled: { type: Boolean, default: true },
 });
 
 module.exports = model("GuildConfig", guildConfigSchema);

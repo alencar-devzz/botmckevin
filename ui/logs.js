@@ -46,10 +46,11 @@ function channelSelect(customId, cfg, guild, placeholder) {
 
 // ---------- Painel principal de logs ----------
 
-function buildLogsPanel(guild, all) {
+function buildLogsPanel(guild, all, enabled = true) {
   const header = new ContainerBuilder().addTextDisplayComponents(
     text("## Logs e registros"),
-    text("-# Defina para onde vão os registros de mensagens, moderação, calls, canais e mais.")
+    text("-# Defina para onde vão os registros de mensagens, moderação, calls, canais e mais."),
+    text(`-# Sistema: **${enabled ? "ativado" : "desativado"}**${enabled ? "" : " · nenhum log está sendo enviado"}`)
   );
 
   const summary = new ContainerBuilder()
@@ -71,6 +72,14 @@ function buildLogsPanel(guild, all) {
           text("-# Envie todos os logs para o mesmo canal.")
         )
         .setButtonAccessory(button("logs_all", "Definir"))
+    )
+    // O botão "Ativar"/"Desativar" vira o toggle do canto do título (ícones on3/off3) pelo ui/breadcrumb.js
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        button("logs_master", enabled ? "Desativar" : "Ativar", {
+          style: enabled ? ButtonStyle.Danger : ButtonStyle.Success,
+        })
+      )
     );
 
   const select = new StringSelectMenuBuilder()

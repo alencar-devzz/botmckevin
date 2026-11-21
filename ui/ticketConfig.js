@@ -71,18 +71,28 @@ function stateText(panel) {
 
 // ---------- Lista de painéis ----------
 
-function buildTicketHome({ panels, openByPanel = {} }) {
+function buildTicketHome({ panels, openByPanel = {}, enabled = true }) {
   const totalOpen = Object.values(openByPanel).reduce((sum, n) => sum + n, 0);
   const totalSent = panels.reduce((sum, p) => sum + p.sent.length, 0);
 
   const header = new ContainerBuilder().addTextDisplayComponents(
     text("## Sistema de tickets"),
-    text("-# Crie vários painéis de atendimento, com abertura por select menu ou botão.")
+    text("-# Crie vários painéis de atendimento, com abertura por select menu ou botão."),
+    text(`-# Sistema: **${enabled ? "ativado" : "desativado"}**${enabled ? "" : " · ninguém consegue abrir tickets agora"}`)
   );
 
   const overview = new ContainerBuilder().addTextDisplayComponents(
     text(
       `**Visão geral**\n-# Painéis: \`${panels.length}/${MAX_PANELS}\` · Mensagens enviadas: \`${totalSent}\` · Tickets abertos agora: \`${totalOpen}\``
+    )
+  );
+  // O botão "Ativar"/"Desativar" vira o toggle do canto do título (ícones on3/off3) pelo ui/breadcrumb.js
+  overview.addActionRowComponents(
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("tcfg_master")
+        .setLabel(enabled ? "Desativar" : "Ativar")
+        .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Success)
     )
   );
 

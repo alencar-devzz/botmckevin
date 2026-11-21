@@ -5,6 +5,7 @@ const {
   StringSelectMenuBuilder,
 } = require("discord.js");
 const { ALL_STAFF_ROLE_IDS } = require("../utils/staffRoles");
+const GuildConfig = require("../database/models/GuildConfig");
 const {
   MAX_OPTIONS,
   MAX_IMAGES,
@@ -158,11 +159,17 @@ function refreshInBackground(interaction, panel) {
 
 // ---------- telas ----------
 
+// Liga/desliga geral do sistema de tickets (campo ticketsEnabled do GuildConfig; padrão: ligado)
+async function isTicketsEnabled(guildId) {
+  const cfg = await GuildConfig.findOne({ guildId }).select("ticketsEnabled").lean();
+  return cfg?.ticketsEnabled !== false;
+}
+
 async function homeView(guild) {
   const panels = await listPanels(guild.id);
   const openByPanel = {};
   for (const panel of panels) openByPanel[panel.id] = await countOpen(guild.id, panel.id);
-  return buildTicketHome({ panels, openByPanel });
+  return buildTicketHome({ panels, openByPanel, enabled: await isTicketsEnabled(guild.id) });
 }
 
 async function managerView(guild, panel) {
@@ -261,6 +268,16 @@ async function handleTicketConfigButton(interaction) {
 
   // Ações que não dependem de um painel
   if (action === "tcfg_home") {
+    return interaction.update({ components: await homeView(guild) });
+  }
+
+  if (action === "tcfg_master") {
+    const enabled = await isTicketsEnabled(guild.id);
+    await GuildConfig.findOneAndUpdate(
+      { guildId: guild.id },
+      { $set: { ticketsEnabled: !enabled } },
+      { upsert: true, setDefaultsOnInsert: true }
+    );
     return interaction.update({ components: await homeView(guild) });
   }
 

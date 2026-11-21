@@ -66,6 +66,9 @@ const bioPanelConfigSchema = new Schema({
   // Token de usuário (criptografada com AES-256-GCM); null = não definida
   tokenEnc: { type: String, default: null }, // iv:authTag:ciphertext (hex)
 
+  // Liga/desliga geral do sistema no /menu (padrão: ligado)
+  enabled: { type: Boolean, default: true },
+
   panels: { type: [panelSchema], default: [] },
 });
 

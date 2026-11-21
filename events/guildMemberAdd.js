@@ -45,18 +45,23 @@ module.exports = {
 
     const config = await getGuildConfig(member.guild.id);
 
+    // Liga/desliga do /menu: Portaria (cargos de bots, filtro, boas-vindas e DM) e Auto-roles
+    const portariaOn = config.portariaEnabled !== false;
+    const autoRolesOn = config.autoRolesEnabled !== false;
+
     // Bots: só recebem os cargos exclusivos de bots
     if (member.user.bot) {
-      await addRoles(member, config.botAutoRoles);
+      if (portariaOn) await addRoles(member, config.botAutoRoles);
       return;
     }
 
-    if (await filterNewAccount(member, config)) return;
+    if (portariaOn && (await filterNewAccount(member, config))) return;
 
     // Auto-roles
-    await addRoles(member, config.autoRoles);
+    if (autoRolesOn) await addRoles(member, config.autoRoles);
 
     // Boas-vindas no canal e na DM
+    if (!portariaOn) return;
     await sendGreeting("welcome", member, config);
     await sendWelcomeDm(member, config);
   },

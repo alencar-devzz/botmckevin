@@ -5,6 +5,8 @@ const { Schema, model } = require("mongoose");
 const logConfigSchema = new Schema({
   guildId: { type: String, required: true, unique: true },
   categories: { type: Schema.Types.Mixed },
+  // Liga/desliga geral dos logs no /menu (padrão: ligado)
+  enabled: { type: Boolean, default: true },
 });
 
 module.exports = model("LogConfig", logConfigSchema);
