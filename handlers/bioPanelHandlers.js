@@ -431,9 +431,41 @@ async function handleBioPanelVerify(interaction) {
 
   if (!panel) return interaction.editReply({ content: "Este painel não existe mais.", flags: EPHEMERAL });
 
-  // Quem já se verificou neste painel não verifica de novo
+  // Cargos de entrega configurados (ignora os que foram apagados do servidor)
+  const giveRoles = (panel.giveRoles ?? []).filter((rid) => interaction.guild.roles.cache.has(rid));
+
+  // Sem cargo definido no painel: avisa em vez de verificar
+  if (!giveRoles.length) {
+    return interaction.editReply({
+      content: "Este painel não tem nenhum cargo definido para entregar. Avise a staff para configurar o cargo.",
+      flags: EPHEMERAL,
+    });
+  }
+
+  // Quem já se verificou neste painel não verifica de novo,
+  // mas se perdeu o cargo por qualquer motivo, o bot devolve.
   if ((panel.verifiedUsers ?? []).includes(interaction.user.id)) {
-    return interaction.editReply({ content: "Você já se verificou neste painel.", flags: EPHEMERAL });
+    const missing = giveRoles.filter((rid) => !member.roles.cache.has(rid));
+    if (!missing.length) {
+      return interaction.editReply({ content: "Você já se verificou neste painel.", flags: EPHEMERAL });
+    }
+
+    const restored = [];
+    const failed = [];
+    for (const roleId of missing) {
+      try {
+        await member.roles.add(roleId);
+        restored.push(`<@&${roleId}>`);
+      } catch {
+        failed.push(`<@&${roleId}>`);
+      }
+    }
+
+    let reply = restored.length
+      ? `Você já estava verificado, mas estava sem o cargo. Devolvi: ${restored.join(", ")}.`
+      : "Você já se verificou neste painel.";
+    if (failed.length) reply += `\n-# Não consegui devolver ${failed.join(", ")}. Avise a staff (confira a posição do cargo do bot).`;
+    return interaction.editReply({ content: reply, flags: EPHEMERAL });
   }
 
   if (!token) {
@@ -461,7 +493,7 @@ async function handleBioPanelVerify(interaction) {
     await markVerified(guildId, panelId, interaction.user.id);
     // Dar/remover cargos
     const errors = [];
-    for (const roleId of panel.giveRoles) {
+    for (const roleId of giveRoles) {
       try { await member.roles.add(roleId); } catch { errors.push(`dar <@&${roleId}>`); }
     }
     for (const roleId of panel.removeRoles) {
