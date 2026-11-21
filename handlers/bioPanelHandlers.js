@@ -1,7 +1,7 @@
 const { MessageFlags, PermissionFlagsBits } = require("discord.js");
 const {
   getToken, setToken, clearToken, getPanels, getPanel,
-  createPanel, updatePanel, deletePanel,
+  createPanel, updatePanel, deletePanel, markVerified,
 } = require("../utils/bioPanel/store");
 const { fetchProfile, checkProfile } = require("../utils/bioPanel/api");
 const {
@@ -426,6 +426,11 @@ async function handleBioPanelVerify(interaction) {
 
   if (!panel) return interaction.editReply({ content: "Este painel não existe mais.", flags: EPHEMERAL });
 
+  // Quem já se verificou neste painel não verifica de novo
+  if ((panel.verifiedUsers ?? []).includes(interaction.user.id)) {
+    return interaction.editReply({ content: "Você já se verificou neste painel.", flags: EPHEMERAL });
+  }
+
   if (!token) {
     return interaction.editReply({
       content: "O administrador ainda não definiu a token de acesso. A verificação está indisponível.",
@@ -448,6 +453,7 @@ async function handleBioPanelVerify(interaction) {
   const fill = (t) => stripEmoji(t).replaceAll("{usuario}", `<@${interaction.user.id}>`);
 
   if (passed) {
+    await markVerified(guildId, panelId, interaction.user.id);
     // Dar/remover cargos
     const errors = [];
     for (const roleId of panel.giveRoles) {

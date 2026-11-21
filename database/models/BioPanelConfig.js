@@ -48,6 +48,9 @@ const panelSchema = new Schema(
 
     // Padrões exigidos (todos os que estiverem ativos DEVEM aparecer no campo)
     patterns: { type: [String], default: [] }, // strings literais (case-insensitive)
+
+    // Quem já se verificou neste painel (não pode verificar de novo)
+    verifiedUsers: { type: [String], default: [] },
   },
   { _id: false }
 );

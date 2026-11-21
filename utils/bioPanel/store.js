@@ -77,7 +77,16 @@ async function deletePanel(guildId, panelId) {
   );
 }
 
+// Marca o membro como verificado no painel (sem duplicar)
+async function markVerified(guildId, panelId, userId) {
+  await BioPanelConfig.updateOne(
+    { guildId, "panels.panelId": panelId },
+    { $addToSet: { "panels.$.verifiedUsers": userId } }
+  );
+}
+
 module.exports = {
+  markVerified,
   getToken, setToken, clearToken, invalidateToken,
   getPanels, getPanel, createPanel, updatePanel, deletePanel, getDoc,
 };
