@@ -14,7 +14,7 @@ const {
   MessageFlags,
 } = require("discord.js");
 const MessageAsset = require("../../database/models/MessageAsset");
-const { LAYOUTS, BUTTON_STYLES, colorValue, isStored, storedId, saveImage, dropSources } = require("../msgBuilder/store");
+const { LAYOUTS, BUTTON_STYLES, colorValue, isStored, storedId, saveImage, dropSources, responseSources } = require("../msgBuilder/store");
 const { chunkText, textLength, parseEmoji, loadAssets } = require("../msgBuilder/render");
 const { updatePanel } = require("./store");
 
@@ -81,6 +81,7 @@ function normalizePanel(p = {}) {
     patterns: p.patterns ?? [],
     successText: p.successText ?? "",
     failText: p.failText ?? "",
+    responses: p.responses && typeof p.responses === "object" ? p.responses : {},
   };
 }
 
@@ -106,7 +107,9 @@ async function savePanelImage({ guildId, userId, file }) {
 }
 
 const panelSources = (p) => [p?.image, p?.thumb].filter(Boolean);
-const dropPanelAssets = (p) => dropSources(panelSources(p));
+// Imagens das respostas personalizadas (também precisam ser apagadas junto com o painel)
+const responseAssets = (p) => Object.values(p?.responses ?? {}).flatMap((r) => responseSources(r));
+const dropPanelAssets = (p) => dropSources([...panelSources(p), ...responseAssets(p)]);
 
 // ---------- montagem ----------
 
@@ -286,6 +289,7 @@ module.exports = {
   savePanelImage,
   panelSources,
   dropPanelAssets,
+  responseAssets,
   renderPanel,
   publishPanel,
   syncPublished,

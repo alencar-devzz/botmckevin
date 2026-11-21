@@ -5,14 +5,16 @@ const {
 } = require("../utils/bioPanel/store");
 const { fetchProfile, checkProfile } = require("../utils/bioPanel/api");
 const {
-  buildBioPanelHome, buildBioPanelEdit, setEditPage, stepEditPage, needsReport, stripEmoji,
+  buildBioPanelHome, buildBioPanelEdit, setEditPage, stepEditPage, needsReport,
   buildTokenModal, buildTextModal, buildImageModal, buildHexModal, buildMainButtonModal,
-  buildExtraButtonModal, buildPatternModal, buildReplyModal, DEFAULT_MESSAGE,
+  buildExtraButtonModal, buildPatternModal, DEFAULT_MESSAGE,
+  buildRespTextModal, buildRespHexModal, buildRespImageModal, buildRespLinkModal, currentKind, setRespKind,
 } = require("../ui/bioPanel/bioPanelConfig");
+const responses = require("../utils/bioPanel/responses");
 const {
-  LIMITS, cleanText, normalizePanel, savePanelImage, dropPanelAssets, renderPanel, publishPanel, syncPublished,
+  LIMITS, cleanText, stripEmoji, normalizePanel, savePanelImage, dropPanelAssets, renderPanel, publishPanel, syncPublished,
 } = require("../utils/bioPanel/message");
-const { LAYOUTS, COLORS, BUTTON_STYLES, PLACES, parseHex, dropSources } = require("../utils/msgBuilder/store");
+const { LAYOUTS, COLORS, BUTTON_STYLES, PLACES, LIMITS: MSG_LIMITS, parseHex, dropSources, responseSources } = require("../utils/msgBuilder/store");
 const { textLength, parseEmoji } = require("../utils/msgBuilder/render");
 
 const V2 = MessageFlags.IsComponentsV2;
@@ -45,6 +47,14 @@ const safeUpdate = (interaction, payload) => {
 
 // Aviso só para quem clicou
 const notice = (interaction, content) => deny(interaction, content);
+
+// Salva uma resposta personalizada (parte do que já vale hoje + as mudanças). patch = null volta ao padrão.
+async function saveResponse(guildId, raw, kind, patch) {
+  const all = { ...(raw.responses ?? {}) };
+  if (patch === null) delete all[kind];
+  else all[kind] = { ...responses.getResponse(raw, kind), ...patch };
+  await updatePanel(guildId, raw.panelId, { responses: all });
+}
 
 // Mostra a etapa aberta do editor (atualiza a mensagem do /menu)
 async function showEditor(interaction, panelId, note = null) {
@@ -139,8 +149,9 @@ async function handlePanelAction(interaction, guildId, panelId, action, arg) {
   if (action === "hex") return interaction.showModal(buildHexModal(panelId, panel.color));
   if (action === "btn_main") return interaction.showModal(buildMainButtonModal(panelId, raw));
   if (action === "add_pattern") return interaction.showModal(buildPatternModal(panelId));
-  if (action === "resp_ok") return interaction.showModal(buildReplyModal(panelId, "ok", panel.successText));
-  if (action === "resp_fail") return interaction.showModal(buildReplyModal(panelId, "fail", panel.failText));
+
+  // ----- respostas do botão Verificar -----
+  if (action.startsWith("rp_")) return handleResponseAction(interaction, guildId, raw, panelId, action);
   if (action === "btn_add") {
     if (panel.extraButtons.length >= LIMITS.extraButtons) return deny(interaction, `Máximo de ${LIMITS.extraButtons} links extras.`);
     return interaction.showModal(buildExtraButtonModal(panelId, "new"));
@@ -227,6 +238,43 @@ async function handlePanelAction(interaction, guildId, panelId, action, arg) {
   }
 }
 
+// ─── Respostas do botão Verificar (etapa Respostas do editor) ───────────────
+
+async function handleResponseAction(interaction, guildId, raw, panelId, action) {
+  const kind = currentKind(panelId);
+  const resp = responses.getResponse(raw, kind);
+
+  if (action === "rp_preview") return responses.preview(interaction, raw, kind);
+
+  if (action === "rp_txt") return interaction.showModal(buildRespTextModal(panelId, kind, resp));
+  if (action === "rp_hex") return interaction.showModal(buildRespHexModal(panelId, kind, resp.color));
+  if (action === "rp_img") return interaction.showModal(buildRespImageModal(panelId, kind, "main"));
+  if (action === "rp_thumb") return interaction.showModal(buildRespImageModal(panelId, kind, "thumb"));
+  if (action === "rp_link_add") {
+    if (resp.buttons.length >= MSG_LIMITS.respButtons) return deny(interaction, `Máximo de ${MSG_LIMITS.respButtons} links por resposta.`);
+    return interaction.showModal(buildRespLinkModal(panelId, kind));
+  }
+
+  if (action === "rp_link_clear") {
+    await saveResponse(guildId, raw, kind, { buttons: [] });
+    return showEditor(interaction, panelId);
+  }
+
+  if (action === "rp_ximg" || action === "rp_xthumb") {
+    const field = action === "rp_ximg" ? "image" : "thumb";
+    const old = resp[field];
+    await saveResponse(guildId, raw, kind, { [field]: null });
+    await dropSources([old]);
+    return showEditor(interaction, panelId);
+  }
+
+  if (action === "rp_reset") {
+    await saveResponse(guildId, raw, kind, null);
+    await dropSources(responseSources(raw.responses?.[kind]));
+    return showEditor(interaction, panelId);
+  }
+}
+
 // ─── Selects do editor (navegação, formato, cor, cargos, canal) ─────────────
 
 async function handleBioPanelSelect(interaction) {
@@ -258,6 +306,15 @@ async function handleBioPanelSelect(interaction) {
       return r && r.id !== interaction.guild.id && !r.managed && r.position < top;
     });
     await updatePanel(guildId, panelId, { [action === "give_roles" ? "giveRoles" : "removeRoles"]: ids });
+  } else if (action === "resp_pick") {
+    if (!(values[0] in responses.KINDS)) return;
+    setRespKind(panelId, values[0]);
+  } else if (action === "rp_mode") {
+    if (!(values[0] in responses.MODES)) return;
+    await saveResponse(guildId, raw, currentKind(panelId), { mode: values[0] });
+  } else if (action === "rp_color") {
+    if (values[0] !== "none" && !(values[0] in COLORS)) return;
+    await saveResponse(guildId, raw, currentKind(panelId), { color: values[0] === "none" ? null : values[0] });
   } else if (action === "channel") {
     const newId = values[0] ?? null;
     if (newId !== panel.channelId) {
@@ -299,7 +356,7 @@ function customEmoji(raw) {
 async function handleBioPanelModal(interaction) {
   if (!(await guard(interaction))) return;
   const { customId, guildId, guild, user } = interaction;
-  const [, type, panelId, arg] = customId.split(":"); // bp_modal:<tipo>[:<painel>[:<arg>]]
+  const [, type, panelId, arg, arg2] = customId.split(":"); // bp_modal:<tipo>[:<painel>[:<arg>[:<arg2>]]]
 
   if (type === "set_token") {
     const token = interaction.fields.getTextInputValue("token").trim();
@@ -407,12 +464,62 @@ async function handleBioPanelModal(interaction) {
     return showEditor(interaction, panelId);
   }
 
-  // ----- respostas -----
-  if (type === "resp_ok" || type === "resp_fail") {
-    const value = cleanText(interaction.fields.getTextInputValue("text"));
-    if (!value) return notice(interaction, "Escreva algum texto.");
-    await updatePanel(guildId, panelId, { [type === "resp_ok" ? "successText" : "failText"]: value });
-    return showEditor(interaction, panelId);
+  // ----- respostas do botão Verificar -----
+  if (type.startsWith("rp_")) {
+    const kind = arg;
+    if (!(kind in responses.KINDS)) return showEditor(interaction, panelId);
+    const resp = responses.getResponse(raw, kind);
+
+    if (type === "rp_txt") {
+      const text = cleanText(interaction.fields.getTextInputValue("text"));
+      if (!text) return notice(interaction, "Escreva algum texto.");
+      await saveResponse(guildId, raw, kind, {
+        text,
+        title: stripEmoji(field("title")),
+        footer: stripEmoji(field("footer")),
+      });
+      return showEditor(interaction, panelId);
+    }
+
+    if (type === "rp_hex") {
+      const hex = parseHex(field("hex"));
+      if (!hex) return notice(interaction, "Cor inválida. Use o formato #RRGGBB ou #RGB.");
+      await saveResponse(guildId, raw, kind, { color: hex });
+      return showEditor(interaction, panelId);
+    }
+
+    if (type === "rp_img") {
+      const file = interaction.fields.getUploadedFiles("file", false)?.first();
+      const link = field("link");
+      let source;
+      if (file) {
+        const saved = await savePanelImage({ guildId: guild.id, userId: user.id, file });
+        if (saved.error) return notice(interaction, saved.error);
+        source = saved.source;
+      } else if (link) {
+        if (!LINK.test(link)) return notice(interaction, "Link inválido. Use um link que começa com http:// ou https://");
+        source = link;
+      } else {
+        return notice(interaction, "Envie uma imagem ou informe o link de uma imagem.");
+      }
+      const target = arg2 === "main" ? "image" : "thumb";
+      const old = resp[target];
+      await saveResponse(guildId, raw, kind, { [target]: source });
+      if (old && old !== source) await dropSources([old]);
+      return showEditor(interaction, panelId);
+    }
+
+    if (type === "rp_link") {
+      const label = field("label");
+      const url = field("url");
+      const emoji = customEmoji(field("emoji"));
+      if (emoji.error) return notice(interaction, emoji.error);
+      if (!LINK.test(url)) return notice(interaction, "Link inválido. Use um link que começa com http:// ou https://");
+      if (!label && !emoji.value) return notice(interaction, "O botão precisa de um texto ou de um emoji.");
+      if (resp.buttons.length >= MSG_LIMITS.respButtons) return notice(interaction, `Máximo de ${MSG_LIMITS.respButtons} links por resposta.`);
+      await saveResponse(guildId, raw, kind, { buttons: [...resp.buttons, { label, url, emoji: emoji.value }] });
+      return showEditor(interaction, panelId);
+    }
   }
 }
 
@@ -433,61 +540,42 @@ async function handleBioPanelVerify(interaction) {
 
   // Cargos de entrega configurados (ignora os que foram apagados do servidor)
   const giveRoles = (panel.giveRoles ?? []).filter((rid) => interaction.guild.roles.cache.has(rid));
+  const reply = (kind, extra) => responses.answer(interaction, panel, kind, extra);
 
   // Sem cargo definido no painel: avisa em vez de verificar
-  if (!giveRoles.length) {
-    return interaction.editReply({
-      content: "Este painel não tem nenhum cargo definido para entregar. Avise a staff para configurar o cargo.",
-      flags: EPHEMERAL,
-    });
-  }
+  if (!giveRoles.length) return reply("norole");
 
   // Quem já se verificou neste painel não verifica de novo,
   // mas se perdeu o cargo por qualquer motivo, o bot devolve.
   if ((panel.verifiedUsers ?? []).includes(interaction.user.id)) {
     const missing = giveRoles.filter((rid) => !member.roles.cache.has(rid));
-    if (!missing.length) {
-      return interaction.editReply({ content: "Você já se verificou neste painel.", flags: EPHEMERAL });
-    }
+    if (!missing.length) return reply("already", { cargos: responses.mentions(giveRoles) });
 
     const restored = [];
     const failed = [];
     for (const roleId of missing) {
       try {
         await member.roles.add(roleId);
-        restored.push(`<@&${roleId}>`);
+        restored.push(roleId);
       } catch {
-        failed.push(`<@&${roleId}>`);
+        failed.push(roleId);
       }
     }
 
-    let reply = restored.length
-      ? `Você já estava verificado, mas estava sem o cargo. Devolvi: ${restored.join(", ")}.`
-      : "Você já se verificou neste painel.";
-    if (failed.length) reply += `\n-# Não consegui devolver ${failed.join(", ")}. Avise a staff (confira a posição do cargo do bot).`;
-    return interaction.editReply({ content: reply, flags: EPHEMERAL });
+    // Nenhum voltou: avisa o erro. Se ao menos um voltou, é "cargo devolvido".
+    const erros = failed.length ? `-# Não consegui devolver ${responses.mentions(failed)}. Avise a staff (confira a posição do cargo do bot).` : "";
+    if (!restored.length) return reply("restored", { cargos: "nenhum", erros });
+    return reply("restored", { cargos: responses.mentions(restored), erros });
   }
 
-  if (!token) {
-    return interaction.editReply({
-      content: "O administrador ainda não definiu a token de acesso. A verificação está indisponível.",
-      flags: EPHEMERAL,
-    });
-  }
+  if (!token) return reply("notoken");
 
   // A bio e os pronomes são lidos com a token da staff. O status vem da presença do membro (intent GuildPresences).
   const statusText = member.presence?.activities?.find((a) => a.type === 4)?.state ?? "";
   const profile = await fetchProfile(guildId, token, interaction.user.id, statusText);
-  if (!profile) {
-    return interaction.editReply({
-      content: "Não consegui ler seu perfil agora. Tente de novo em instantes; se continuar, avise a staff.",
-      flags: EPHEMERAL,
-    });
-  }
+  if (!profile) return reply("noprofile");
 
   const { passed, details } = checkProfile(profile, panel);
-  // {usuario} vira a menção de quem clicou; emoji unicode não entra nas respostas
-  const fill = (t) => stripEmoji(t).replaceAll("{usuario}", `<@${interaction.user.id}>`);
 
   if (passed) {
     await markVerified(guildId, panelId, interaction.user.id);
@@ -499,14 +587,13 @@ async function handleBioPanelVerify(interaction) {
     for (const roleId of panel.removeRoles) {
       try { await member.roles.remove(roleId); } catch { errors.push(`remover <@&${roleId}>`); }
     }
-    const extra = errors.length ? `\n-# Erro nos cargos: ${errors.join(", ")}` : "";
-    return interaction.editReply({ content: fill(panel.successText) + extra, flags: EPHEMERAL });
+    return reply("ok", {
+      cargos: responses.mentions(giveRoles),
+      erros: errors.length ? `-# Erro nos cargos: ${errors.join(", ")}` : "",
+    });
   }
 
-  return interaction.editReply({
-    content: `${fill(panel.failText)}\n-# ${details.join("\n-# ")}`,
-    flags: EPHEMERAL,
-  });
+  return reply("fail", { detalhes: details.map((d) => `-# ${d}`).join("\n") });
 }
 
 module.exports = {

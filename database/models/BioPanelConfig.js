@@ -37,6 +37,11 @@ const panelSchema = new Schema(
     successText: { type: String, default: "Perfil verificado com sucesso!" },
     failText: { type: String, default: "Seu perfil não contém o padrão exigido." },
 
+    // Respostas personalizadas do botão Verificar (ok, fail, already, restored, norole, notoken, noprofile).
+    // Cada uma: { mode: text | embed | v2, text, title, footer, image, thumb, color, buttons[] }.
+    // Chave ausente = usa a resposta padrão.
+    responses: { type: Schema.Types.Mixed, default: {} },
+
     // Cargos concedidos / removidos ao verificar
     giveRoles: { type: [String], default: [] },
     removeRoles: { type: [String], default: [] },

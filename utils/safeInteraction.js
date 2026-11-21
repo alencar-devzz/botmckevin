@@ -38,7 +38,7 @@ const MODAL_BUTTONS = [
   /^uba:(add|search)$/, // unbanall: banir pessoas e buscar banidos
   /^dup:[^:]+:(rename|filter)$/, // /duplicar-categoria: nomes da cópia e filtro por nome
   /^bp_token_set$/, // cargos por perfil: token
-  /^bp_panel:[^:]+:(txt|img_main|img_thumb|hex|btn_main|btn_add|btn_edit:\d|add_pattern|resp_ok|resp_fail)$/, // cargos por perfil: editor
+  /^bp_panel:[^:]+:(txt|img_main|img_thumb|hex|btn_main|btn_add|btn_edit:\d|add_pattern|rp_txt|rp_hex|rp_img|rp_thumb|rp_link_add)$/, // cargos por perfil: editor
   /^tcfg_(new|a_text|a_color|a_images|m_mode|m_btn|m_ph|o_add|o_edit|o_rmopen|i_text|c_text|i_opttitle|i_images|i_arch|su_text|su_btn|cc_text|lim_text|color|g_limit|x_rename)(:|$)/, // ticket (configuração)
 ];
 

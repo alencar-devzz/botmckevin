@@ -16,6 +16,8 @@ const { LAYOUTS, COLORS, BUTTON_STYLES, PLACES, colorLabel, parseHex, isStored }
 const { textLength } = require("../../utils/msgBuilder/render");
 const { textLabel, selectLabel, uploadLabel, modal } = require("../modalHelpers");
 const { LIMITS, DEFAULT_MESSAGE, stripEmoji, normalizePanel, panelName } = require("../../utils/bioPanel/message");
+const { LIMITS: MSG_LIMITS } = require("../../utils/msgBuilder/store");
+const { KINDS, MODES, VAR_HELP, getResponse, isCustom } = require("../../utils/bioPanel/responses");
 
 // Painéis de configuração de "Cargos por perfil" (Self). Tudo em Components V2.
 // Visual do Criador de mensagens (n!msg): um assunto por container, seletor para navegar entre as etapas
@@ -98,6 +100,7 @@ const SECTIONS = [
   { key: "btns", label: "Botões", desc: "Botão de verificar e links extras" },
   { key: "verify", label: "Verificação", desc: "O que o perfil precisa ter" },
   { key: "roles", label: "Cargos", desc: "Entrega e remoção" },
+  { key: "resp", label: "Respostas", desc: "Mensagens do botão Verificar" },
   { key: "send", label: "Envio", desc: "Canal e publicação" },
 ];
 const KEYS = SECTIONS.map((s) => s.key);
@@ -113,6 +116,13 @@ function setEditPage(panelId, page) {
 }
 
 const currentView = (panelId) => views.get(panelId) ?? "home";
+
+// Resposta aberta na etapa Respostas de cada painel (só em memória)
+const respKinds = new Map();
+const currentKind = (panelId) => respKinds.get(panelId) ?? "ok";
+function setRespKind(panelId, kind) {
+  respKinds.set(panelId, kind in KINDS ? kind : "ok");
+}
 
 // Move uma etapa para frente (+1) ou para trás (-1)
 function stepEditPage(panelId, delta) {
@@ -192,6 +202,7 @@ function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
               `**Texto**  \`${num(textLength(panel.message))} de ${num(LIMITS.text)}\` caracteres  ·  **Imagens**  \`${images}\`  ·  **Links extras**  \`${links}\``,
               `**Verifica**  bio \`${yes(panel.checkBio)}\`  ·  status \`${yes(panel.checkStatus)}\`  ·  pronomes \`${yes(panel.checkPronouns)}\``,
               `**Padrões**  \`${panel.patterns.length} de ${LIMITS.patterns}\`  ·  **Dar**  \`${panel.giveRoles.length}\`  ·  **Remover**  \`${panel.removeRoles.length}\``,
+              `**Respostas**  \`${Object.keys(KINDS).filter((k) => isCustom(panel, k)).length} de ${Object.keys(KINDS).length}\` personalizadas`,
               `**Canal**  ${channel}`,
               `**Situação**  ${report ? (report.ready ? "`Pronto para publicar`" : "`Incompleto`") : "`Sem checagem`"}`,
               ...problems.map((p) => `-# ${p}`),
@@ -366,13 +377,11 @@ function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
           text(
             [
               "### Respostas",
-              "-# Mensagens privadas mostradas a quem clica. Aceitam markdown e {usuario}.",
-              `**Sucesso**  ${panel.successText.trim() ? clip(stripEmoji(panel.successText).replace(/\s+/g, " "), 100) : "`vazio`"}`,
-              `**Falha**  ${panel.failText.trim() ? clip(stripEmoji(panel.failText).replace(/\s+/g, " "), 100) : "`vazio`"}`,
+              "-# As mensagens mostradas a quem clica em Verificar (sucesso, falha, aviso de cargo e outras) são personalizadas na etapa Respostas.",
             ].join("\n")
           )
         )
-        .addActionRowComponents(row(btn(id("resp_ok"), "Resposta de sucesso"), btn(id("resp_fail"), "Resposta de falha")))
+        .addActionRowComponents(row(btn(id("go:resp"), "Editar respostas", ButtonStyle.Primary)))
     );
   }
 
@@ -392,6 +401,87 @@ function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
       box()
         .addTextDisplayComponents(text(`### Remover cargos\n-# Retirados do membro ao verificar.\n${roles(panel.removeRoles)}`))
         .addActionRowComponents(roleSelect("remove_roles", "Escolher cargos para remover...", panel.removeRoles))
+    );
+  }
+
+  // ── Respostas ──
+  else if (view === "resp") {
+    const kind = currentKind(panelId);
+    const info = KINDS[kind];
+    const resp = getResponse(panel, kind);
+    const custom = isCustom(panel, kind);
+    const plain = resp.mode === "text";
+    const limit = MSG_LIMITS.respText[resp.mode === "text" ? "text" : resp.mode === "embed" ? "embed" : "v2"];
+    const links = resp.buttons.filter((b) => b.url).length;
+
+    const picker = new StringSelectMenuBuilder()
+      .setCustomId(id("resp_pick"))
+      .setPlaceholder("Escolha a resposta para editar")
+      .addOptions(Object.entries(KINDS).map(([value, k]) => ({ label: k.label, description: k.desc, value, default: value === kind })));
+
+    const modeSelect = new StringSelectMenuBuilder()
+      .setCustomId(id("rp_mode"))
+      .setPlaceholder("Formato da resposta")
+      .addOptions(Object.entries(MODES).map(([value, m]) => ({ label: m.label, description: m.desc, value, default: resp.mode === value })));
+
+    const colorSelect = new StringSelectMenuBuilder()
+      .setCustomId(id("rp_color"))
+      .setPlaceholder(plain ? "Texto puro não tem cor" : "Cor da resposta")
+      .setDisabled(plain)
+      .addOptions([
+        { label: "Sem cor", value: "none", default: !resp.color },
+        ...Object.entries(COLORS).map(([value, c]) => ({ label: c.label, value, default: resp.color === value })),
+      ]);
+
+    const summary = [
+      `### ${info.label}`,
+      `**Formato**  \`${MODES[resp.mode].label}\`  ·  **Cor**  \`${plain ? "não usa" : colorLabel(resp.color)}\`  ·  **Imagem**  \`${yes(resp.image)}\`  ·  **Miniatura**  \`${plain ? "não usa" : yes(resp.thumb)}\`  ·  **Links**  \`${links} de ${MSG_LIMITS.respButtons}\``,
+    ];
+    if (resp.mode === "embed") {
+      summary.push(`**Título**  ${resp.title.trim() ? clip(resp.title, 80) : "`vazio`"}  ·  **Rodapé**  ${resp.footer.trim() ? clip(resp.footer, 80) : "`vazio`"}`);
+    }
+    summary.push("**Texto**", resp.text.trim() ? quote(resp.text, 500) : "-# Nenhum texto.", `-# ${num(resp.text.length)} de ${num(limit)} caracteres.`);
+    if (resp.text.length > limit) summary.push("-# O texto passa do limite deste formato e será cortado.");
+
+    const removals = [];
+    if (resp.image) removals.push(btn(id("rp_ximg"), "Remover imagem", ButtonStyle.Danger));
+    if (resp.thumb) removals.push(btn(id("rp_xthumb"), "Remover miniatura", ButtonStyle.Danger));
+
+    const editor = box()
+      .addTextDisplayComponents(text(summary.join("\n")))
+      .addActionRowComponents(
+        row(modeSelect),
+        row(colorSelect),
+        row(
+          btn(id("rp_txt"), "Editar texto", ButtonStyle.Primary),
+          btn(id("rp_hex"), "Cor personalizada").setDisabled(plain),
+          btn(id("rp_img"), resp.image ? "Trocar imagem" : "Imagem"),
+          btn(id("rp_thumb"), resp.thumb ? "Trocar miniatura" : "Miniatura").setDisabled(plain)
+        ),
+        row(
+          btn(id("rp_link_add"), "Adicionar link", ButtonStyle.Success).setDisabled(links >= MSG_LIMITS.respButtons),
+          btn(id("rp_link_clear"), "Limpar links", ButtonStyle.Danger).setDisabled(!links),
+          btn(id("rp_preview"), "Ver prévia"),
+          btn(id("rp_reset"), "Restaurar padrão").setDisabled(!custom)
+        )
+      );
+    if (removals.length) editor.addActionRowComponents(row(...removals));
+
+    cards.push(
+      box()
+        .addTextDisplayComponents(
+          text(
+            [
+              title(),
+              `**Resposta**  \`${info.label}\`  ·  ${custom ? "`personalizada`" : "`padrão`"}`,
+              `-# ${info.desc}.`,
+              `-# Variáveis: ${info.vars.map((v) => `\`{${v}}\` ${VAR_HELP[v]}`).join("  ·  ")}`,
+              "-# Use [separador] e [separador_largo] para dividir o texto. Valem no Container e no Embed (o texto puro mostra só o texto).",
+            ].join("\n")
+          )
+        )
+        .addActionRowComponents(row(picker)),
+      editor
     );
   }
 
@@ -558,21 +648,79 @@ function buildPatternModal(panelId) {
   );
 }
 
-// kind: "ok" (sucesso) ou "fail" (falha)
-function buildReplyModal(panelId, kind, current) {
-  const ok = kind === "ok";
+// ─── Modais das respostas ───────────────────────────────────────────────────
+// IDs: "bp_modal:rp_<tipo>:<painel>:<resposta>[:<arg>]"
+
+function buildRespTextModal(panelId, kind, resp) {
   return modal(
-    `bp_modal:resp_${kind}:${panelId}`,
-    ok ? "Resposta de sucesso" : "Resposta de falha",
+    `bp_modal:rp_txt:${panelId}:${kind}`,
+    `Texto: ${KINDS[kind].label}`.slice(0, 45),
+    textLabel({
+      id: "title",
+      label: "Título (só no formato Embed)",
+      description: "Aceita variáveis como {usuario}.",
+      max: MSG_LIMITS.respTitle,
+      value: resp.title,
+      placeholder: "Ex.: Perfil verificado",
+    }),
     textLabel({
       id: "text",
-      label: ok ? "Texto ao verificar com sucesso" : "Texto ao falhar a verificação",
-      description: "Markdown aceito. Use {usuario} para mencionar quem clicou.",
+      label: "Texto da resposta",
+      description: "Markdown, variáveis, [separador] e [separador_largo].",
       style: TextInputStyle.Paragraph,
-      max: LIMITS.reply,
+      max: MSG_LIMITS.respText.v2,
       required: true,
-      value: current,
+      value: resp.text,
+    }),
+    textLabel({
+      id: "footer",
+      label: "Rodapé (só no formato Embed)",
+      description: "Aceita variáveis como {servidor}.",
+      max: 200,
+      value: resp.footer,
     })
+  );
+}
+
+function buildRespHexModal(panelId, kind, current) {
+  return modal(
+    `bp_modal:rp_hex:${panelId}:${kind}`,
+    "Cor personalizada",
+    textLabel({
+      id: "hex",
+      label: "Cor em HEX",
+      description: "Use #RRGGBB ou a forma curta #RGB.",
+      max: 7,
+      required: true,
+      value: parseHex(current) ?? "",
+      placeholder: "#5865F2",
+    })
+  );
+}
+
+// which: "main" (imagem) ou "thumb" (miniatura)
+function buildRespImageModal(panelId, kind, which) {
+  return modal(
+    `bp_modal:rp_img:${panelId}:${kind}:${which}`,
+    which === "main" ? "Imagem da resposta" : "Miniatura da resposta",
+    uploadLabel({ id: "file", label: "Enviar imagem", description: "Escolha uma imagem (png, jpg, gif ou webp) de até 4 MB." }),
+    textLabel({
+      id: "link",
+      label: "Ou use o link de uma imagem",
+      description: "Só use se não enviou um arquivo acima.",
+      max: 500,
+      placeholder: "https://exemplo.com/imagem.png",
+    })
+  );
+}
+
+function buildRespLinkModal(panelId, kind) {
+  return modal(
+    `bp_modal:rp_link:${panelId}:${kind}`,
+    "Novo link na resposta",
+    textLabel({ id: "label", label: "Texto do botão", description: "Opcional quando houver emoji.", max: 80, placeholder: "Ex.: Regras" }),
+    textLabel({ id: "url", label: "Link", description: "Obrigatório. Começa com https://", max: 500, required: true, placeholder: "https://exemplo.com" }),
+    textLabel({ id: "emoji", label: "Emoji do servidor (opcional)", description: "Formato <:nome:id>. Emoji unicode não é aceito.", max: 60 })
   );
 }
 
@@ -591,5 +739,10 @@ module.exports = {
   buildMainButtonModal,
   buildExtraButtonModal,
   buildPatternModal,
-  buildReplyModal,
+  buildRespTextModal,
+  buildRespHexModal,
+  buildRespImageModal,
+  buildRespLinkModal,
+  currentKind,
+  setRespKind,
 };
