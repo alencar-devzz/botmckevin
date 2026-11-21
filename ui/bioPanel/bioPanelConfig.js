@@ -85,115 +85,100 @@ function buildBioPanelHome(panels, hasToken) {
 function buildBioPanelEdit(panel) {
   const { panelId } = panel;
   const id = (action) => `bp_panel:${panelId}:${action}`;
+  const clip = (v, n = 120) => {
+    const t = String(v ?? "");
+    return t.length > n ? t.slice(0, n - 1) + "…" : t;
+  };
+  const btn = (action, label, style = ButtonStyle.Secondary) =>
+    new ButtonBuilder().setCustomId(id(action)).setLabel(label).setStyle(style);
 
   const channel = panel.channelId ? `<#${panel.channelId}>` : "—";
   const msgSent = panel.messageId ? "✅ Mensagem enviada" : "⚠️ Não publicado";
+  const patterns = panel.patterns || [];
 
+  // Limite do Discord: no máximo 40 componentes no total (container, textos,
+  // separadores, seções, botões e action rows contam). Esta tela usa ~36.
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
-      text(`### ${panel.title}`),
-      text(`-# Painel › Self › Cargos por perfil › **${panel.title}**`)
-    )
-    .addSeparatorComponents(sep())
-
-    // ── Estado atual
-    .addTextDisplayComponents(text("**Situação atual**"))
-    .addTextDisplayComponents(
-      text(
-        `**Canal:** ${channel}\n` +
-        `**Publicação:** ${msgSent}\n` +
-        `**Verifica bio:** ${bool(panel.checkBio)} · **Status:** ${bool(panel.checkStatus)} · **Pronomes:** ${bool(panel.checkPronouns)}\n` +
-        `**Padrões:** ${list(panel.patterns)}\n` +
-        `**Dar cargos:** ${roles(panel.giveRoles)}\n` +
-        `**Remover cargos:** ${roles(panel.removeRoles)}`
-      )
+      text(`### ${clip(panel.title, 100)}\n-# Painel › Self › Cargos por perfil › **${clip(panel.title, 60)}**`)
     )
     .addSeparatorComponents(sep())
 
     // ── Aparência
-    .addTextDisplayComponents(text("**Aparência do painel**"))
-    .addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(text(`**Título**\n-# ${none(panel.title)}`))
-        .setButtonAccessory(new ButtonBuilder().setCustomId(id("edit_title")).setLabel("Editar").setStyle(ButtonStyle.Secondary))
+    .addTextDisplayComponents(
+      text(
+        `**Aparência do painel**\n` +
+        `**Título:** ${clip(none(panel.title))}\n` +
+        `**Descrição:** ${clip(none(panel.description))}\n` +
+        `**Botão:** label ${none(panel.buttonLabel)} · emoji ${none(panel.buttonEmoji)}\n` +
+        `**Sucesso:** ${clip(none(panel.successText))}\n` +
+        `**Falha:** ${clip(none(panel.failText))}`
+      )
     )
-    .addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(text(`**Descrição**\n-# ${none(panel.description)}`))
-        .setButtonAccessory(new ButtonBuilder().setCustomId(id("edit_desc")).setLabel("Editar").setStyle(ButtonStyle.Secondary))
-    )
-    .addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(text(`**Botão de verificação**\n-# label: ${none(panel.buttonLabel)} · emoji: ${none(panel.buttonEmoji)}`))
-        .setButtonAccessory(new ButtonBuilder().setCustomId(id("edit_btn")).setLabel("Editar").setStyle(ButtonStyle.Secondary))
-    )
-    .addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(text(`**Texto de sucesso**\n-# ${none(panel.successText)}`))
-        .setButtonAccessory(new ButtonBuilder().setCustomId(id("edit_success")).setLabel("Editar").setStyle(ButtonStyle.Secondary))
-    )
-    .addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(text(`**Texto de falha**\n-# ${none(panel.failText)}`))
-        .setButtonAccessory(new ButtonBuilder().setCustomId(id("edit_fail")).setLabel("Editar").setStyle(ButtonStyle.Secondary))
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        btn("edit_title", "Título"),
+        btn("edit_desc", "Descrição"),
+        btn("edit_btn", "Botão"),
+        btn("edit_success", "Sucesso"),
+        btn("edit_fail", "Falha")
+      )
     )
     .addSeparatorComponents(sep())
 
     // ── O que verificar
-    .addTextDisplayComponents(text("**O que verificar no perfil**"))
-    .addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(text(`**Bio (sobre mim):** ${bool(panel.checkBio)}`))
-        .setButtonAccessory(new ButtonBuilder().setCustomId(id("toggle_bio")).setLabel(panel.checkBio ? "Desativar" : "Ativar").setStyle(ButtonStyle.Secondary))
+    .addTextDisplayComponents(
+      text(
+        `**O que verificar no perfil**\n` +
+        `**Bio:** ${bool(panel.checkBio)} · **Status:** ${bool(panel.checkStatus)} · **Pronomes:** ${bool(panel.checkPronouns)}`
+      )
     )
-    .addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(text(`**Status personalizado:** ${bool(panel.checkStatus)}`))
-        .setButtonAccessory(new ButtonBuilder().setCustomId(id("toggle_status")).setLabel(panel.checkStatus ? "Desativar" : "Ativar").setStyle(ButtonStyle.Secondary))
-    )
-    .addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(text(`**Pronomes:** ${bool(panel.checkPronouns)}`))
-        .setButtonAccessory(new ButtonBuilder().setCustomId(id("toggle_pronouns")).setLabel(panel.checkPronouns ? "Desativar" : "Ativar").setStyle(ButtonStyle.Secondary))
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        btn("toggle_bio", `Bio: ${panel.checkBio ? "Desativar" : "Ativar"}`),
+        btn("toggle_status", `Status: ${panel.checkStatus ? "Desativar" : "Ativar"}`),
+        btn("toggle_pronouns", `Pronomes: ${panel.checkPronouns ? "Desativar" : "Ativar"}`)
+      )
     )
     .addSeparatorComponents(sep())
 
     // ── Padrões
-    .addTextDisplayComponents(text(`**Padrões exigidos**\n-# O perfil deve conter TODOS os padrões abaixo nos campos ativados.`))
-    .addTextDisplayComponents(text(panel.patterns.length ? panel.patterns.map((p, i) => `${i + 1}. \`${p}\``).join("\n") : "-# Nenhum padrão definido."))
+    .addTextDisplayComponents(
+      text(
+        `**Padrões exigidos**\n-# O perfil deve conter TODOS os padrões abaixo nos campos ativados.\n` +
+        (patterns.length ? clip(patterns.map((p, i) => `${i + 1}. \`${p}\``).join("\n"), 1500) : "-# Nenhum padrão definido.")
+      )
+    )
     .addActionRowComponents(
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(id("add_pattern")).setLabel("Adicionar padrão").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(id("remove_pattern")).setLabel("Remover padrão").setStyle(ButtonStyle.Secondary).setDisabled(!panel.patterns.length)
+        btn("add_pattern", "Adicionar padrão"),
+        btn("remove_pattern", "Remover padrão").setDisabled(!patterns.length)
       )
     )
     .addSeparatorComponents(sep())
 
     // ── Cargos
-    .addTextDisplayComponents(text("**Cargos**"))
     .addSectionComponents(
       new SectionBuilder()
-        .addTextDisplayComponents(text(`**Dar cargos ao verificar**\n-# ${roles(panel.giveRoles)}`))
-        .setButtonAccessory(new ButtonBuilder().setCustomId(id("edit_give_roles")).setLabel("Editar").setStyle(ButtonStyle.Secondary))
+        .addTextDisplayComponents(text(`**Dar cargos ao verificar**\n-# ${clip(roles(panel.giveRoles || []), 300)}`))
+        .setButtonAccessory(btn("edit_give_roles", "Editar"))
     )
     .addSectionComponents(
       new SectionBuilder()
-        .addTextDisplayComponents(text(`**Remover cargos ao verificar**\n-# ${roles(panel.removeRoles)}`))
-        .setButtonAccessory(new ButtonBuilder().setCustomId(id("edit_remove_roles")).setLabel("Editar").setStyle(ButtonStyle.Secondary))
+        .addTextDisplayComponents(text(`**Remover cargos ao verificar**\n-# ${clip(roles(panel.removeRoles || []), 300)}`))
+        .setButtonAccessory(btn("edit_remove_roles", "Editar"))
     )
     .addSeparatorComponents(sep())
 
     // ── Publicação
-    .addTextDisplayComponents(text("**Publicação**\n-# O bot envia a mensagem do painel no canal escolhido."))
-    .addActionRowComponents(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(id("set_channel")).setLabel("Definir canal").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(id("publish")).setLabel(panel.messageId ? "Reenviar" : "Publicar").setStyle(ButtonStyle.Success).setDisabled(!panel.channelId),
-        new ButtonBuilder().setCustomId(id("delete_panel")).setLabel("Excluir painel").setStyle(ButtonStyle.Danger)
-      )
+    .addTextDisplayComponents(
+      text(`**Publicação**\n**Canal:** ${channel} · ${msgSent}\n-# O bot envia a mensagem do painel no canal escolhido.`)
     )
     .addActionRowComponents(
       new ActionRowBuilder().addComponents(
+        btn("set_channel", "Definir canal"),
+        btn("publish", panel.messageId ? "Reenviar" : "Publicar", ButtonStyle.Success).setDisabled(!panel.channelId),
+        btn("delete_panel", "Excluir", ButtonStyle.Danger),
         new ButtonBuilder().setCustomId("bp_home").setLabel("Voltar").setStyle(ButtonStyle.Secondary)
       )
     );
