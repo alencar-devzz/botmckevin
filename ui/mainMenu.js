@@ -36,7 +36,7 @@ const SISTEMAS = [
     value: "moderacao",
   },
   {
-    label: "Self",
+    label: "Selfing",
     description: "Verificação de bio, status e pronomes com cargos automáticos.",
     value: "self",
   },
