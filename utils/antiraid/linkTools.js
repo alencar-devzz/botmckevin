@@ -248,8 +248,8 @@ const isResolvableInvite = (link) => link.type === "invite" && !!link.code;
 
 // ---------- Texto entre símbolos ----------
 // Pares configurados no painel (ex.: "<>" ou "[]"). Dentro de < > a sintaxe do Discord passa:
-// <@id>, <@&id>, <#id>, <:emoji:id>, <a:emoji:id>, <t:123:R>, </comando:id>, <id:customize>.
-const DISCORD_SYNTAX = /^(?:@!?\d+|@&\d+|#\d+|a?:\w{2,32}:\d+|t:-?\d+(?::[tTdDfFR])?|\/[^:\s]+(?: [^:\s]+){0,2}:\d+|id:\w+)$/;
+// <@id>, <@!id>, <@$id>, <@&id>, <#id>, <:emoji:id>, <a:emoji:id>, <t:123:R>, </comando:id>, <id:customize>.
+const DISCORD_SYNTAX = /^(?:@[!$]?\d+|@&\d+|#\d+|a?:\w{2,32}:\d+|t:-?\d+(?::[tTdDfFR])?|\/[^:\s]+(?: [^:\s]+){0,2}:\d+|id:\w+)$/;
 const wrapLabel = (pair) => String(pair);
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\\/-]/g, "\\$&");
 
