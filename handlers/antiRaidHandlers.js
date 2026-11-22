@@ -59,11 +59,37 @@ async function showPanel(interaction, key) {
   return interaction.update({ components });
 }
 
+// Mensagens (efêmeras) em que o painel foi aberto pelo /menu > Moderação > Sistema de proteção.
+// Nelas a central mostra o botão Voltar para a lista de Moderação, mesmo depois de entrar nos módulos e voltar.
+// Fica só na memória (o limite descarta as mais antigas): se o bot reiniciar, o botão some das mensagens antigas.
+const FROM_MENU = new Set();
+const FROM_MENU_LIMIT = 500;
+
+function markFromMenu(messageId) {
+  if (!messageId) return;
+  FROM_MENU.delete(messageId);
+  FROM_MENU.add(messageId);
+  if (FROM_MENU.size > FROM_MENU_LIMIT) FROM_MENU.delete(FROM_MENU.values().next().value);
+}
+
+const isFromMenu = (interaction) => FROM_MENU.has(interaction.message?.id);
+
 // Tela inicial do painel (informações + pânico). notice mostra o resultado da última ação do pânico.
-async function quickComponents(guild, notice = null) {
+// fromMenu: aberto pelo /menu (mostra o Voltar para Moderação)
+async function quickComponents(guild, notice = null, fromMenu = false) {
   const cfg = await getAntiRaidConfig(guild.id);
   const stats = await getIncidentStats(guild.id).catch(() => ({}));
-  return buildQuickPanel(guild, cfg, stats, notice);
+  return buildQuickPanel(guild, cfg, stats, notice, { fromMenu });
+}
+
+// /menu > Moderação > Sistema de proteção: abre a central do Anti-Raid na própria mensagem do menu.
+// Daqui o botão "Abrir sistemas" leva ao sistema completo.
+async function openAntiRaidPanel(interaction) {
+  if (!canManage(interaction.member)) {
+    return deny(interaction, "Só o dono ou quem tem Administrador pode configurar o Anti-Raid.");
+  }
+  markFromMenu(interaction.message?.id);
+  return interaction.update({ components: await quickComponents(interaction.guild, null, true) });
 }
 
 // ======================= Histórico de incidentes =======================
@@ -99,7 +125,7 @@ async function handlePanicButton(interaction) {
     await interaction.deferUpdate();
     const result =
       customId === "ar:pn:on" ? await activatePanic(guild, interaction.user) : await deactivatePanic(guild, interaction.user);
-    return interaction.editReply({ components: await quickComponents(guild, result) });
+    return interaction.editReply({ components: await quickComponents(guild, result, isFromMenu(interaction)) });
   }
 }
 
@@ -148,7 +174,7 @@ async function handleAntiRaidButton(interaction) {
 
   // Volta para a central
   if (customId === "ar:quick") {
-    return interaction.update({ components: await quickComponents(guild) });
+    return interaction.update({ components: await quickComponents(guild, null, isFromMenu(interaction)) });
   }
 
   if (customId === "ar:hist") return showHistory(interaction, 1, "all");
@@ -640,4 +666,4 @@ async function handleMovCallSelect(interaction) {
   return showPanel(interaction, "movCall");
 }
 
-module.exports = { handleAntiRaidButton, handleAntiRaidSelect };
+module.exports = { handleAntiRaidButton, handleAntiRaidSelect, openAntiRaidPanel };

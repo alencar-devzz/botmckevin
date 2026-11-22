@@ -8,7 +8,7 @@ const { handleTicketSelect } = require("./ticketHandlers");
 const { handleBotcallSelect } = require("./botcallHandlers");
 const { handleHelpSelect } = require("./helpHandlers");
 const { openBumpPanel, handleBumpSelect } = require("./bumpHandlers");
-const { handleAntiRaidSelect } = require("./antiRaidHandlers");
+const { handleAntiRaidSelect, openAntiRaidPanel } = require("./antiRaidHandlers");
 const { handleMessageSelect } = require("./mensagemHandlers");
 const { handleMetricsSelect } = require("./metricasHandlers");
 const { handleDupSelect } = require("./dupCategoriaHandlers");
@@ -79,6 +79,9 @@ async function openModeracaoOption(interaction, value) {
   }
   if (value === "bump") {
     return openBumpPanel(interaction);
+  }
+  if (value === "protecao") {
+    return openAntiRaidPanel(interaction);
   }
 }
 

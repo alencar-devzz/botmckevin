@@ -29,6 +29,7 @@ const KEYWORDS = {
   "moderacao:cargos": ["cargo", "role", "groles", "gerenciar cargos", "permissao", "painel de cargos"],
   "moderacao:nuke": ["nnuke", "nuke", "recriar canal", "limpar canal", "resetar canal", "clonar canal", "comando"],
   "moderacao:bump": ["bump", "disboard", "lembrete", "divulgar", "bump reminder", "agradecimento"],
+  "moderacao:protecao": ["anti raid", "antiraid", "raid", "painelps", "protecao", "seguranca", "panico", "lockdown", "incidentes", "anti spam", "antispam", "anti link", "antilink", "anti bot", "antibot", "entrada em massa", "cargos protegidos", "permissoes perigosas"],
   "outros:sorteios": ["sorteio", "giveaway", "gw", "premio", "rifa"],
   "outros:msg": ["mensagem", "msg", "criador", "embed", "publicar", "enviar mensagem", "montar mensagem", "rascunho", "editor"],
 };

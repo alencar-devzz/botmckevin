@@ -27,6 +27,11 @@ const OPCOES = [
     description: "Lembrete de bump, agradecimento, cargos, tempos e embeds.",
     value: "bump",
   },
+  {
+    label: "Sistema de proteção",
+    description: "Anti-raid, pânico, histórico de incidentes e acesso ao sistema completo.",
+    value: "protecao",
+  },
 ];
 
 function buildModeracaoPanel(page = 0) {

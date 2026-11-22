@@ -1,6 +1,7 @@
 const { StringSelectMenuBuilder, ChannelSelectMenuBuilder, ButtonStyle, ChannelType } = require("discord.js");
 const { ui } = require("./antiraid");
 const D = require("../utils/antiraid/defaults");
+const { crumbLine } = require("./breadcrumb");
 const { missingPerms } = require("../utils/antiraid/panic");
 
 // Telas rápidas do Anti-Raid: início (informações + pânico), ajustes do pânico e histórico de incidentes.
@@ -14,7 +15,8 @@ const labelsOf = (keys) => keys.filter((k) => k in D.PANIC_ACTIONS).map((k) => D
 
 // ======================= Início =======================
 // notice: { title, lines } com o resultado da última ação do pânico (opcional)
-function buildQuickPanel(guild, cfg, stats = {}, notice = null) {
+// opts.fromMenu: aberto pelo /menu > Moderação > Sistema de proteção (mostra o caminho e o botão Voltar)
+function buildQuickPanel(guild, cfg, stats = {}, notice = null, opts = {}) {
   const { core, massJoin: mj, panic: p } = cfg;
   const now = Date.now();
   const counted = D.MODULES.filter((m) => m.key !== "core" && !m.info);
@@ -43,7 +45,9 @@ function buildQuickPanel(guild, cfg, stats = {}, notice = null) {
   ].join("\n");
 
   const info = box()
-    .addTextDisplayComponents(text(`## Central Anti-Raid\n-# ${clip(guild.name, 80)}`))
+    .addTextDisplayComponents(
+      text(`## Central Anti-Raid\n${opts.fromMenu ? crumbLine(["Moderação", "Sistema de proteção"]) : `-# ${clip(guild.name, 80)}`}`)
+    )
     .addSeparatorComponents(divider())
     .addTextDisplayComponents(text(situacao))
     .addSeparatorComponents(divider())
@@ -103,7 +107,8 @@ function buildQuickPanel(guild, cfg, stats = {}, notice = null) {
       )
     );
   }
-  return [...parts, info, panico, outros];
+  const back = opts.fromMenu ? [row(btn("back_moderacao", "Voltar"))] : [];
+  return [...parts, info, panico, outros, ...back];
 }
 
 // ======================= Ajustes do pânico =======================
