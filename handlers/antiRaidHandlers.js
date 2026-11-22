@@ -193,7 +193,7 @@ async function handleAntiRaidButton(interaction) {
 
   if (customId === "ar:hub") {
     const cfg = await getAntiRaidConfig(guild.id);
-    return interaction.update({ components: buildAntiRaidHub(guild, cfg) });
+    return interaction.update({ components: buildAntiRaidHub(guild, cfg, { fromMenu: isFromMenu(interaction) }) });
   }
 
   if (customId === "ar:close") {

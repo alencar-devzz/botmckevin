@@ -104,7 +104,8 @@ const GROUPS = [
   { title: "Proteções sensíveis", keys: ["protectedRoles", "movCall"] },
 ];
 
-function buildAntiRaidHub(guild, cfg) {
+// opts.fromMenu: aberto pelo /menu > Moderação > Sistema de proteção (sem o botão Fechar)
+function buildAntiRaidHub(guild, cfg, opts = {}) {
   const head = box().addTextDisplayComponents(
     text("## Anti-Raid\n-# Escolha uma proteção em cada grupo para configurar.")
   );
@@ -129,7 +130,7 @@ function buildAntiRaidHub(guild, cfg) {
     );
   });
 
-  containers.push(row(btn("ar:quick", "Voltar ao início"), btn("ar:hist", "Histórico de incidentes"), btn("ar:close", "Fechar")));
+  containers.push(row(btn("ar:quick", "Voltar ao início"), btn("ar:hist", "Histórico de incidentes"), ...(opts.fromMenu ? [] : [btn("ar:close", "Fechar")])));
   return containers;
 }
 
