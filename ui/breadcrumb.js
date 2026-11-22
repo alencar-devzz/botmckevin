@@ -36,6 +36,8 @@ const ROOTS = [
   { prefix: "bp_panel", trail: [SELF, "Cargos por perfil"], home: ["Cargos por perfil"], noArrows: true },
   { prefix: "bp_token", trail: [SELF, "Cargos por perfil"], home: ["Cargos por perfil"], noArrows: true },
   { prefix: "bp_home", trail: [SELF, "Cargos por perfil"], home: ["Cargos por perfil"], noArrows: true },
+  { prefix: "tp_panel", trail: [SELF, "Cargos por tag"], home: ["Cargos por tag"], noArrows: true },
+  { prefix: "tp_home", trail: [SELF, "Cargos por tag"], home: ["Cargos por tag"], noArrows: true },
   { prefix: "nukecfg_", trail: [MODERACAO, "nnuke"], home: ["Comando nnuke"] },
   { prefix: "bumpcfg_", trail: [MODERACAO, "Bump"], home: ["Bump reminder"] },
   // Criador de mensagens aberto pelo /menu (só ele tem a linha de navegação msg:hist:*)

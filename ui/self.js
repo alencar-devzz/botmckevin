@@ -10,6 +10,11 @@ const OPCOES = [
     value: "bio_panel",
     emoji: { name: "🪪" },
   },
+  {
+    label: "Cargos por tag",
+    description: "Cargo automático para quem usa a tag do servidor no perfil.",
+    value: "tag_panel",
+  },
 ];
 
 function buildSelfPanel(page = 0) {

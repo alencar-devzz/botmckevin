@@ -17,6 +17,7 @@ const { handleSorteioModal } = require("./sorteioHandlers");
 const { handleInvitesConfigModal } = require("./convitesConfigHandlers");
 const { handleUnbanallModal } = require("./unbanallHandlers");
 const { handleBioPanelModal } = require("./bioPanelHandlers");
+const { handleTagPanelModal } = require("./tagPanelHandlers");
 
 const { handleCallHubConfigModal, handleCallPanelModal } = require("./callHubHandlers");
 
@@ -51,6 +52,11 @@ async function handleModal(interaction) {
   // Cargos por perfil (token, texto, mídia, botões, padrões e respostas)
   if (customId.startsWith("bp_modal:")) {
     return handleBioPanelModal(interaction);
+  }
+
+  // Cargos por tag (texto, mídia, botões e respostas)
+  if (customId.startsWith("tp_modal:")) {
+    return handleTagPanelModal(interaction);
   }
 
   // Criador de mensagens (comando mensagem)

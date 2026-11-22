@@ -10,6 +10,7 @@ const {
   handleBioPanelButton,
   handleBioPanelVerify,
 } = require("./bioPanelHandlers");
+const { handleTagPanelButton, handleTagPanelVerify } = require("./tagPanelHandlers");
 const { buildOutrosPanel } = require("../ui/outros");
 const { buildSistemasPanel } = require("../ui/sistemas");
 const { buildMessageHome } = require("../ui/mensagemPanels");
@@ -282,6 +283,13 @@ async function handleButton(interaction) {
       return handleBioPanelButton(interaction);
     }
 
+    // ── Cargos por tag (configuração e botão público) ────────────────────────
+    case "tp_home":
+    case "tp_toggle":
+    case "tp_panel_create": {
+      return handleTagPanelButton(interaction);
+    }
+
     case "back_self": {
       return interaction.update({ components: buildSelfPanel(recallCategoryPage(interaction.message?.id, "self")) });
     }
@@ -300,6 +308,12 @@ async function handleButton(interaction) {
       }
       if (customId.startsWith("bp_verify:")) {
         return handleBioPanelVerify(interaction);
+      }
+      if (customId.startsWith("tp_panel:") || customId.startsWith("tp_panel_edit:")) {
+        return handleTagPanelButton(interaction);
+      }
+      if (customId.startsWith("tp_verify:")) {
+        return handleTagPanelVerify(interaction);
       }
       return;
   }

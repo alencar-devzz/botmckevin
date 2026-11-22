@@ -91,6 +91,9 @@ const {
   handleBioPanelSelect: _bpSel,
   handleBioPanelModal: _bpMdl,
 } = require("./bioPanelHandlers");
+const { handleTagPanelSelect: _tpSel } = require("./tagPanelHandlers");
+const { getPanels: getTagPanels, isEnabled: isTagEnabled } = require("../utils/tagPanel/store");
+const { buildTagPanelHome } = require("../ui/tagPanel/tagPanelConfig");
 const { getPanels, getToken, isEnabled: isBioEnabled } = require("../utils/bioPanel/store");
 const { buildBioPanelHome } = require("../ui/bioPanel/bioPanelConfig");
 
@@ -107,6 +110,16 @@ async function openSelfOption(interaction, value) {
       flags: require("discord.js").MessageFlags.IsComponentsV2,
     };
     // editReply suporta tanto update() direto quanto deferUpdate() automático do safeInteraction
+    if (interaction.deferred) return interaction.editReply(payload);
+    return interaction.update(payload).catch(() => interaction.editReply(payload));
+  }
+  if (value === "tag_panel") {
+    const { guildId } = interaction;
+    const [panels, enabled] = await Promise.all([getTagPanels(guildId), isTagEnabled(guildId)]);
+    const payload = {
+      components: buildTagPanelHome(panels, enabled),
+      flags: require("discord.js").MessageFlags.IsComponentsV2,
+    };
     if (interaction.deferred) return interaction.editReply(payload);
     return interaction.update(payload).catch(() => interaction.editReply(payload));
   }
@@ -166,6 +179,11 @@ async function handleSelect(interaction) {
   // Cargos por perfil (navegação, cargos e canal)
   if (customId.startsWith("bp_panel:")) {
     return _bpSel(interaction);
+  }
+
+  // Cargos por tag (navegação, cargos e canal)
+  if (customId.startsWith("tp_panel:")) {
+    return _tpSel(interaction);
   }
 
   // Central de ajuda (comando /help)
