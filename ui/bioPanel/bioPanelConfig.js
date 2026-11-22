@@ -114,6 +114,7 @@ const SECTIONS = [
   { key: "look", label: "Aparência", desc: "Formato, cor e espaçamento" },
   { key: "btns", label: "Botões", desc: "Botão de verificar e links extras" },
   { key: "verify", label: "Verificação", desc: "O que o perfil precisa ter" },
+  { key: "profile", label: "Perfil", desc: "Perfil privado ou ilegível" },
   { key: "roles", label: "Cargos", desc: "Entrega e remoção" },
   { key: "resp", label: "Respostas", desc: "Mensagens do botão Verificar" },
   { key: "send", label: "Envio", desc: "Canal e publicação" },
@@ -215,7 +216,7 @@ function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
             [
               title(),
               `**Texto**  \`${num(textLength(panel.message))} de ${num(LIMITS.text)}\` caracteres  ·  **Imagens**  \`${images}\`  ·  **Links extras**  \`${links}\``,
-              `**Verifica**  bio \`${yes(panel.checkBio)}\`  ·  status \`${yes(panel.checkStatus)}\`  ·  pronomes \`${yes(panel.checkPronouns)}\``,
+              `**Verifica**  bio \`${yes(panel.checkBio)}\`  ·  status \`${yes(panel.checkStatus)}\`  ·  pronomes \`${yes(panel.checkPronouns)}\`  ·  tag \`${yes(panel.checkTag)}\``,
               `**Padrões**  \`${panel.patterns.length} de ${LIMITS.patterns}\`  ·  **Dar**  \`${panel.giveRoles.length}\`  ·  **Remover**  \`${panel.removeRoles.length}\``,
               `**Respostas**  \`${Object.keys(KINDS).filter((k) => isCustom(panel, k)).length} de ${Object.keys(KINDS).length}\` personalizadas`,
               `**Canal**  ${channel}`,
@@ -384,9 +385,9 @@ function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
 
     cards.push(
       box()
-        .addTextDisplayComponents(text(`${title()}\n**O que verificar**\n-# Basta uma fonte conter os padrões.`))
+        .addTextDisplayComponents(text(`${title()}\n**O que verificar**\n-# Basta uma fonte conter os padrões. A tag do servidor no perfil também vale e não precisa dos padrões.`))
         .addActionRowComponents(
-          row(flag("toggle_bio", "Bio", panel.checkBio), flag("toggle_status", "Status", panel.checkStatus), flag("toggle_pronouns", "Pronomes", panel.checkPronouns))
+          row(flag("toggle_bio", "Bio", panel.checkBio), flag("toggle_status", "Status", panel.checkStatus), flag("toggle_pronouns", "Pronomes", panel.checkPronouns), flag("toggle_tag", "Tag", panel.checkTag))
         ),
       padroes,
       box()
@@ -399,6 +400,52 @@ function buildBioPanelEdit(rawPanel, { report = null, note = null } = {}) {
           )
         )
         .addActionRowComponents(row(btn(id("go:resp"), "Editar respostas", ButtonStyle.Primary)))
+    );
+  }
+
+  // ── Perfil (privado / ilegível) ──
+  else if (view === "profile") {
+    const notify = panel.privateMode !== "fail";
+    const fallback = panel.privateFallback !== false;
+    cards.push(
+      box().addTextDisplayComponents(
+        text(
+          [
+            title(),
+            "**Perfil privado ou ilegível**",
+            "-# Bio e pronomes são lidos com a token da staff. Se o Discord não liberar o perfil de quem clicou (perfil privado ou restrito), o bot não consegue conferir e avisa em vez de só dar erro.",
+            "-# O Discord não diferencia \"privado\" de outras recusas de acesso: toda recusa de leitura cai aqui. Falhas passageiras e token inválida têm respostas próprias.",
+          ].join("\n")
+        )
+      ),
+      box()
+        .addTextDisplayComponents(
+          text(
+            [
+              "### Quando o perfil estiver privado",
+              notify
+                ? "**Avisar com a resposta Perfil privado**\n-# A pessoa vê a mensagem própria para perfil privado, com o que fazer."
+                : "**Tratar como falha**\n-# A pessoa vê a resposta de Falha, com o detalhe de que o perfil está privado.",
+            ].join("\n")
+          )
+        )
+        .addActionRowComponents(
+          row(
+            btn(id("toggle_private_mode"), notify ? "Avisar: Perfil privado" : "Usar a resposta de Falha", notify ? ButtonStyle.Success : ButtonStyle.Secondary),
+            btn(id("go_private"), "Editar resposta", ButtonStyle.Primary)
+          )
+        ),
+      box()
+        .addTextDisplayComponents(
+          text(
+            [
+              "### Outras fontes",
+              `**Liberar por status ou tag:** ${yes(fallback)}`,
+              "-# Com o perfil ilegível, o status e a tag do servidor (se ligados em Verificação) ainda podem liberar o cargo. Desligado, o perfil privado bloqueia a verificação.",
+            ].join("\n")
+          )
+        )
+        .addActionRowComponents(row(btn(id("toggle_private_fallback"), `Liberar por outras fontes: ${yes(fallback)}`, fallback ? ButtonStyle.Success : ButtonStyle.Secondary)))
     );
   }
 

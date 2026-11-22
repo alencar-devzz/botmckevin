@@ -50,6 +50,12 @@ const panelSchema = new Schema(
     checkBio: { type: Boolean, default: true },
     checkStatus: { type: Boolean, default: false },
     checkPronouns: { type: Boolean, default: false },
+    checkTag: { type: Boolean, default: false }, // tag do servidor no perfil (como fonte, igual bio e status)
+
+    // Perfil privado/ilegível: "notify" mostra a resposta "Perfil privado"; "fail" usa a resposta de Falha
+    privateMode: { type: String, enum: ["notify", "fail"], default: "notify" },
+    // Se a bio/pronomes não puderem ser lidos, status e tag ainda podem liberar o cargo
+    privateFallback: { type: Boolean, default: true },
 
     // Padrões exigidos (todos os que estiverem ativos DEVEM aparecer no campo)
     patterns: { type: [String], default: [] }, // strings literais (case-insensitive)

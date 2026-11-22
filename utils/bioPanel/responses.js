@@ -50,9 +50,15 @@ const KINDS = {
     vars: COMMON,
     color: "amarelo",
   },
+  private: {
+    label: "Perfil privado",
+    desc: "O perfil do membro não pôde ser lido",
+    vars: COMMON,
+    color: "amarelo",
+  },
   noprofile: {
-    label: "Perfil ilegível",
-    desc: "O bot não conseguiu ler o perfil agora",
+    label: "Erro ao ler perfil",
+    desc: "Falha passageira ao ler o perfil",
     vars: COMMON,
     color: "vermelho",
   },
@@ -82,6 +88,8 @@ function defaultText(panel, kind) {
       return "### Cargo devolvido\n[separador]\nVocê já estava verificado, mas estava sem o cargo. Devolvi: {cargos}";
     case "norole":
       return "### Painel sem cargo\n[separador]\nEste painel não tem nenhum cargo definido para entregar. Avise a staff para configurar o cargo.";
+    case "private":
+      return "### Perfil privado\n[separador]\nNão consegui ler o seu perfil porque ele está privado ou restrito. Deixe seu perfil visível, ou ative o que for exigido (status, tag), e tente de novo.";
     case "notoken":
       return "### Verificação indisponível\n[separador]\nO administrador ainda não definiu a token de acesso. A verificação está indisponível.";
     default:

@@ -144,6 +144,11 @@ async function handlePanelAction(interaction, guildId, panelId, action, arg) {
     setEditPage(panelId, arg);
     return showEditor(interaction, panelId);
   }
+  if (action === "go_private") {
+    setRespKind(panelId, "private");
+    setEditPage(panelId, "resp");
+    return showEditor(interaction, panelId);
+  }
   if (action === "prev" || action === "next") {
     stepEditPage(panelId, action === "next" ? 1 : -1);
     return showEditor(interaction, panelId);
@@ -205,7 +210,15 @@ async function handlePanelAction(interaction, guildId, panelId, action, arg) {
   }
 
   // ----- verificação -----
-  const toggles = { toggle_bio: "checkBio", toggle_status: "checkStatus", toggle_pronouns: "checkPronouns" };
+  const toggles = { toggle_bio: "checkBio", toggle_status: "checkStatus", toggle_pronouns: "checkPronouns", toggle_tag: "checkTag" };
+  if (action === "toggle_private_mode") {
+    await updatePanel(guildId, panelId, { privateMode: panel.privateMode === "fail" ? "notify" : "fail" });
+    return showEditor(interaction, panelId);
+  }
+  if (action === "toggle_private_fallback") {
+    await updatePanel(guildId, panelId, { privateFallback: panel.privateFallback === false });
+    return showEditor(interaction, panelId);
+  }
   if (toggles[action]) {
     await updatePanel(guildId, panelId, { [toggles[action]]: !panel[toggles[action]] });
     return showEditor(interaction, panelId);
@@ -559,11 +572,43 @@ async function handleBioPanelVerify(interaction) {
   // Lê o perfil de quem clicou e confere os padrões do painel.
   // Devolve { kind } com a resposta de erro, ou { passed, details }.
   const checkMember = async () => {
-    if (!token) return { kind: "notoken" };
-    // A bio e os pronomes são lidos com a token da staff. O status vem da presença do membro (intent GuildPresences).
+    let unreadable = null;
+    // O status vem da presença do membro (intent GuildPresences)
     const statusText = member.presence?.activities?.find((a) => a.type === 4)?.state ?? "";
-    const profile = await fetchProfile(guildId, token, interaction.user.id, statusText);
-    if (!profile) return { kind: "noprofile" };
+
+    // A bio e os pronomes são lidos com a token da staff; status e tag não precisam dela
+    let profile = { bio: "", pronouns: "", status: statusText };
+    if (panel.checkBio || panel.checkPronouns) {
+      if (!token) return { kind: "notoken" };
+      const read = await fetchProfile(guildId, token, interaction.user.id, statusText);
+      if (read?.error === "token") return { kind: "notoken" };
+      if (read?.error) {
+        // Bio/pronomes ilegíveis: se o painel permitir, status e tag ainda podem liberar o cargo
+        unreadable = read.error;
+      } else {
+        profile = read;
+      }
+    }
+
+    // Tag do servidor: vem do usuário (busca atualizada na API do Discord)
+    if (panel.checkTag) {
+      const user = await interaction.user.fetch(true).catch(() => interaction.user);
+      const tag = user.primaryGuild;
+      profile.tag = Boolean(tag && tag.identityGuildId === guildId && tag.identityEnabled !== false);
+    }
+    if (unreadable) {
+      const others = Boolean(panel.checkStatus || panel.checkTag);
+      if (panel.privateFallback !== false && others) {
+        const alt = checkProfile(profile, { ...panel, checkBio: false, checkPronouns: false });
+        if (alt.passed) return alt;
+      }
+      if (unreadable === "private") {
+        return panel.privateMode === "fail"
+          ? { passed: false, details: ["seu perfil está privado e não pôde ser lido"] }
+          : { kind: "private" };
+      }
+      return { kind: "noprofile" };
+    }
     return checkProfile(profile, panel);
   };
 
