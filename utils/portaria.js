@@ -18,7 +18,13 @@ async function sendGreeting(kind, member, config, { force = false } = {}) {
 
   try {
     const payload = await buildPortariaPayload(kind, member, resolveSettings(kind, config));
-    const sent = await channel.send(payload);
+    // O client usa allowedMentions { parse: [] }, e aí o Discord não manda os dados do usuário junto da
+    // mensagem: quem ainda não tem o membro em cache vê "@usuário-desconhecido". Listar o membro resolve o
+    // nome e pinga só o membro que entrou.
+    const sent = await channel.send({
+      ...payload,
+      allowedMentions: { users: [member.id] },
+    });
     scheduleDelete(sent, config[f.delay]);
     return sent;
   } catch (err) {
