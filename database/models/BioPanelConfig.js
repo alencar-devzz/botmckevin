@@ -75,6 +75,12 @@ const bioPanelConfigSchema = new Schema({
   // Liga/desliga geral do sistema no /menu (padrão: ligado)
   enabled: { type: Boolean, default: true },
 
+  // Convite permanente do servidor, gerado pelo botão da tela inicial. Quando existe, o bot confere
+  // essa URL (pelo código do convite) no perfil de quem clica em Verificar, em todos os painéis.
+  autoInviteUrl: { type: String, default: null },
+  autoInviteCode: { type: String, default: null },
+  autoInviteAt: { type: Date, default: null },
+
   panels: { type: [panelSchema], default: [] },
 });
 

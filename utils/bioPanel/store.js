@@ -42,6 +42,31 @@ async function setEnabled(guildId, enabled) {
   await BioPanelConfig.findOneAndUpdate({ guildId }, { $set: { enabled: Boolean(enabled) } }, { upsert: true });
 }
 
+// ---------- convite fixo do servidor ----------
+
+// Devolve { url, code, at } ou null quando nenhum convite foi gerado
+async function getAutoInvite(guildId) {
+  const doc = await BioPanelConfig.findOne({ guildId }).select("autoInviteUrl autoInviteCode autoInviteAt").lean();
+  if (!doc?.autoInviteUrl || !doc?.autoInviteCode) return null;
+  return { url: doc.autoInviteUrl, code: doc.autoInviteCode, at: doc.autoInviteAt ?? null };
+}
+
+async function setAutoInvite(guildId, { url, code }) {
+  await BioPanelConfig.findOneAndUpdate(
+    { guildId },
+    { $set: { autoInviteUrl: url, autoInviteCode: code, autoInviteAt: new Date() } },
+    { upsert: true }
+  );
+}
+
+async function clearAutoInvite(guildId) {
+  await BioPanelConfig.findOneAndUpdate(
+    { guildId },
+    { $set: { autoInviteUrl: null, autoInviteCode: null, autoInviteAt: null } },
+    { upsert: true }
+  );
+}
+
 // ---------- painéis ----------
 
 async function getDoc(guildId) {
@@ -100,5 +125,6 @@ module.exports = {
   markVerified,
   getToken, setToken, clearToken, invalidateToken,
   isEnabled, setEnabled,
+  getAutoInvite, setAutoInvite, clearAutoInvite,
   getPanels, getPanel, createPanel, updatePanel, deletePanel, getDoc,
 };

@@ -45,9 +45,13 @@ const roles = (arr) => (arr.length ? arr.map((id) => `<@&${id}>`).join(", ") : "
 
 // ─── Tela inicial: token e lista de painéis ─────────────────────────────────
 
-function buildBioPanelHome(panels, hasToken, enabled = true) {
-  // Toggle geral no canto do título (esta tela não passa pela conversão automática do breadcrumb)
-  const container = box()
+// autoInvite: { url, code, at } do convite fixo do servidor, ou null quando ainda não foi gerado.
+// Limite de 40 componentes: título/token (12) + convite fixo (5) + lista (2 + 3 por painel) + rodapé (3).
+const HOME_PANEL_LIMIT = 6;
+
+function buildBioPanelHome(panels, hasToken, enabled = true, autoInvite = null) {
+  // Container 1: título com o toggle geral e a token (esta tela não passa pela conversão automática do breadcrumb)
+  const main = box()
     .addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(
@@ -65,7 +69,7 @@ function buildBioPanelHome(panels, hasToken, enabled = true) {
     )
     .addSeparatorComponents(divider());
 
-  container.addSectionComponents(
+  main.addSectionComponents(
     new SectionBuilder()
       .addTextDisplayComponents(
         text(`**Token de acesso**  ${tag(hasToken)}\n-# ${hasToken ? "Definida e criptografada. O bot lê o perfil de quem clica com ela." : "Nenhuma token definida: a verificação não funciona."}`)
@@ -74,35 +78,51 @@ function buildBioPanelHome(panels, hasToken, enabled = true) {
   );
 
   if (hasToken) {
-    container.addSectionComponents(
+    main.addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(text("**Remover token**\n-# Apaga a token do banco de dados."))
         .setButtonAccessory(btn("bp_token_clear", "Remover", ButtonStyle.Danger))
     );
   }
 
-  container
-    .addSeparatorComponents(divider())
-    .addTextDisplayComponents(
-      text(`**Painéis**  \`${panels.length}\`\n-# Cada painel é uma mensagem com botão de verificação, enviada num canal.`)
-    );
+  // Container 2 (no meio): convite permanente do servidor. O botão fica na primeira linha, à esquerda,
+  // acima do texto. Gerar e atualizar são o mesmo botão: cada clique cria um convite novo e passa a consultá-lo.
+  const lines = autoInvite
+    ? [
+        "**Link fixo do servidor**  `Ativo`",
+        `\`${autoInvite.url}\``,
+        `-# Todo painel confere este link no perfil, em qualquer campo ligado (bio, status ou pronomes).${autoInvite.at ? ` Gerado <t:${Math.floor(new Date(autoInvite.at).getTime() / 1000)}:R>.` : ""} Ao atualizar, o link anterior é apagado.`,
+      ]
+    : [
+        "**Link fixo do servidor**  `Sem link`",
+        "-# Gere um convite permanente e o bot passa a exigi-lo no perfil de quem verificar, sem precisar cadastrar como padrão.",
+      ];
+  const inviteButtons = [btn("bp_invite_refresh", autoInvite ? "Atualizar link" : "Gerar link", ButtonStyle.Primary)];
+  if (autoInvite) inviteButtons.push(btn("bp_invite_clear", "Desativar", ButtonStyle.Danger));
+  const invite = box().addActionRowComponents(row(...inviteButtons)).addTextDisplayComponents(text(lines.join("\n")));
 
-  // limite de 40 componentes: cada painel listado custa 3
-  for (const p of panels.slice(0, 7)) {
+  // Container 3: lista de painéis (cada painel listado custa 3 componentes)
+  const hidden = Math.max(panels.length - HOME_PANEL_LIMIT, 0);
+  const list = box().addTextDisplayComponents(
+    text(
+      `**Painéis**  \`${panels.length}\`\n-# Cada painel é uma mensagem com botão de verificação, enviada num canal.${hidden ? `\n-# Mostrando os ${HOME_PANEL_LIMIT} primeiros; exclua algum para ver os outros ${hidden}.` : ""}`
+    )
+  );
+  for (const p of panels.slice(0, HOME_PANEL_LIMIT)) {
     const n = normalizePanel(p);
     const channel = p.channelId ? `<#${p.channelId}>` : "`sem canal`";
-    container.addSectionComponents(
+    list.addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(
-          text(`**${clip(panelName(p), 60)}**  ${channel}\n-# ${p.messageId ? "Publicado" : "Não publicado"}  ·  padrões: ${n.patterns.length}`)
+          text(`**${clip(panelName(p), 60)}**  ${channel}\n-# ${p.messageId ? "Publicado" : "Não publicado"}  ·  padrões: ${n.patterns.length}${autoInvite ? " + link fixo" : ""}`)
         )
         .setButtonAccessory(btn(`bp_panel_edit:${p.panelId}`, "Editar", ButtonStyle.Primary))
     );
   }
-  if (!panels.length) container.addTextDisplayComponents(text("-# Nenhum painel criado ainda."));
+  if (!panels.length) list.addTextDisplayComponents(text("-# Nenhum painel criado ainda."));
 
   // Criar painel e Voltar ficam juntos, numa linha fora da caixa
-  return [container, row(btn("bp_panel_create", "Criar painel", ButtonStyle.Success), btn("back_self", "Voltar"))];
+  return [main, invite, list, row(btn("bp_panel_create", "Criar painel", ButtonStyle.Success), btn("back_self", "Voltar"))];
 }
 
 // ─── Editor de um painel ────────────────────────────────────────────────────

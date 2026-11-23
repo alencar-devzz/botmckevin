@@ -279,6 +279,8 @@ async function handleButton(interaction) {
     case "bp_toggle":
     case "bp_token_set":
     case "bp_token_clear":
+    case "bp_invite_refresh":
+    case "bp_invite_clear":
     case "bp_panel_create": {
       return handleBioPanelButton(interaction);
     }

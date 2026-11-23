@@ -1,9 +1,11 @@
 const { MessageFlags, PermissionFlagsBits } = require("discord.js");
 const {
   getToken, setToken, clearToken, getPanels, getPanel, isEnabled, setEnabled,
+  getAutoInvite, setAutoInvite, clearAutoInvite,
   createPanel, updatePanel, deletePanel, markVerified,
 } = require("../utils/bioPanel/store");
 const { fetchProfile, checkProfile } = require("../utils/bioPanel/api");
+const { createPermanentInvite } = require("../utils/bioPanel/autoInvite");
 const {
   buildBioPanelHome, buildBioPanelEdit, setEditPage, stepEditPage, needsReport,
   buildTokenModal, buildTextModal, buildImageModal, buildHexModal, buildMainButtonModal,
@@ -33,12 +35,13 @@ async function guard(interaction) {
 }
 
 async function homePanel(guildId) {
-  const [panels, hasToken, enabled] = await Promise.all([
+  const [panels, hasToken, enabled, autoInvite] = await Promise.all([
     getPanels(guildId),
     getToken(guildId).then((t) => t !== null),
     isEnabled(guildId),
+    getAutoInvite(guildId),
   ]);
-  return buildBioPanelHome(panels, hasToken, enabled);
+  return buildBioPanelHome(panels, hasToken, enabled, autoInvite);
 }
 
 const safeUpdate = (interaction, payload) => {
@@ -92,6 +95,22 @@ async function handleBioPanelButton(interaction) {
   // Liga/desliga geral do sistema
   if (customId === "bp_toggle") {
     await setEnabled(guildId, !(await isEnabled(guildId)));
+    return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
+  }
+
+  // Link fixo do servidor: gera um convite permanente e o usa como padrão. Clicar de novo troca por um novo.
+  if (customId === "bp_invite_refresh") {
+    await interaction.deferUpdate().catch(() => null);
+    const current = await getAutoInvite(guildId);
+    const made = await createPermanentInvite(interaction.guild, current?.code ?? null);
+    if (!made.ok) return deny(interaction, made.reason);
+    await setAutoInvite(guildId, { url: made.url, code: made.code });
+    return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
+  }
+  if (customId === "bp_invite_clear") {
+    const current = await getAutoInvite(guildId);
+    await clearAutoInvite(guildId);
+    if (current?.code) await interaction.guild.invites.delete(current.code, "Convite fixo desativado no painel Cargos por perfil").catch(() => null);
     return safeUpdate(interaction, { components: await homePanel(guildId), flags: V2 });
   }
 
@@ -551,11 +570,14 @@ async function handleBioPanelVerify(interaction) {
 
   await interaction.deferReply({ flags: EPHEMERAL });
 
-  const [panel, token, enabled] = await Promise.all([
+  const [rawPanel, token, enabled, autoInvite] = await Promise.all([
     getPanel(guildId, panelId),
     getToken(guildId),
     isEnabled(guildId),
+    getAutoInvite(guildId),
   ]);
+  // O link fixo do servidor entra em toda verificação (checkProfile lê panel.autoInvite)
+  const panel = rawPanel ? { ...rawPanel, autoInvite } : null;
 
   if (!panel) return interaction.editReply({ content: "Este painel não existe mais.", flags: EPHEMERAL });
 

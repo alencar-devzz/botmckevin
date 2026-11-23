@@ -51,6 +51,7 @@ async function fetchProfile(guildId, token, targetUserId, statusText = "") {
 // Retorna { passed: bool, details: string[] }
 function checkProfile(profile, panel) {
   const { checkBio, checkStatus, checkPronouns, checkTag, patterns } = panel;
+  const invite = panel.autoInvite?.code ? panel.autoInvite : null; // convite fixo do servidor (tela inicial)
   const details = [];
 
   // Usar a tag deste servidor no perfil basta, sem precisar dos padrões de texto
@@ -63,7 +64,7 @@ function checkProfile(profile, panel) {
   if (checkPronouns) fields.push({ name: "pronomes", value: profile.pronouns });
 
   // Sem texto para conferir: só a tag decide (ou nada a conferir, se a tag também estiver desligada)
-  if (!fields.length || !patterns.length) {
+  if (!fields.length || (!patterns.length && !invite)) {
     return checkTag ? { passed: false, details: [noTag] } : { passed: true, details: [] };
   }
 
@@ -73,6 +74,13 @@ function checkProfile(profile, panel) {
     if (!combined.includes(pattern.toLowerCase())) {
       details.push(`padrão não encontrado: \`${pattern}\``);
     }
+  }
+
+  // Convite fixo: vale a URL em qualquer forma comum (discord.gg/código ou discord.com/invite/código)
+  if (invite) {
+    const code = String(invite.code).toLowerCase();
+    const forms = [`discord.gg/${code}`, `discord.com/invite/${code}`, `discordapp.com/invite/${code}`];
+    if (!forms.some((f) => combined.includes(f))) details.push(`convite do servidor não encontrado: \`${invite.url}\``);
   }
 
   if (details.length && checkTag) details.push(noTag);

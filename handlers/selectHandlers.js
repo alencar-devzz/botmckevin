@@ -94,19 +94,20 @@ const {
 const { handleTagPanelSelect: _tpSel } = require("./tagPanelHandlers");
 const { getPanels: getTagPanels, isEnabled: isTagEnabled } = require("../utils/tagPanel/store");
 const { buildTagPanelHome } = require("../ui/tagPanel/tagPanelConfig");
-const { getPanels, getToken, isEnabled: isBioEnabled } = require("../utils/bioPanel/store");
+const { getPanels, getToken, isEnabled: isBioEnabled, getAutoInvite } = require("../utils/bioPanel/store");
 const { buildBioPanelHome } = require("../ui/bioPanel/bioPanelConfig");
 
 async function openSelfOption(interaction, value) {
   if (value === "bio_panel") {
     const { guildId } = interaction;
-    const [panels, hasToken, bioEnabled] = await Promise.all([
+    const [panels, hasToken, bioEnabled, autoInvite] = await Promise.all([
       getPanels(guildId),
       getToken(guildId).then((t) => t !== null),
       isBioEnabled(guildId),
+      getAutoInvite(guildId),
     ]);
     const payload = {
-      components: buildBioPanelHome(panels, hasToken, bioEnabled),
+      components: buildBioPanelHome(panels, hasToken, bioEnabled, autoInvite),
       flags: require("discord.js").MessageFlags.IsComponentsV2,
     };
     // editReply suporta tanto update() direto quanto deferUpdate() automático do safeInteraction
