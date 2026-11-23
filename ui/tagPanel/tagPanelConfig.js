@@ -51,7 +51,7 @@ function buildTagPanelHome(panels, enabled = true) {
     .addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(
-          text("### Cargos por tag"),
+          text("### Verificação de tag"),
           text(
             `Painéis de cargo por tag: o membro usa a tag deste servidor no perfil, clica no botão e recebe o cargo.\n-# Sistema: **${enabled ? "ativado" : "desativado"}**${enabled ? "" : " · os botões dos painéis estão indisponíveis"}`
           )
