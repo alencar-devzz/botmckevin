@@ -40,10 +40,22 @@ async function fetchProfile(guildId, token, targetUserId, statusText = "") {
   // Resposta válida, mas sem o bloco do perfil: o Discord não liberou os dados desse membro
   if (!data.user_profile) return { error: "private" };
 
+  const bio = data.user_profile?.bio ?? data.user?.bio ?? "";
+  const pronouns = data.user_profile?.pronouns ?? "";
+
+  // Perfil privado: o Discord costuma responder 200 com o bloco do perfil, só que com bio e pronomes vazios,
+  // em vez de recusar. Sem nada para ler, tratamos como privado (quem tem a bio mesmo vazia recebe o mesmo
+  // aviso, que pede para deixar o perfil visível). Status e tag ainda podem liberar pelo fallback do painel.
+  if (!String(bio).trim() && !String(pronouns).trim()) {
+    // Diagnóstico: mostra nos logs da Render o que o Discord devolveu para esse perfil
+    console.log("[bioPanel] perfil sem bio/pronomes:", targetUserId, "status", status, "chaves", Object.keys(data.user_profile ?? {}).join(","));
+    return { error: "private" };
+  }
+
   return {
-    bio: data.user_profile?.bio ?? data.user?.bio ?? "",
+    bio,
     status: statusText ?? "",
-    pronouns: data.user_profile?.pronouns ?? "",
+    pronouns,
   };
 }
 
