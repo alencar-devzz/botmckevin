@@ -117,10 +117,10 @@ function buildOverview({ guild, draft, report }) {
     )
   );
 
-  // Botão só com o lápis, ao lado direito do texto
+  // Botão só com o emoji (pincel), ao lado direito do texto
   const editBlocks = new ButtonBuilder()
     .setCustomId("msg:go:blocks")
-    .setEmoji({ id: "1571748457423831191", name: "pencil" })
+    .setEmoji({ id: "1574626764309921923", name: "brush" })
     .setStyle(ButtonStyle.Primary);
 
   const montagem = box()
