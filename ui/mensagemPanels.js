@@ -3,6 +3,7 @@ const {
   ChannelSelectMenuBuilder,
   ChannelType,
   ButtonStyle,
+  ButtonBuilder,
   SectionBuilder,
 } = require("discord.js");
 const { ui } = require("./antiraid");
@@ -47,14 +48,35 @@ const sourceTag = (source) => (!source ? "`vazia`" : isStored(source) ? "`arquiv
 
 function buildMessageHome(guild) {
   // O botão fica dentro da caixa, ao lado direito dos textos (por isso a imagem do servidor não aparece aqui)
-  const head = box().addSectionComponents(
-    new SectionBuilder()
-      .addTextDisplayComponents(
-        text("## Criador de mensagens"),
-        text(`-# Monte e publique mensagens de **${clip(guild.name, 60)}**.`)
+  const head = box()
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          text("## Criador de mensagens"),
+          text(`Monte, revise e publique mensagens de **${clip(guild.name, 60)}**.\n-# O rascunho é pessoal: cada pessoa da equipe edita o seu.`)
+        )
+        .setButtonAccessory(btn("msg:open", "Abrir editor", ButtonStyle.Primary))
+    )
+    .addSeparatorComponents(divider())
+    .addTextDisplayComponents(
+      text(
+        [
+          "### Recursos",
+          `**Blocos**  até ${LIMITS.blocks} caixas por mensagem`,
+          "**Texto**  markdown, separadores e emojis do servidor",
+          "**Mídia**  imagem principal e miniatura, por envio ou link",
+          `**Botões**  até ${LIMITS.buttons} por bloco, com link ou com resposta ao clique`,
+          "**Respostas**  texto puro, embed ou Componentes V2",
+          "**Áudio**  arquivo de áudio ou vídeo anexado junto",
+        ].join("\n")
+      ),
+      text(
+        [
+          "### Como usar",
+          "-# 1. Abra o editor  ·  2. Monte os blocos  ·  3. Confira na prévia  ·  4. Escolha o canal e publique",
+        ].join("\n")
       )
-      .setButtonAccessory(btn("msg:open", "Abrir editor", ButtonStyle.Primary))
-  );
+    );
 
   return [head];
 }
@@ -95,23 +117,20 @@ function buildOverview({ guild, draft, report }) {
     )
   );
 
+  // Botão só com o lápis, ao lado direito do texto
+  const editBlocks = new ButtonBuilder()
+    .setCustomId("msg:go:blocks")
+    .setEmoji({ id: "1571748457423831191", name: "pencil" })
+    .setStyle(ButtonStyle.Primary);
+
   const montagem = box()
-    .addTextDisplayComponents(
-      text(
-        [
-          "### Montagem",
-          "**Conteúdo visual**  texto, mídia e aparência de cada bloco",
-          "**Áudio**  anexo opcional enviado logo depois da mensagem",
-        ].join("\n")
-      )
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(text("**Conteúdo visual**\n-# texto, mídia e aparência de cada bloco"))
+        .setButtonAccessory(editBlocks)
     )
     .addActionRowComponents(
-      row(
-        btn("msg:go:blocks", "Editar blocos", ButtonStyle.Primary),
-        btn("msg:go:audio", "Áudio"),
-        btn("msg:prev", "Ver prévia"),
-        btn("msg:go:send", "Publicar", ButtonStyle.Success)
-      )
+      row(btn("msg:go:audio", "Áudio"), btn("msg:prev", "Ver prévia"), btn("msg:go:send", "Publicar", ButtonStyle.Success))
     );
 
   return [head, rascunho, montagem, row(btn("msg:close", "Fechar"))];
