@@ -47,29 +47,14 @@ const sourceTag = (source) => (!source ? "`vazia`" : isStored(source) ? "`arquiv
 
 function buildMessageHome(guild) {
   // O botão fica dentro da caixa, ao lado direito dos textos (por isso a imagem do servidor não aparece aqui)
-  const head = box()
-    .addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(
-          text("## Criador de mensagens"),
-          text(`Monte, revise e publique mensagens de **${clip(guild.name, 60)}**.\n-# O rascunho é pessoal: cada pessoa da equipe edita o seu.`)
-        )
-        .setButtonAccessory(btn("msg:open", "Abrir editor", ButtonStyle.Primary))
-    )
-    .addSeparatorComponents(divider())
-    .addTextDisplayComponents(
-      text(
-        [
-          "### O que dá para montar",
-          `**Blocos**  até ${LIMITS.blocks} caixas por mensagem`,
-          "**Texto**  markdown, separadores e emojis do servidor",
-          "**Mídia**  imagem principal e miniatura, por envio ou link",
-          `**Botões**  até ${LIMITS.buttons} por bloco, com link ou com resposta ao clique`,
-          "**Respostas**  texto puro, embed ou Componentes V2, com imagem, cor e botões",
-          "**Áudio**  arquivo de áudio ou vídeo anexado junto",
-        ].join("\n")
+  const head = box().addSectionComponents(
+    new SectionBuilder()
+      .addTextDisplayComponents(
+        text("## Criador de mensagens"),
+        text(`-# Monte e publique mensagens de **${clip(guild.name, 60)}**.`)
       )
-    );
+      .setButtonAccessory(btn("msg:open", "Abrir editor", ButtonStyle.Primary))
+  );
 
   return [head];
 }
@@ -121,8 +106,12 @@ function buildOverview({ guild, draft, report }) {
       )
     )
     .addActionRowComponents(
-      row(btn("msg:go:blocks", "Editar blocos", ButtonStyle.Primary), btn("msg:go:audio", "Áudio")),
-      row(btn("msg:prev", "Ver prévia"), btn("msg:go:send", "Publicar", ButtonStyle.Success))
+      row(
+        btn("msg:go:blocks", "Editar blocos", ButtonStyle.Primary),
+        btn("msg:go:audio", "Áudio"),
+        btn("msg:prev", "Ver prévia"),
+        btn("msg:go:send", "Publicar", ButtonStyle.Success)
+      )
     );
 
   return [head, rascunho, montagem, row(btn("msg:close", "Fechar"))];
