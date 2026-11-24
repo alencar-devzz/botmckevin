@@ -121,7 +121,7 @@ function buildOverview({ guild, draft, report }) {
   const editBlocks = new ButtonBuilder()
     .setCustomId("msg:go:blocks")
     .setEmoji({ id: "1574626764309921923", name: "brush" })
-    .setStyle(ButtonStyle.Primary);
+    .setStyle(ButtonStyle.Secondary);
 
   const montagem = box()
     .addSectionComponents(
