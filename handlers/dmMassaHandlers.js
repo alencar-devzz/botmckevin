@@ -1,6 +1,14 @@
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, LabelBuilder } = require("discord.js");
 const { getDmMassaSession, deleteDmMassaSession, createDmMassaSession } = require("../utils/dmMassa/session");
-const { fetchUserGuilds, fetchGuildMemberIds, sendDm, USER_TOKEN } = require("../utils/dmMassa/userApi");
+const {
+  fetchUserGuilds,
+  fetchGuildMemberIds,
+  fetchExistingDmChannels,
+  sendToChannel,
+  sleep,
+  jitter,
+  USER_TOKEN,
+} = require("../utils/dmMassa/userApi");
 const {
   buildDmMassaHome,
   buildDmMassaServers,
@@ -225,9 +233,19 @@ async function handleDmMassaModal(interaction) {
 
 // ---------- Disparo em background ----------
 
+// Atualiza o progresso na mensagem efemera sem explodir se a interaction expirou
+function _editProgress(interaction, state) {
+  interaction.editReply({
+    components: buildDmMassaProgress(state),
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [] },
+  }).catch(() => {});
+}
+
 async function _runDisparo(interaction, state) {
   const { guildId, message, limit } = state;
 
+  // --- 1. Busca membros do servidor ---
   let memberIds;
   try {
     memberIds = await fetchGuildMemberIds(guildId, limit ?? 1000);
@@ -235,10 +253,6 @@ async function _runDisparo(interaction, state) {
     console.error("[DMMASSA] Erro ao buscar membros:", err);
     memberIds = [];
   }
-
-  state.total = memberIds.length;
-  state.sent = 0;
-  state.failed = 0;
 
   if (memberIds.length === 0) {
     state.phase = "done";
@@ -250,29 +264,77 @@ async function _runDisparo(interaction, state) {
     return;
   }
 
-  // Envia em lotes de 5 com pausa para evitar rate limit
-  const BATCH = 5;
-  const DELAY_MS = 1200;
+  // --- 2. Busca canais de DM ja existentes (NAO abre canal novo) ---
+  let dmChannels;
+  try {
+    dmChannels = await fetchExistingDmChannels();
+  } catch {
+    dmChannels = new Map();
+  }
 
-  for (let i = 0; i < memberIds.length; i += BATCH) {
-    const batch = memberIds.slice(i, i + BATCH);
-    await Promise.all(
-      batch.map(async (uid) => {
-        const ok = await sendDm(uid, message);
-        if (ok) state.sent++;
-        else state.failed++;
-      })
-    );
+  // Filtra: so envia pra quem ja tem DM aberta com a conta
+  const targets = memberIds.filter((uid) => dmChannels.has(uid));
 
-    // Atualiza a mensagem de progresso a cada lote
+  state.total = targets.length;
+  state.sent = 0;
+  state.failed = 0;
+  state.skipped = (memberIds.length - targets.length); // sem DM aberta
+
+  if (targets.length === 0) {
+    state.phase = "done";
     interaction.editReply({
-      components: buildDmMassaProgress(state),
+      components: buildDmMassaError(
+        state,
+        `Nenhum dos ${memberIds.length} membros tem uma DM aberta com a conta configurada.\n` +
+        `-# So e possivel enviar para pessoas que ja conversaram com a conta antes.`
+      ),
       flags: MessageFlags.IsComponentsV2,
       allowedMentions: { parse: [] },
     }).catch(() => {});
+    return;
+  }
 
-    if (i + BATCH < memberIds.length) {
-      await new Promise((r) => setTimeout(r, DELAY_MS));
+  _editProgress(interaction, state);
+
+  // --- 3. Envio 1 por vez, delay com jitter, backoff em ratelimit ---
+
+  // Delay base entre mensagens: 4s a 9s (aleatorio por envio)
+  const BASE_DELAY_MIN = 4000;
+  const BASE_DELAY_MAX = 9000;
+
+  // Contagem para atualizar progresso a cada N envios
+  const PROGRESS_EVERY = 3;
+
+  for (let i = 0; i < targets.length; i++) {
+    const uid = targets[i];
+    const channelId = dmChannels.get(uid);
+
+    // Tenta enviar
+    let result = await sendToChannel(channelId, message);
+
+    // Backoff progressivo em caso de ratelimit (nao deveria chegar aqui, userApi ja trata 429,
+    // mas por seguranca aguardamos mais antes de continuar)
+    if (result === "ratelimit") {
+      console.warn("[DMMASSA] Ratelimit secundario, aguardando 20s...");
+      await sleep(20000 + jitter(5000));
+      result = await sendToChannel(channelId, message);
+    }
+
+    if (result === "ok") state.sent++;
+    else state.failed++;
+
+    // Atualiza progresso periodicamente
+    if ((i + 1) % PROGRESS_EVERY === 0 || i === targets.length - 1) {
+      _editProgress(interaction, state);
+    }
+
+    // Delay entre mensagens (nao aplica apos o ultimo)
+    if (i < targets.length - 1) {
+      const delay =
+        BASE_DELAY_MIN +
+        Math.floor(Math.random() * (BASE_DELAY_MAX - BASE_DELAY_MIN)) +
+        jitter(1000);
+      await sleep(delay);
     }
   }
 

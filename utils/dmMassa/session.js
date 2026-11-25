@@ -23,6 +23,7 @@ function createDmMassaSession(userId) {
     sent: 0,
     failed: 0,
     total: 0,
+    skipped: 0, // membros sem DM aberta, pulados
     // Timestamp da ultima interação
     touch: Date.now(),
   };

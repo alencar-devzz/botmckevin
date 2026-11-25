@@ -131,23 +131,24 @@ function buildDmMassaConfirm(state) {
 // ---------- Tela 4 — Progresso do envio ----------
 
 function buildDmMassaProgress(state) {
-  const { sent, failed, total } = state;
+  const { sent, failed, total, skipped } = state;
   const done = sent + failed;
   const pct = total ? Math.round((done / total) * 100) : 0;
   const bar = buildBar(done, total);
 
+  const lines = [
+    `**Servidor:** ${state.guildName ?? state.guildId}`,
+    `**Progresso:** ${done}/${total} (${pct}%)`,
+    bar,
+    `**Enviadas:** ${sent}  |  **Falhas:** ${failed}`,
+  ];
+  if (skipped) lines.push(`**Sem DM aberta (pulados):** ${skipped}`);
+
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
       text("### Disparar DMs em massa"),
-      text(
-        [
-          `**Servidor:** ${state.guildName ?? state.guildId}`,
-          `**Progresso:** ${done}/${total} (${pct}%)`,
-          `${bar}`,
-          `**Enviadas:** ${sent}  |  **Falhas:** ${failed}`,
-        ].join("\n")
-      ),
-      text("-# O envio esta em andamento. Esta mensagem sera atualizada ao final.")
+      text(lines.join("\n")),
+      text("-# O envio esta em andamento. Esta mensagem sera atualizada periodicamente.")
     );
 
   return [container];
@@ -156,19 +157,20 @@ function buildDmMassaProgress(state) {
 // ---------- Tela 5 — Resultado final ----------
 
 function buildDmMassaDone(state) {
-  const { sent, failed, total } = state;
+  const { sent, failed, total, skipped } = state;
+
+  const lines = [
+    `**Servidor:** ${state.guildName ?? state.guildId}`,
+    `**Alvos com DM aberta:** ${total}`,
+    `**Enviadas com sucesso:** ${sent}`,
+    `**Falhas:** ${failed}`,
+  ];
+  if (skipped) lines.push(`**Pulados (sem DM aberta):** ${skipped}`);
 
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
       text("### Disparar DMs em massa — Concluido"),
-      text(
-        [
-          `**Servidor:** ${state.guildName ?? state.guildId}`,
-          `**Total de membros processados:** ${total}`,
-          `**Enviadas com sucesso:** ${sent}`,
-          `**Falhas:** ${failed}`,
-        ].join("\n")
-      )
+      text(lines.join("\n"))
     )
     .addSeparatorComponents(sep())
     .addActionRowComponents(
