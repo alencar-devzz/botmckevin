@@ -12,6 +12,7 @@ const { handleAntiRaidSelect, openAntiRaidPanel } = require("./antiRaidHandlers"
 const { handleMessageSelect } = require("./mensagemHandlers");
 const { handleMetricsSelect } = require("./metricasHandlers");
 const { handleDupSelect } = require("./dupCategoriaHandlers");
+const { handleDmMassaSelect } = require("./dmMassaHandlers");
 const { handleUnbanallSelect } = require("./unbanallHandlers");
 const { handleSorteioSelect, openSorteioMenu } = require("./sorteioHandlers");
 const {
@@ -210,6 +211,11 @@ async function handleSelect(interaction) {
   // Painel do comando /duplicar-categoria
   if (customId.startsWith("dup:")) {
     return handleDupSelect(interaction);
+  }
+
+  // Painel do comando /dmmassa
+  if (customId.startsWith("dmm:")) {
+    return handleDmMassaSelect(interaction);
   }
 
   // Painel do Anti-Raid (comando painelps)

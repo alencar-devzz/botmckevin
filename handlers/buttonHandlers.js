@@ -37,6 +37,7 @@ const { handleMetricsButton } = require("./metricasHandlers");
 const { handleSpotifyButton } = require("./spotifyHandlers");
 const { handleTagButton } = require("./tagHandlers");
 const { handleDupButton } = require("./dupCategoriaHandlers");
+const { handleDmMassaButton } = require("./dmMassaHandlers");
 const { handleEmojiButton } = require("./addEmojiHandlers");
 const { handleSorteioButton } = require("./sorteioHandlers");
 const { handleInvitesConfigButton } = require("./convitesConfigHandlers");
@@ -68,6 +69,11 @@ async function handleButton(interaction) {
   // Painel do comando /duplicar-categoria
   if (customId.startsWith("dup:")) {
     return handleDupButton(interaction);
+  }
+
+  // Painel do comando /dmmassa
+  if (customId.startsWith("dmm:")) {
+    return handleDmMassaButton(interaction);
   }
 
   // Painel do comando /addemoji
