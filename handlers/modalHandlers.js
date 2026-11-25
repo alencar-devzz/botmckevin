@@ -12,7 +12,6 @@ const { handleBumpModal } = require("./bumpHandlers");
 const { handleAntiLinkModal } = require("./antiLinkHandlers");
 const { handleMessageModal } = require("./mensagemHandlers");
 const { handleDupModal } = require("./dupCategoriaHandlers");
-const { handleDmMassaModal } = require("./dmMassaHandlers");
 const { handleSearchModal } = require("./menuSearchHandlers");
 const { handleSorteioModal } = require("./sorteioHandlers");
 const { handleInvitesConfigModal } = require("./convitesConfigHandlers");
@@ -48,11 +47,6 @@ async function handleModal(interaction) {
   // Painel do comando /duplicar-categoria (nome da cópia)
   if (customId.startsWith("dup:")) {
     return handleDupModal(interaction);
-  }
-
-  // Painel do comando /dmmassa (mensagem e limite)
-  if (customId.startsWith("dmm_modal:")) {
-    return handleDmMassaModal(interaction);
   }
 
   // Cargos por perfil (token, texto, mídia, botões, padrões e respostas)
