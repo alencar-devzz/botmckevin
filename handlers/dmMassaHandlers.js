@@ -257,7 +257,11 @@ async function _runDisparo(interaction, state) {
   if (memberIds.length === 0) {
     state.phase = "done";
     interaction.editReply({
-      components: buildDmMassaError(state, "Nenhum membro encontrado no servidor ou token sem acesso."),
+      components: buildDmMassaError(
+        state,
+        "Nenhum membro encontrado.\n" +
+        "-# Verifique se a conta esta no servidor e se USER_TOKEN esta correta."
+      ),
       flags: MessageFlags.IsComponentsV2,
       allowedMentions: { parse: [] },
     }).catch(() => {});
@@ -272,20 +276,22 @@ async function _runDisparo(interaction, state) {
     dmChannels = new Map();
   }
 
+  console.log(`[DMMASSA] Membros encontrados: ${memberIds.length} | DMs abertas na conta: ${dmChannels.size}`);
+
   // Filtra: so envia pra quem ja tem DM aberta com a conta
   const targets = memberIds.filter((uid) => dmChannels.has(uid));
 
   state.total = targets.length;
   state.sent = 0;
   state.failed = 0;
-  state.skipped = (memberIds.length - targets.length); // sem DM aberta
+  state.skipped = memberIds.length - targets.length;
 
   if (targets.length === 0) {
     state.phase = "done";
     interaction.editReply({
       components: buildDmMassaError(
         state,
-        `Nenhum dos ${memberIds.length} membros tem uma DM aberta com a conta configurada.\n` +
+        `${memberIds.length} membros encontrados no servidor, mas nenhum tem DM aberta com a conta configurada.\n` +
         `-# So e possivel enviar para pessoas que ja conversaram com a conta antes.`
       ),
       flags: MessageFlags.IsComponentsV2,

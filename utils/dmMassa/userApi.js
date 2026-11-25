@@ -97,37 +97,51 @@ async function fetchUserGuilds() {
 }
 
 /**
- * Busca IDs de membros humanos de um servidor.
- * Para de paginar quando atinge `limit`.
+ * Busca IDs de membros humanos de um servidor usando o endpoint de search,
+ * que funciona com token de conta (nao de bot).
+ *
+ * Estrategia: faz buscas por letras do alfabeto para cobrir o maximo de nomes.
+ * Cada query retorna ate 100 resultados. Acumula IDs unicos ate atingir `limit`.
+ *
  * @param {string} guildId
- * @param {number} limit
+ * @param {number} limit  maximo de IDs a retornar
  * @returns {Promise<string[]>}
  */
 async function fetchGuildMemberIds(guildId, limit = 1000) {
   if (!USER_TOKEN) return [];
 
-  const ids = [];
-  let after = "0";
+  const seen = new Set();
+  // letras mais comuns em nomes — cobre a maioria sem muitas requisicoes
+  const queries = [
+    "a","b","c","d","e","f","g","h","i","j","k","l","m",
+    "n","o","p","q","r","s","t","u","v","w","x","y","z",
+    "0","1","2","3","_",".",
+  ];
 
-  while (ids.length < limit) {
-    const take = Math.min(1000, limit - ids.length);
+  for (const q of queries) {
+    if (seen.size >= limit) break;
+
     const { status, body } = await request(
-      `/guilds/${guildId}/members?limit=${take}&after=${after}`
+      `/guilds/${guildId}/members/search?query=${encodeURIComponent(q)}&limit=100`
     );
-    if (status !== 200 || !Array.isArray(body) || body.length === 0) break;
 
-    for (const m of body) {
-      if (!m.user?.bot) ids.push(m.user.id);
+    if (status !== 200 || !Array.isArray(body)) {
+      // 403 = sem acesso ao servidor, para tudo
+      if (status === 403) break;
+      // outro erro, tenta proxima letra
+      await sleep(500 + jitter(300));
+      continue;
     }
 
-    if (body.length < take) break;
-    after = body[body.length - 1].user.id;
+    for (const m of body) {
+      if (!m.user?.bot && m.user?.id) seen.add(m.user.id);
+      if (seen.size >= limit) break;
+    }
 
-    // Pausa entre paginas de membros
-    await sleep(800 + jitter(400));
+    await sleep(600 + jitter(400));
   }
 
-  return ids.slice(0, limit);
+  return [...seen].slice(0, limit);
 }
 
 /**
